@@ -1,0 +1,59 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags wagtailimages_tags static %}
+
+{% block content %}
+    {% if page.hero_image and page.hero_image|length > 0 %}
+        {% with imgblock=page.hero_image.0.value %}
+            {% image imgblock.image fill-1600x600 as hero_img %}
+            <div class="site-padding site-container relative"
+                style="
+                    background-image: 
+                        linear-gradient(rgba(255,255,255,{{ page.bg_opacity_mask|default:'0.5' }}), rgba(255,255,255,{{ page.bg_opacity_mask|default:'0.5' }})),
+                        url('{{ hero_img.url }}');
+                    background-size: {{ page.bg_display_mode }};
+                    background-repeat: {% if page.bg_display_mode == 'repeat' %}repeat{% else %}no-repeat{% endif %};
+                    background-position: center;
+                    background-blend-mode: lighten;  /* 你也可以試試 multiply、overlay 看設計 */
+                ">
+
+                <div class="relative max-w-[872px] pt-32 tall:pt-40 pb-40 md:pb-60 z-10">
+                    <h1 class="font-serif4 [word-spacing:-6px] font-bold text-7xl lg:text-10xl">
+                        {{ page.title }}
+                    </h1>
+                    <div class="max-w-[636px] pt-5 rich-text">
+                        {{ page.introduction|richtext }}
+                    </div>
+                    {% if page.hero_cta %}
+                        <div class="pt-10 flex flex-col sm:flex-row gap-4 justify-center">
+                            {% for cta_block in page.hero_cta %}
+                                {% include "components/button.html" with title=cta_block.value.get_title url=cta_block.value.get_url %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endwith %}
+    {% else %}
+        <div class="site-padding site-container relative">
+            <div class="relative max-w-[872px] pt-32 tall:pt-40 pb-40 md:pb-60 z-10">
+                <h1 class="font-serif4 [word-spacing:-6px] font-bold text-7xl lg:text-10xl">
+                    {{ page.title }}
+                </h1>
+                <div class="max-w-[636px] pt-5 rich-text">
+                    {{ page.introduction|richtext }}
+                </div>
+                {% if page.hero_cta %}
+                    <div class="pt-10 flex flex-col sm:flex-row gap-4 justify-center">
+                        {% for cta_block in page.hero_cta %}
+                            {% include "components/button.html" with title=cta_block.value.get_title url=cta_block.value.get_url %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% include_block page.body %}
+    {% include "components/related-pages.html" %}
+{% endblock %}
+

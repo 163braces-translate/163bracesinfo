@@ -1,0 +1,206 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags static %}
+
+{% block content %}
+
+    {% block breadcrumbs %}
+        {% include "navigation/breadcrumbs.html" %}
+    {% endblock %}
+
+    <div class="site-padding site-container">
+        <div class="relative max-w-[872px] pt-32 tall:pt-40 pb-20">
+            <h1 class="font-serif4 font-bold text-7xl lg:text-10xl">
+                {{ page.title }}
+            </h1>
+
+            <div class="pt-4 pb-3">
+                <br>
+                <a href="/performances/stats/" 
+                style="color: #3b82f6"
+                onmouseover="this.style.color='#26899e'"
+                onmouseout="this.style.color='#3b82f6'">
+                    📊 查看演出統計分析
+                </a>
+            </div>
+
+            {% if page.intro %}
+                <p class="max-w-[636px] pt-7 rich-text">
+                    {{ page.intro|richtext }}
+                </p>
+            {% endif %}
+        </div>
+
+        <!-- 搜尋與篩選 -->
+        <form method="get" class="mb-8 space-y-4">
+            <!-- 關鍵字搜尋 -->
+            <div class="flex items-center space-x-2 mb-8">
+                <label class="font-semibold">關鍵字：</label>
+                <input type="text" name="q" placeholder="名稱"
+                       value="{{ query|default_if_none:'' }}"
+                       class="border border-gray-300 rounded px-3 py-2" />
+                
+            </div>
+            <!-- 進階篩選 -->
+            <div class="border border-gray-200 rounded p-4 mb-8">
+                <div class="font-semibold mb-6">進階篩選條件 <br><br></div>
+                <div class="mt-3 flex flex-wrap gap-4">
+                    <!-- 城市 -->
+                    <div>
+                        <span class="block font-medium mb-1">城市：</span>
+                        <select name="city" multiple class="border rounded px-2 py-1 min-w-[200px]">
+                            {% for city in all_cities %}
+                                <option value="{{ city.id }}" {% if city.id|stringformat:"s" in selected_cities %}selected{% endif %}>{{ city.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+
+                    <!-- 類型  -->
+                    <div>
+                        <span class="block font-medium mb-1">類型：</span>
+                        <select name="event_type" multiple class="border rounded px-2 py-1 min-w-[200px]">
+                            {% for t in all_types %}
+                                <option value="{{ t.id }}" {% if t.id|stringformat:"s" in selected_types %}selected{% endif %}>{{ t.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- 日期排序 -->
+                    <div>
+                        <span class="block font-medium mb-1">日期排序：</span>
+                        <select name="sort" class="border rounded px-2 py-1">
+                            <option value="event_date_desc" {% if sort == "event_date_desc" %}selected{% endif %}>新 → 舊</option>
+                            <option value="event_date_asc" {% if sort == "event_date_asc" %}selected{% endif %}>舊 → 新</option>
+                        </select>
+                    </div>
+
+                    <!-- ===== 修改：日期篩選（並排顯示）===== -->
+                    <div class="min-w-[300px] flex-1">
+                        <span class="block font-medium mb-1">日期篩選：</span>
+                        <div class="space-y-3">
+                            <!-- 篩選類型選擇 -->
+                            <div class="flex flex-wrap gap-3">
+                                <label class="flex items-center text-sm">
+                                    <input type="radio" name="date_filter_type" value="range" 
+                                        {% if date_filter_type == "range" or not date_filter_type %}checked{% endif %}
+                                        class="mr-1">
+                                    日期區間
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="radio" name="date_filter_type" value="before" 
+                                        {% if date_filter_type == "before" %}checked{% endif %}
+                                        class="mr-1">
+                                    此日期之前
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="radio" name="date_filter_type" value="after" 
+                                        {% if date_filter_type == "after" %}checked{% endif %}
+                                        class="mr-1">
+                                    此日期之後
+                                </label>
+                            </div>
+                            
+                            <!-- 日期輸入欄位 -->
+                            <div class="flex gap-3">
+                                <div id="date-from-group" class="flex-1">
+                                    <label class="block text-xs mb-1">開始日期：</label>
+                                    <input type="date" name="date_from" 
+                                        value="{{ date_from|default_if_none:'' }}"
+                                        class="border rounded px-2 py-1 w-full text-sm">
+                                </div>
+                                <div id="date-to-group" class="flex-1">
+                                    <label class="block text-xs mb-1">結束日期：</label>
+                                    <input type="date" name="date_to" 
+                                        value="{{ date_to|default_if_none:'' }}"
+                                        class="border rounded px-2 py-1 w-full text-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ===== 日期篩選結束 ===== -->
+
+                </div>
+            </div>
+            <button type="submit"
+                        class="ml-2 px-4 py-2 border border-gray-500 text-gray-800 bg-white hover:bg-gray-100 rounded">
+                    搜尋/篩選
+            </button>
+            <a href="{% pageurl page %}"
+                class="ml-2 px-4 py-2 border border-gray-300 text-gray-600 bg-gray-50 hover:bg-gray-100 rounded">
+                取消所有選取
+            </a>
+            <!--<button type="submit">套用篩選</button>-->
+            <!--class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"-->
+        </form>
+
+        <!-- 表格 -->
+        <div class="overflow-x-auto">
+            <table class="w-full table-auto border-collapse border border-gray-300 text-left">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-2 border">日期</th>
+                        <th class="p-2 border">活動名稱</th>
+                        <th class="p-2 border">類型</th>
+                        <th class="p-2 border">地點</th>
+                        <th class="p-2 border">城市</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in performances %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-2 border">{{ p.event_date|date:"Y/m/d" }}</td>
+                            <td class="p-2 border">{{ p.event_name }}</td>
+                            <td class="p-2 border">{{ p.event_type }}</td>
+                            <td class="p-2 border">{{ p.venue }}</td>
+                            <td class="p-2 border">{{ p.city }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="p-4 text-center">尚無表演資料</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}
+
+<!-- ===== 修改：日期篩選 JavaScript ===== -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dateFilterRadios = document.querySelectorAll('input[name="date_filter_type"]');
+    const dateFromGroup = document.getElementById('date-from-group');
+    const dateToGroup = document.getElementById('date-to-group');
+    const dateFromLabel = dateFromGroup.querySelector('label');
+    const dateToLabel = dateToGroup.querySelector('label');
+    
+    function updateDateFields() {
+        const selectedType = document.querySelector('input[name="date_filter_type"]:checked').value;
+        
+        if (selectedType === 'range') {
+            // 日期區間：顯示開始日期和結束日期
+            dateFromGroup.style.display = 'block';
+            dateToGroup.style.display = 'block';
+            dateFromLabel.textContent = '開始日期：';
+            dateToLabel.textContent = '結束日期：';
+        } else if (selectedType === 'before') {
+            // 此日期之前：只顯示結束日期
+            dateFromGroup.style.display = 'none';
+            dateToGroup.style.display = 'block';
+            dateToLabel.textContent = '此日期之前：';
+        } else if (selectedType === 'after') {
+            // 此日期之後：只顯示開始日期
+            dateFromGroup.style.display = 'block';
+            dateToGroup.style.display = 'none';
+            dateFromLabel.textContent = '此日期之後：';
+        }
+    }
+    
+    // 初始化
+    updateDateFields();
+    
+    // 監聽變化
+    dateFilterRadios.forEach(radio => {
+        radio.addEventListener('change', updateDateFields);
+    });
+});
+</script>
+<!-- ===== JavaScript 修改結束 ===== -->

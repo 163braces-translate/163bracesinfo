@@ -1,0 +1,49 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags wagtailsettings_tags wagtailimages_tags %}
+
+{% block title %}{{ settings.utils.SystemMessagesSettings.title_404|default:"Page not found" }}{% endblock %}
+
+{% block body_class %}template-404{% endblock %}
+
+{% block content %}
+    <div class="site-padding site-container">
+        <div class="relative max-w-[872px] pt-32 tall:pt-40 pb-20">
+            <h1 class="font-serif4 [word-spacing:-6px] font-bold text-7xl lg:text-10xl">
+                {{ settings.utils.SystemMessagesSettings.title_404|default:"Page not found" }}
+            </h1>
+            
+            <div class="max-w-[636px] pt-7 rich-text">
+                {{ settings.utils.SystemMessagesSettings.body_404|richtext|default:"<p>You may be trying to find a page that doesn&rsquo;t exist or has been moved.</p>" }}
+            </div>
+            
+            {% comment %}圖片處理 - 用更安全的方式{% endcomment %}
+            {% if settings.utils.SystemMessagesSettings.placeholder_image %}
+                <div class="pt-10">
+                    {% comment %}使用最簡單的圖片處理方式{% endcomment %}
+                    {% image settings.utils.SystemMessagesSettings.placeholder_image original as error_img %}
+                    {% if error_img %}
+                        <img src="{{ error_img.url }}" alt="Page not found" style="max-width: 600px; height: auto;">
+                    {% endif %}
+                </div>
+            {% endif %}
+            
+            <div class="pt-10">
+                <a href="/" class="
+                    inline-flex
+                    items-center
+                    text-base
+                    font-semibold
+                    underline
+                    underline-offset-8
+                    decoration-[1.5px]
+                    decoration-mackerel-200
+                    hover:decoration-mackerel-300
+                    transition-colors
+                    duration-200
+                ">
+                    ← Back to homepage
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

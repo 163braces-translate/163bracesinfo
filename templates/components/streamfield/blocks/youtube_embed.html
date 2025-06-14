@@ -1,0 +1,60 @@
+<!-- templates/components/streamfield/blocks/youtube_embed.html -->
+<div class="youtube-embed my-8">
+    {% if value.title %}
+        <h3 class="text-xl font-semibold mb-4">{{ value.title }}</h3>
+    {% endif %}
+    
+    {% if video_id %}
+        <!-- YouTube 影片嵌入 -->
+        <div class="youtube-wrapper mb-4">
+            <iframe 
+                src="https://www.youtube.com/embed/{{ video_id }}?rel=0"
+                title="{% if value.title %}{{ value.title }}{% else %}YouTube video player{% endif %}"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+            </iframe>
+        </div>
+        
+        <!-- 版權說明文字 -->
+        <p class="text-sm text-gray-600 mt-3">
+            有時因影片包含版權音樂，無法直接播放影片，可至：
+            <a href="{{ original_url }}" target="_blank" class="text-blue-600 underline hover:text-blue-800">
+                YouTube
+            </a> 
+            上觀看
+        </p>
+    {% else %}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <strong>錯誤：</strong>無法從網址中提取影片 ID<br>
+            <strong>支援格式：</strong>
+            <ul class="mt-2 list-disc list-inside text-sm">
+                <li>https://www.youtube.com/watch?v=VIDEO_ID</li>
+                <li>https://youtu.be/VIDEO_ID</li>
+                <li>https://youtu.be/VIDEO_ID?si=xxx</li>
+            </ul>
+            <strong>當前網址：</strong> {{ original_url }}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+/* YouTube 響應式樣式 */
+.youtube-wrapper {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%; /* 16:9 比例 */
+    background-color: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.youtube-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+</style>

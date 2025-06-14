@@ -1,0 +1,278 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags static %}
+
+{% block extra_css %}
+<style>
+.stats-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.year-selector {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.year-selector select {
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-left: 10px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chart-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.summary-stats {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.summary-stats h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.city-list {
+    list-style: none;
+    padding: 0;
+}
+
+.city-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.city-list li:last-child {
+    border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+    {% block breadcrumbs %}
+        {% include "navigation/breadcrumbs.html" %}
+    {% endblock %}
+<div class="stats-container">
+    
+    <div class="relative max-w-[872px] pt-32 tall:pt-40 pb-20">
+        <h1 class="font-serif4 font-bold text-7xl lg:text-10xl">
+            {{ page.title }}
+        </h1>
+        {% if page.intro %}
+            <p class="max-w-[636px] pt-7 rich-text">
+                {{ page.intro|richtext }}
+            </p>
+        {% endif %}
+    </div>
+    
+    <!-- ===== 新增：歷史演出堆疊長條圖 ===== -->
+    <div class="chart-container" style="margin-bottom: 30px;">
+        <div class="chart-title">歷史演出統計（所有年份）</div>
+        <canvas id="historicalChart" width="400" height="200"></canvas>
+    </div>
+    <!-- ===== 歷史圖表結束 ===== -->
+
+    <!-- 年份選擇器 -->
+    <div class="year-selector">
+        <label for="year-select">選擇年份：</label>
+        <select id="year-select" onchange="changeYear()">
+            <option value="all" {% if selected_year == "all" %}selected{% endif %}>
+                全部時間
+            </option>
+            {% for year in available_years %}
+                <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
+                    {{ year }}年
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <!-- 統計摘要 -->
+    <div class="summary-stats">
+        <h3>{{ selected_year }}年統計摘要</h3>
+        <p>總演出場次：<strong>{{ total_performances }}</strong> 場</p>
+    </div>
+    
+    <!-- 圖表區域 -->
+    <div class="stats-grid">
+        <!-- 堆疊長條圖 -->
+        <div class="chart-container">
+            <div class="chart-title">各類型月度演出統計</div>
+            <canvas id="monthlyChart" width="400" height="200"></canvas>
+        </div>
+        
+        <!-- 圓餅圖 -->
+        <div class="chart-container">
+            <div class="chart-title">城市演出比例</div>
+            <canvas id="cityChart" width="300" height="300"></canvas>
+        </div>
+    </div>
+    
+    <!-- 城市統計詳情 -->
+    <div class="chart-container">
+        <div class="chart-title">城市演出詳情</div>
+        <ul class="city-list">
+            {% for city in city_stats %}
+                <li>
+                    <span>{{ city.city__name }}</span>
+                    <span><strong>{{ city.count }}</strong> 場</span>
+                </li>
+            {% empty %}
+                <li>該年份無演出資料</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+// 圖表數據
+const chartData = {{ chart_data|safe }};
+const pieData = {{ pie_data|safe }};
+const historicalData = {{ historical_chart_data|safe }};
+
+// 堆疊長條圖
+const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+const monthlyChart = new Chart(monthlyCtx, {
+    type: 'bar',
+    data: chartData,
+    options: {
+        responsive: true,
+        scales: {
+            x: {
+                stacked: true,
+            },
+            y: {
+                stacked: true,
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        },
+        plugins: {
+            title: {
+                display: true,
+                text: '各類型月度演出統計'
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        }
+    }
+});
+
+// 圓餅圖
+const cityCtx = document.getElementById('cityChart').getContext('2d');
+const cityChart = new Chart(cityCtx, {
+    type: 'pie',
+    data: pieData,
+    options: {
+        responsive: true,
+        plugins: {
+            title: {
+                display: true,
+                text: '城市演出比例'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.raw;
+                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${label}: ${value}場 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// ===== 新增：歷史演出堆疊長條圖 =====
+const historicalCtx = document.getElementById('historicalChart').getContext('2d');
+const historicalChart = new Chart(historicalCtx, {
+    type: 'bar',
+    data: historicalData,
+    options: {
+        responsive: true,
+        scales: {
+            x: {
+                stacked: true,
+                title: {
+                    display: true,
+                    text: '年/月'
+                }
+            },
+            y: {
+                stacked: true,
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: '演出場次'
+                },
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        },
+        plugins: {
+            title: {
+                display: true,
+                text: '歷史演出統計'
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        }
+    }
+});
+// ===== 歷史圖表 JavaScript 結束 =====
+
+// 年份切換功能
+function changeYear() {
+    const selectedYear = document.getElementById('year-select').value;
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('year', selectedYear);
+    window.location.href = currentUrl.toString();
+}
+</script>
+{% endblock %}
