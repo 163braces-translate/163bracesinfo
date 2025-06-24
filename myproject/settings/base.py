@@ -19,6 +19,9 @@ BASE_DIR = os.path.dirname(PROJECT_DIR)
 
 if "SECRET_KEY" in os.environ:
     SECRET_KEY = os.environ["SECRET_KEY"]
+else:
+    SECRET_KEY = "rjxj$)a3ng-8-e1^(6^dv84qqd!fm$*wr+wzjgy%id&e$z-8x@"
+
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
@@ -341,3 +344,8 @@ CACHE_CONTROL_STALE_WHILE_REVALIDATE = int(
 )
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+DEBUG = not bool(os.environ.get("WEBSITE_SITE_NAME"))  # Azure 環境自動設為 False
+
+# 更新 WAGTAILADMIN_BASE_URL
+WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
