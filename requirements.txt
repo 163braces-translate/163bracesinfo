@@ -6,3 +6,4 @@ whitenoise>=6.0.0
 gunicorn==23.0.0
 django-storages[s3]
 wagtail-storages
+# Updated for Azure deployment
