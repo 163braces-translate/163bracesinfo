@@ -106,6 +106,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "myproject.wsgi.application"
 
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -118,6 +119,13 @@ DATABASES = {
     )
 }
 
+if os.environ.get('WEBSITE_SITE_NAME'):  # Azure 環境
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': '/tmp/db.sqlite3',  # 用 tmp 目錄
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -345,8 +353,6 @@ CACHE_CONTROL_STALE_WHILE_REVALIDATE = int(
 )
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-DEBUG = not bool(os.environ.get("WEBSITE_SITE_NAME"))  # Azure 環境自動設為 False
 
 # 更新 WAGTAILADMIN_BASE_URL
 WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
