@@ -1,0 +1,10 @@
+# .gcloudignore
+.DS_Store
+__pycache__/
+*.pyc
+*.sqlite3
+.env
+.git
+.gitignore
+venv/
+env/

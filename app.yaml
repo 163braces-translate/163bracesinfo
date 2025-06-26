@@ -1,0 +1,27 @@
+# app.yaml
+runtime: python311
+instance_class: F1
+
+# 您的專案進入點，根據您的專案結構，這個路徑是正確的
+entrypoint: gunicorn -b :$PORT bracesinfo.wsgi:application
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1
+
+# 環境變數 (!!! 請填入您自己的資訊 !!!)
+env_variables:
+  # 告訴 Django 使用哪個 settings 檔案
+  DJANGO_SETTINGS_MODULE: "bracesinfo.settings.production"
+
+  # 產生一個新的 Django Secret Key 貼上來，不要用 dev 的
+  SECRET_KEY: "^6m==zut(4%_f9u%&@8qdwu$0+49ppgj-$=9neqa^jm$#dck1g"
+
+  # ---- 從您在 GCP 建立的 Cloud SQL 取得資訊 ----
+  DB_HOST: "/cloudsql/bracesinfo:asia-east1:bracesinfo"
+  DB_NAME: "bracesinfo"
+  DB_USER: "postgres"
+  DB_PASS: "163istheBEST"
+
+  # ---- 從您在 GCP 建立的 Cloud Storage 取得資訊 ----
+  GS_BUCKET_NAME: "braces-ver1"
