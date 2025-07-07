@@ -31,3 +31,5 @@ requests
 # Azure-specific packages (if needed)
 azure-storage-blob  # for Azure Blob Storage
 django-storages[azure]  # for cloud storage
+
+dj-database-url>=2.0.0
