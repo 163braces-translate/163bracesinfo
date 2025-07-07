@@ -1,43 +1,74 @@
-# bracesinfo/settings/prod.py
-
-from .base import *
+# Create this as myproject/settings/production.py
 import os
+from .base import *
 
-# 安全性設定
+# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-# 從環境變數讀取 SECRET_KEY
-# 這是您需要在 app.yaml 中設定的變數
+# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
-# ALLOWED_HOSTS
-# 在 App Engine 上，GCP 會處理好域名，設定 '*' 即可
-# 或是更安全地設定為您的 appspot.com 域名和自訂域名
-ALLOWED_HOSTS = ['*'] 
+# Azure App Service automatically provides WEBSITE_HOSTNAME
+ALLOWED_HOSTS = [os.environ.get('WEBSITE_HOSTNAME')]
+if 'ALLOWED_HOSTS' in os.environ:
+    ALLOWED_HOSTS = os.environ['ALLOWED_HOSTS'].split(',')
 
-# 資料庫設定 (從 Cloud SQL 環境變數讀取)
-# 這些變數同樣需要在 app.yaml 中設定
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'HOST': os.environ.get('DB_HOST'),       # e.g., /cloudsql/your-project-id:region:instance-name
-        'USER': os.environ.get('DB_USER'),       # e.g., postgres
-        'PASSWORD': os.environ.get('DB_PASS'),
-        'NAME': os.environ.get('DB_NAME'),       # e.g., wagtail_db
+# CSRF Configuration for Azure
+CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if host]
+
+# Database Configuration for Azure PostgreSQL
+if 'AZURE_POSTGRESQL_HOST' in os.environ:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['AZURE_POSTGRESQL_NAME'],
+            'HOST': os.environ['AZURE_POSTGRESQL_HOST'],
+            'USER': os.environ['AZURE_POSTGRESQL_USER'],
+            'PASSWORD': os.environ['AZURE_POSTGRESQL_PASSWORD'],
+            'PORT': '5432',
+            'OPTIONS': {'sslmode': 'require'},
+        }
     }
+
+# Static files configuration for Azure
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Add WhiteNoise for static file serving
+if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+# WhiteNoise configuration
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media files configuration
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Logging configuration for Azure
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
 }
 
-# 靜態檔案與媒體檔案 (設定到 Google Cloud Storage)
-# GS_BUCKET_NAME 同樣需要在 app.yaml 中設定
-GS_BUCKET_NAME = os.environ.get('GS_BUCKET_NAME')
-STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-
-STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/static/'
-MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
-
-
-try:
-    from .local import *
-except ImportError:
-    pass
+# Security settings for production
+SECURE_SSL_REDIRECT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
