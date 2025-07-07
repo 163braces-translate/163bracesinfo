@@ -161,9 +161,8 @@
             </table>
         </div>
     </div>
-{% endblock %}
 
-<!-- ===== 修改：日期篩選 JavaScript ===== -->
+<!-- ===== 日期區間檢查 JavaScript ===== -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dateFilterRadios = document.querySelectorAll('input[name="date_filter_type"]');
@@ -174,6 +173,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateDateFields() {
         const selectedType = document.querySelector('input[name="date_filter_type"]:checked').value;
+        const dateFromInput = dateFromGroup.querySelector('input[type="date"]');
+        const dateToInput = dateToGroup.querySelector('input[type="date"]');
         
         if (selectedType === 'range') {
             // 日期區間：顯示開始日期和結束日期
@@ -181,11 +182,16 @@ document.addEventListener('DOMContentLoaded', function() {
             dateToGroup.style.display = 'block';
             dateFromLabel.textContent = '開始日期：';
             dateToLabel.textContent = '結束日期：';
+            // ===== 新增防呆：結束日期不得早於開始日期 =====
+            if (dateFromInput && dateToInput) {
+                dateToInput.min = dateFromInput.value || '';
+            }
         } else if (selectedType === 'before') {
             // 此日期之前：只顯示結束日期
             dateFromGroup.style.display = 'none';
             dateToGroup.style.display = 'block';
             dateToLabel.textContent = '此日期之前：';
+            if (dateToInput) dateToInput.min = '';
         } else if (selectedType === 'after') {
             // 此日期之後：只顯示開始日期
             dateFromGroup.style.display = 'block';
@@ -201,6 +207,22 @@ document.addEventListener('DOMContentLoaded', function() {
     dateFilterRadios.forEach(radio => {
         radio.addEventListener('change', updateDateFields);
     });
+    // ===== 新增：監聽開始日期變化，動態調整結束日期 min =====
+    const dateFromInput = dateFromGroup.querySelector('input[type="date"]');
+    const dateToInput = dateToGroup.querySelector('input[type="date"]');
+    if (dateFromInput && dateToInput) {
+        dateFromInput.addEventListener('change', function() {
+            if (document.querySelector('input[name="date_filter_type"]:checked').value === 'range') {
+                dateToInput.min = dateFromInput.value || '';
+                // 若結束日期已選且早於開始日期，自動清空
+                if (dateToInput.value && dateToInput.value < dateFromInput.value) {
+                    dateToInput.value = '';
+                }
+            }
+        });
+    }
 });
 </script>
-<!-- ===== JavaScript 修改結束 ===== -->
+<!-- ===== 日期區間檢查 JavaScript 結束 ===== -->
+
+{% endblock %}
