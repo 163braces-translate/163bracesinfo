@@ -174,7 +174,13 @@ STATICFILES_DIRS = [
 STATIC_ROOT = os.path.join(BASE_DIR, "static")
 STATIC_URL = "/static/"
 
-MEDIA_ROOT = os.environ.get("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
+# For Azure - use persistent storage
+if os.environ.get('WEBSITE_SITE_NAME'):  # Azure environment
+    MEDIA_ROOT = "/home/media"
+else:
+    MEDIA_ROOT = os.environ.get("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
+
+
 MEDIA_URL = "/media/"
 
 # Default storage settings, with the staticfiles storage updated.
