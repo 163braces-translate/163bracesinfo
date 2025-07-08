@@ -123,7 +123,7 @@ if os.environ.get('WEBSITE_SITE_NAME'):  # Azure 環境
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': '/data/db.sqlite3',
+            'NAME': '/home/data/db.sqlite3',
         }
     }
 
