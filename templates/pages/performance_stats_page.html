@@ -36,6 +36,10 @@
     .stats-grid {
         grid-template-columns: 1fr;
     }
+    
+    .stats-container {
+        padding: 10px;
+    }
 }
 
 .chart-container {
@@ -43,7 +47,64 @@
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    /* 修復移動端圖表容器 */
+    position: relative;
+    width: 100%;
+    overflow: hidden;
 }
+
+/* 修復移動端畫布響應式 */
+.chart-container canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
+}
+
+/* 移動端特定調整 */
+@media (max-width: 768px) {
+    .chart-container {
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .chart-title {
+        font-size: 16px;
+        text-align: center;
+    }
+    
+    /* 歷史圖表移動端高度調整 */
+    .historical-chart-container {
+        min-height: 300px;
+    }
+    
+    /* 月度圖表移動端高度調整 */
+    .monthly-chart-container {
+        min-height: 350px;
+    }
+    
+    /* 城市圓餅圖移動端調整 */
+    .city-chart-container {
+        min-height: 300px;
+    }
+}
+
+/* 超小屏幕適配 */
+@media (max-width: 480px) {
+    .stats-container {
+        padding: 5px;
+    }
+    
+    .chart-container {
+        padding: 10px;
+    }
+    
+    .historical-chart-container,
+    .monthly-chart-container,
+    .city-chart-container {
+        min-height: 250px;
+    }
+}
+
 
 .chart-title {
     font-size: 18px;
