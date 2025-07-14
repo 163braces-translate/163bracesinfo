@@ -181,7 +181,7 @@ class PerformanceStatsPage(BasePage):
         }
         
         # 為每個演出類型創建數據集
-        colors = ['#FF6384', '#36A2EB', '#9966FF', '#FF9F40']
+        colors = ['#FF7F7F', '#87CEEB', '#FFB347', '#90EE90']
         
         for i, event_type in enumerate(all_types):
             dataset = {
@@ -203,9 +203,11 @@ class PerformanceStatsPage(BasePage):
             'datasets': [{
                 'data': [stat['count'] for stat in city_stats],
                 'backgroundColor': [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
-                    '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
-                ][:len(city_stats)]
+                '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
+                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
+                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
+                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5'
+            ][:len(city_stats)]
             }]
         }
         
@@ -251,7 +253,7 @@ class PerformanceStatsPage(BasePage):
             'datasets': []
         }
 
-        history_colors = ['#FF6384', '#36A2EB', '#9966FF', '#FF9F40']
+        history_colors = ['#FF7F7F', '#87CEEB', '#FFB347', '#90EE90']
 
         for i, event_type in enumerate(all_types_for_history):
             dataset = {
