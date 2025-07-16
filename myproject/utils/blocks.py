@@ -255,9 +255,10 @@ class YouTubeEmbedBlock(blocks.StructBlock):
 
 class SectionBlocks(blocks.StreamBlock):
     paragraph = blocks.RichTextBlock(
-        features=["bold", "italic", "link", "ol", "ul", "h3", "embed"],
+        features=["bold", "italic", "link", "ol", "ul", "h3", "embed", "image"],
         template="components/streamfield/blocks/paragraph_block.html",
     )
+    image = CaptionedImageBlock()
     youtube = YouTubeEmbedBlock()
 
 
