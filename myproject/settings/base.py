@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "wagtail.contrib.table_block",
     "wagtail_color_panel",
     "performances",
+    "django.contrib.sitemaps",
 ]
 
 MIDDLEWARE = [
