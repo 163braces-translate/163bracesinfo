@@ -9,6 +9,14 @@ from wagtail.documents import urls as wagtaildocs_urls
 
 from myproject.search import views as search_views
 from wagtail.contrib.sitemaps.views import sitemap
+from wagtail.contrib.sitemaps.views import sitemap as wagtail_sitemap
+
+def sitemap(request):
+    response = wagtail_sitemap(request)
+    # 強制移除或覆蓋 X-Robots-Tag
+    response['X-Robots-Tag'] = 'index, follow'
+    return response
+
 
 def robots_txt(request):
     lines = [
