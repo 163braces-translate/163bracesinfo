@@ -172,6 +172,28 @@
                 <li>
                     {% include "components/theme-toggle.html" %}
                 </li>
+                <li class="flex items-center gap-1">
+                    {% load i18n %}
+                    {% get_current_language as CURRENT_LANGUAGE %}
+                    <a href="{% if CURRENT_LANGUAGE == 'en' %}/{% else %}/{% endif %}" 
+                        class="w-7 h-7 flex items-center justify-center text-xs font-semibold rounded transition-all
+                                {% if CURRENT_LANGUAGE == 'zh-hant' %}
+                                    bg-mackerel-300 text-white
+                                {% else %}
+                                    hover:bg-mackerel-200 text-mackerel-400
+                                {% endif %}">
+                        中
+                    </a>
+                    <a href="/en/" 
+                        class="w-7 h-7 flex items-center justify-center text-xs font-semibold rounded transition-all
+                                {% if CURRENT_LANGUAGE == 'en' %}
+                                    bg-mackerel-300 text-white
+                                {% else %}
+                                    hover:bg-mackerel-200 text-mackerel-400
+                                {% endif %}">
+                        EN
+                    </a>
+                </li>
             </ul>
         </nav>
     </div>
@@ -231,6 +253,30 @@
         </ul>
         {% include "components/search.html" with variant="mobile-menu" %}
         {% include "components/theme-toggle.html" %}
+
+        <!-- Add this language switcher for mobile -->
+        <div class="flex gap-3 mt-6 justify-center">
+            {% load i18n %}
+            {% get_current_language as CURRENT_LANGUAGE %}
+            <a href="{% if CURRENT_LANGUAGE == 'en' %}/{% else %}/{% endif %}" 
+                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
+                        {% if CURRENT_LANGUAGE == 'zh-hant' %}
+                            bg-white text-mackerel-300
+                        {% else %}
+                            bg-mackerel-400 text-white border border-white
+                        {% endif %}">
+                中
+            </a>
+            <a href="/en/" 
+                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
+                        {% if CURRENT_LANGUAGE == 'en' %}
+                            bg-white text-mackerel-300
+                        {% else %}
+                            bg-mackerel-400 text-white border border-white
+                        {% endif %}">
+                EN
+            </a>
+        </div>
     </nav>
     </section>
 
