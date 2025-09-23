@@ -15,11 +15,15 @@
 
             <div class="pt-4 pb-3">
                 <br>
-                <a href="/performances/stats/" 
+                <a href="/{% if current_language == 'en' %}en/{% endif %}performances/stats/" 
                 style="color: #3b82f6"
                 onmouseover="this.style.color='#26899e'"
                 onmouseout="this.style.color='#3b82f6'">
-                    📊 查看演出統計分析
+                    {% if current_language == 'en' %}
+                        📊 View Performance Statistics
+                    {% else %}
+                        📊 查看演出統計分析
+                    {% endif %}
                 </a>
             </div>
 
@@ -34,22 +38,36 @@
         <form method="get" class="mb-8 space-y-4">
             <!-- 關鍵字搜尋 -->
             <div class="flex items-center space-x-2 mb-8">
-                <label class="font-semibold">關鍵字：</label>
-                <input type="text" name="q" placeholder="名稱"
+                <label class="font-semibold">
+                    {% if current_language == 'en' %}Keywords:{% else %}關鍵字：{% endif %}
+                </label>
+                <input type="text" name="q" 
+                       placeholder="{% if current_language == 'en' %}Event name{% else %}名稱{% endif %}"
                        value="{{ query|default_if_none:'' }}"
                        class="border border-gray-300 rounded px-3 py-2" />
                 
             </div>
             <!-- 進階篩選 -->
             <div class="border border-gray-200 rounded p-4 mb-8">
-                <div class="font-semibold mb-6">進階篩選條件 <br><br></div>
+                <div class="font-semibold mb-6">
+                    {% if current_language == 'en' %}Advanced Filters{% else %}進階篩選條件{% endif %}
+                    <br><br>
+                </div>
                 <div class="mt-3 flex flex-wrap gap-4">
                     <!-- 城市 -->
                     <div>
-                        <span class="block font-medium mb-1">城市：</span>
+                        <span class="block font-medium mb-1">
+                            {% if current_language == 'en' %}City:{% else %}城市：{% endif %}
+                        </span>
                         <select name="city" multiple class="border rounded px-2 py-1 min-w-[200px]">
                             {% for city in all_cities %}
-                                <option value="{{ city.id }}" {% if city.id|stringformat:"s" in selected_cities %}selected{% endif %}>{{ city.name }}</option>
+                                <option value="{{ city.id }}" {% if city.id|stringformat:"s" in selected_cities %}selected{% endif %}>
+                                    {% if current_language == 'en' and city.name_en %}
+                                        {{ city.name_en }}
+                                    {% else %}
+                                        {{ city.name }}
+                                    {% endif %}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
@@ -57,26 +75,42 @@
 
                     <!-- 類型  -->
                     <div>
-                        <span class="block font-medium mb-1">類型：</span>
+                        <span class="block font-medium mb-1">
+                            {% if current_language == 'en' %}Type:{% else %}類型：{% endif %}
+                        </span>
                         <select name="event_type" multiple class="border rounded px-2 py-1 min-w-[200px]">
                             {% for t in all_types %}
-                                <option value="{{ t.id }}" {% if t.id|stringformat:"s" in selected_types %}selected{% endif %}>{{ t.name }}</option>
+                                <option value="{{ t.id }}" {% if t.id|stringformat:"s" in selected_types %}selected{% endif %}>
+                                    {% if current_language == 'en' and t.name_en %}
+                                        {{ t.name_en }}
+                                    {% else %}
+                                        {{ t.name }}
+                                    {% endif %}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <!-- 日期排序 -->
                     <div>
-                        <span class="block font-medium mb-1">日期排序：</span>
+                        <span class="block font-medium mb-1">
+                            {% if current_language == 'en' %}Date Sort:{% else %}日期排序：{% endif %}
+                        </span>
                         <select name="sort" class="border rounded px-2 py-1">
-                            <option value="event_date_desc" {% if sort == "event_date_desc" %}selected{% endif %}>新 → 舊</option>
-                            <option value="event_date_asc" {% if sort == "event_date_asc" %}selected{% endif %}>舊 → 新</option>
+                            <option value="event_date_desc" {% if sort == "event_date_desc" %}selected{% endif %}>
+                                {% if current_language == 'en' %}New → Old{% else %}新 → 舊{% endif %}
+                            </option>
+                            <option value="event_date_asc" {% if sort == "event_date_asc" %}selected{% endif %}>
+                                {% if current_language == 'en' %}Old → New{% else %}舊 → 新{% endif %}
+                            </option>
                         </select>
                     </div>
 
                     <!-- ===== 修改：日期篩選（並排顯示）===== -->
                     <div class="min-w-[300px] flex-1">
-                        <span class="block font-medium mb-1">日期篩選：</span>
+                        <span class="block font-medium mb-1">
+                            {% if current_language == 'en' %}Date Filter:{% else %}日期篩選：{% endif %}
+                        </span>
                         <div class="space-y-3">
                             <!-- 篩選類型選擇 -->
                             <div class="flex flex-wrap gap-3">
@@ -84,32 +118,36 @@
                                     <input type="radio" name="date_filter_type" value="range" 
                                         {% if date_filter_type == "range" or not date_filter_type %}checked{% endif %}
                                         class="mr-1">
-                                    日期區間
+                                    {% if current_language == 'en' %}Date Range{% else %}日期區間{% endif %}
                                 </label>
                                 <label class="flex items-center text-sm">
                                     <input type="radio" name="date_filter_type" value="before" 
                                         {% if date_filter_type == "before" %}checked{% endif %}
                                         class="mr-1">
-                                    此日期之前
+                                    {% if current_language == 'en' %}Before Date{% else %}此日期之前{% endif %}
                                 </label>
                                 <label class="flex items-center text-sm">
                                     <input type="radio" name="date_filter_type" value="after" 
                                         {% if date_filter_type == "after" %}checked{% endif %}
                                         class="mr-1">
-                                    此日期之後
+                                    {% if current_language == 'en' %}After Date{% else %}此日期之後{% endif %}
                                 </label>
                             </div>
                             
                             <!-- 日期輸入欄位 -->
                             <div class="flex gap-3">
                                 <div id="date-from-group" class="flex-1">
-                                    <label class="block text-xs mb-1">開始日期：</label>
+                                    <label class="block text-xs mb-1">
+                                        {% if current_language == 'en' %}Start Date:{% else %}開始日期：{% endif %}
+                                    </label>
                                     <input type="date" name="date_from" 
                                         value="{{ date_from|default_if_none:'' }}"
                                         class="border rounded px-2 py-1 w-full text-sm">
                                 </div>
                                 <div id="date-to-group" class="flex-1">
-                                    <label class="block text-xs mb-1">結束日期：</label>
+                                    <label class="block text-xs mb-1">
+                                        {% if current_language == 'en' %}End Date:{% else %}結束日期：{% endif %}
+                                    </label>
                                     <input type="date" name="date_to" 
                                         value="{{ date_to|default_if_none:'' }}"
                                         class="border rounded px-2 py-1 w-full text-sm">
@@ -122,12 +160,12 @@
                 </div>
             </div>
             <button type="submit"
-                        class="ml-2 px-4 py-2 border border-gray-500 text-gray-800 bg-white hover:bg-gray-100 rounded">
-                    搜尋/篩選
+                    class="ml-2 px-4 py-2 border border-gray-500 text-gray-800 bg-white hover:bg-gray-100 rounded">
+                {% if current_language == 'en' %}Search/Filter{% else %}搜尋/篩選{% endif %}
             </button>
             <a href="{% pageurl page %}"
                 class="ml-2 px-4 py-2 border border-gray-300 text-gray-600 bg-gray-50 hover:bg-gray-100 rounded">
-                取消所有選取
+                {% if current_language == 'en' %}Clear All{% else %}取消所有選取{% endif %}
             </a>
             <!--<button type="submit">套用篩選</button>-->
             <!--class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"-->
@@ -138,24 +176,62 @@
             <table class="w-full table-auto border-collapse border border-gray-300 text-left">
                 <thead class="bg-gray-100">
                     <tr>
-                        <th class="p-2 border">日期</th>
-                        <th class="p-2 border">活動名稱</th>
-                        <th class="p-2 border">類型</th>
-                        <th class="p-2 border">地點</th>
-                        <th class="p-2 border">城市</th>
+                        <th class="p-2 border">
+                            {% if current_language == 'en' %}Date{% else %}日期{% endif %}
+                        </th>
+                        <th class="p-2 border">
+                            {% if current_language == 'en' %}Event Name{% else %}活動名稱{% endif %}
+                        </th>
+                        <th class="p-2 border">
+                            {% if current_language == 'en' %}Type{% else %}類型{% endif %}
+                        </th>
+                        <th class="p-2 border">
+                            {% if current_language == 'en' %}Venue{% else %}地點{% endif %}
+                        </th>
+                        <th class="p-2 border">
+                            {% if current_language == 'en' %}City{% else %}城市{% endif %}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for p in performances %}
                         <tr class="hover:bg-gray-50">
                             <td class="p-2 border">{{ p.event_date|date:"Y/m/d" }}</td>
-                            <td class="p-2 border">{{ p.event_name }}</td>
-                            <td class="p-2 border">{{ p.event_type }}</td>
-                            <td class="p-2 border">{{ p.venue }}</td>
-                            <td class="p-2 border">{{ p.city }}</td>
+                            <td class="p-2 border">
+                                {% if current_language == 'en' and p.event_name_en %}
+                                    {{ p.event_name_en }}
+                                {% else %}
+                                    {{ p.event_name }}
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border">
+                                {% if current_language == 'en' and p.event_type.name_en %}
+                                    {{ p.event_type.name_en }}
+                                {% else %}
+                                    {{ p.event_type.name }}
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border">
+                                {% if current_language == 'en' and p.venue_en %}
+                                    {{ p.venue_en }}
+                                {% else %}
+                                    {{ p.venue }}
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border">
+                                {% if current_language == 'en' and p.city.name_en %}
+                                    {{ p.city.name_en }}
+                                {% else %}
+                                    {{ p.city.name }}
+                                {% endif %}
+                            </td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="5" class="p-4 text-center">尚無表演資料</td></tr>
+                        <tr>
+                            <td colspan="5" class="p-4 text-center">
+                                {% if current_language == 'en' %}No performance data available{% else %}尚無表演資料{% endif %}
+                            </td>
+                        </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -170,6 +246,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateToGroup = document.getElementById('date-to-group');
     const dateFromLabel = dateFromGroup.querySelector('label');
     const dateToLabel = dateToGroup.querySelector('label');
+
+    // Check current language
+    const isEnglish = '{{ current_language }}' === 'en';
     
     function updateDateFields() {
         const selectedType = document.querySelector('input[name="date_filter_type"]:checked').value;
@@ -180,8 +259,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // 日期區間：顯示開始日期和結束日期
             dateFromGroup.style.display = 'block';
             dateToGroup.style.display = 'block';
-            dateFromLabel.textContent = '開始日期：';
-            dateToLabel.textContent = '結束日期：';
+            dateFromLabel.textContent = isEnglish ? 'Start Date:' : '開始日期：';
+            dateToLabel.textContent = isEnglish ? 'End Date:' : '結束日期：';
             // ===== 新增防呆：結束日期不得早於開始日期 =====
             if (dateFromInput && dateToInput) {
                 dateToInput.min = dateFromInput.value || '';
@@ -190,13 +269,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // 此日期之前：只顯示結束日期
             dateFromGroup.style.display = 'none';
             dateToGroup.style.display = 'block';
-            dateToLabel.textContent = '此日期之前：';
+            dateToLabel.textContent = isEnglish ? 'Before this date:' : '此日期之前：';
             if (dateToInput) dateToInput.min = '';
         } else if (selectedType === 'after') {
             // 此日期之後：只顯示開始日期
             dateFromGroup.style.display = 'block';
             dateToGroup.style.display = 'none';
-            dateFromLabel.textContent = '此日期之後：';
+            dateFromLabel.textContent = isEnglish ? 'After this date:' : '此日期之後：';
         }
     }
     

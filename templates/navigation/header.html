@@ -69,8 +69,11 @@
 
 <header class="site-container w-full px-10 pt-14 pb-8 md:py-8 md:px-20">
     <div class="flex justify-between items-center ">
+        
+        {% load i18n %}
+        {% get_current_language as CURRENT_LANGUAGE %}
         <a 
-            href="/"
+            href="{% if CURRENT_LANGUAGE == 'en' %}/en/{% else %}/{% endif %}"
             data-header-logo
             class="header-logo z-30 uppercase font-semibold text-3xl"
             aria-label="Go to the Wagtail Starter Kit homepage">
@@ -118,7 +121,7 @@
                                             hover:decoration-mackerel-300
                                             cursor-pointer
                                             " 
-                                            href="{{ link.value.get_url }}"
+                                            href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ link.value.get_url }}"
                                         >
                                             {{ link.value.get_title }}
                                             <svg class="nav-dropdown-arrow w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
@@ -127,7 +130,7 @@
                                         </a>
                                         <div class="nav-dropdown-content">
                                             {% for child in children %}
-                                                <a href="{{ child.url }}">{{ child.title }}</a>
+                                                <a href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ child.url }}">{{ child.title }}</a>
                                             {% endfor %}
                                         </div>
                                     </div>
@@ -145,7 +148,7 @@
                                         decoration-mackerel-200
                                         hover:decoration-mackerel-300
                                         " 
-                                        href="{{ link.value.get_url }}" 
+                                        href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ link.value.get_url }}" 
                                     >
                                         {{ link.value.get_title }}
                                     </a>
@@ -175,7 +178,7 @@
                 <li class="flex items-center gap-1">
                     {% load i18n %}
                     {% get_current_language as CURRENT_LANGUAGE %}
-                    <a href="{% if CURRENT_LANGUAGE == 'en' %}/{% else %}/{% endif %}" 
+                    <a href="{% if CURRENT_LANGUAGE == 'en' %}{{ request.get_full_path|slice:'3:' }}{% else %}/{% endif %}" 
                         class="w-7 h-7 flex items-center justify-center text-xs font-semibold rounded transition-all
                                 {% if CURRENT_LANGUAGE == 'zh-hant' %}
                                     bg-mackerel-300 text-white
@@ -184,7 +187,7 @@
                                 {% endif %}">
                         中
                     </a>
-                    <a href="/en/" 
+                    <a href="{% if CURRENT_LANGUAGE == 'zh-hant' %}/en{{ request.get_full_path }}{% else %}{{ request.get_full_path }}{% endif %}" 
                         class="w-7 h-7 flex items-center justify-center text-xs font-semibold rounded transition-all
                                 {% if CURRENT_LANGUAGE == 'en' %}
                                     bg-mackerel-300 text-white
@@ -258,7 +261,7 @@
         <div class="flex gap-3 mt-6 justify-center">
             {% load i18n %}
             {% get_current_language as CURRENT_LANGUAGE %}
-            <a href="{% if CURRENT_LANGUAGE == 'en' %}/{% else %}/{% endif %}" 
+            <a href="{% if CURRENT_LANGUAGE == 'en' %}{{ request.get_full_path|slice:'3:' }}{% else %}/{% endif %}" 
                 class="px-4 py-2 text-sm font-semibold rounded-full transition-all
                         {% if CURRENT_LANGUAGE == 'zh-hant' %}
                             bg-white text-mackerel-300
@@ -267,7 +270,7 @@
                         {% endif %}">
                 中
             </a>
-            <a href="/en/" 
+            <a href="{% if CURRENT_LANGUAGE == 'zh-hant' %}/en{{ request.get_full_path }}{% else %}{{ request.get_full_path }}{% endif %}" 
                 class="px-4 py-2 text-sm font-semibold rounded-full transition-all
                         {% if CURRENT_LANGUAGE == 'en' %}
                             bg-white text-mackerel-300

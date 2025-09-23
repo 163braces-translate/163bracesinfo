@@ -97,6 +97,7 @@ class ListingFields(models.Model):
 @register_snippet
 class AuthorSnippet(models.Model):
     title = models.CharField(blank=False, max_length=255)
+    title_en = models.CharField("English Title", blank=True, max_length=255)
     image = models.ForeignKey(
         "images.CustomImage",
         null=True,
@@ -107,55 +108,65 @@ class AuthorSnippet(models.Model):
 
     def __str__(self):
         return self.title
+    
+    def get_title(self, language='zh-hant'):
+        if language == 'en' and self.title_en:
+            return self.title_en
+        return self.title
 
 
 @register_snippet
 class ArticleTopic(models.Model):
     title = models.CharField(blank=False, max_length=255)
+    title_en = models.CharField("English Title", blank=True, max_length=255)
     slug = models.SlugField(blank=False, max_length=255)
+    slug_en = models.SlugField("English Slug", blank=True, max_length=255)
 
     def __str__(self):
         return self.title
+    
+    def get_title(self, language='zh-hant'):
+        if language == 'en' and self.title_en:
+            return self.title_en
+        return self.title
+    
+    def get_slug(self, language='zh-hant'):
+        if language == 'en' and self.slug_en:
+            return self.slug_en
+        return self.slug
 
     def save(self, *args, **kwargs):
+        # Auto-generate slugs for both languages if not provided
         if self._state.adding and not self.slug:
             self.slug = self.slugify(self.title)
-            using = kwargs.get("using") or router.db_for_write(
-                type(self), instance=self
-            )
-            # Make sure we write to the same db for all attempted writes,
-            # with a multi-master setup, theoretically we could try to
-            # write and rollback on different DBs
-            kwargs["using"] = using
-            # Be opportunistic and try to save the tag, this should work for
-            # most cases ;)
-            try:
-                with transaction.atomic(using=using):
-                    res = super().save(*args, **kwargs)
-                return res
-            except IntegrityError:
-                pass
-            # Now try to find existing slugs with similar titles
-            slugs = set(
-                type(self)
-                ._default_manager.filter(slug__startswith=self.slug)
-                .values_list("slug", flat=True)
-            )
-            i = 1
-            while True:
-                slug = self.slugify(self.title, i)
-                if slug not in slugs:
-                    self.slug = slug
-                    # We purposely ignore concurrency issues here for now.
-                    # (That is, till we found a nice solution...)
-                    return super().save(*args, **kwargs)
-                i += 1
-        else:
-            return super().save(*args, **kwargs)
+        if self._state.adding and not self.slug_en and self.title_en:
+            self.slug_en = self.slugify(self.title_en)
+            
+        # Your existing save logic continues...
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = using
+        try:
+            with transaction.atomic(using=using):
+                res = super().save(*args, **kwargs)
+            return res
+        except IntegrityError:
+            pass
+        # Handle slug conflicts for Chinese version
+        slugs = set(
+            type(self)
+            ._default_manager.filter(slug__startswith=self.slug)
+            .values_list("slug", flat=True)
+        )
+        i = 1
+        while True:
+            slug = self.slugify(self.title, i)
+            if slug not in slugs:
+                self.slug = slug
+                return super().save(*args, **kwargs)
+            i += 1
 
     def slugify(self, title, i=None):
         title = slugify(title, allow_unicode=True)
-
         if i is not None:
             title += "_%d" % i
         return title
@@ -164,15 +175,29 @@ class ArticleTopic(models.Model):
 @register_snippet
 class Statistic(models.Model):
     statistic = models.CharField(blank=False, max_length=12)
+    statistic_en = models.CharField("English Statistic", blank=True, max_length=12)
     description = models.CharField(blank=False, max_length=225)
+    description_en = models.CharField("English Description", blank=True, max_length=225)
 
     panels = [
         FieldPanel("statistic"),
+        FieldPanel("statistic_en"),
         FieldPanel("description"),
+        FieldPanel("description_en"),
     ]
 
     def __str__(self):
         return self.statistic
+    
+    def get_statistic(self, language='zh-hant'):
+        if language == 'en' and self.statistic_en:
+            return self.statistic_en
+        return self.statistic
+    
+    def get_description(self, language='zh-hant'):
+        if language == 'en' and self.description_en:
+            return self.description_en
+        return self.description
 
 
 @register_setting

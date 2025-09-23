@@ -13,6 +13,7 @@ import calendar
 @register_snippet
 class EventType(models.Model):
     name = models.CharField("類型", max_length=50)
+    name_en = models.CharField("English Name", max_length=50, blank=True)
     order = models.PositiveIntegerField("排序順序", default=0)
 
     class Meta:
@@ -20,29 +21,52 @@ class EventType(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_name(self, language='zh-hant'):
+        if language == 'en' and self.name_en:
+            return self.name_en
+        return self.name
 
 @register_snippet
 class City(models.Model):
     name = models.CharField("城市", max_length=50)
+    name_en = models.CharField("English Name", max_length=50, blank=True)
     order = models.PositiveIntegerField("排序順序", default=0)
 
     class Meta:
         ordering = ["order", "name"]  # 預設排序：先依 order，再依 name
 
     def __str__(self):
+        return self.name
+    
+    def get_name(self, language='zh-hant'):
+        if language == 'en' and self.name_en:
+            return self.name_en
         return self.name
 
 @register_snippet
 class Performance(models.Model):
     event_date = models.DateField("表演日期")
     event_name = models.CharField("表演名稱", max_length=255)
+    event_name_en = models.CharField("English Event Name", max_length=255, blank=True)
     event_type = models.ForeignKey(EventType, on_delete=models.PROTECT)
     venue = models.CharField("地點", max_length=255)
+    venue_en = models.CharField("English Venue", max_length=255, blank=True)
     city = city = models.ForeignKey(City, on_delete=models.PROTECT)
 
     def __str__(self):
         return f"{self.event_date} - {self.event_name}"
-
+    
+    def get_event_name(self, language='zh-hant'):
+        if language == 'en' and self.event_name_en:
+            return self.event_name_en
+        return self.event_name
+    
+    def get_venue(self, language='zh-hant'):
+        if language == 'en' and self.venue_en:
+            return self.venue_en
+        return self.venue
+    
 
 from .models import Performance, City, EventType
 
@@ -56,6 +80,9 @@ class PerformanceListPage(BasePage):
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
+
+        from django.utils.translation import get_language
+        current_language = get_language()
 
         performances = Performance.objects.all()
 
@@ -114,6 +141,7 @@ class PerformanceListPage(BasePage):
         # 下拉選單資料來源
         context["all_cities"] = City.objects.all().order_by("order")
         context["all_types"] = EventType.objects.all().order_by("order")
+        context["current_language"] = current_language
 
         return context
 
