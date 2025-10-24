@@ -1,7 +1,8 @@
 
 {% extends "base.html" %}
 
-{% load static wagtailuserbar wagtailcore_tags wagtailimages_tags util_tags %}
+{% load static wagtailuserbar wagtailcore_tags wagtailimages_tags wagtailsettings_tags util_tags %}
+{% get_settings %}
 
 {% wagtail_site as current_site %}
 
@@ -13,6 +14,18 @@
 <link rel="apple-touch-icon" href="{% static 'images/favicons/apple-touch-icon.png' %}">
 <link rel="manifest" href="{% static 'images/favicons/favicon.webmanifest' %}">
 -->
+
+{% if settings.utils.BrandingSettings.favicon %}
+    {% image settings.utils.BrandingSettings.favicon fill-32x32 as favicon_32 %}
+    {% image settings.utils.BrandingSettings.favicon fill-180x180 as favicon_180 %}
+    <link rel="icon" href="{{ favicon_32.url }}" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ favicon_180.url }}">
+{% else %}
+    <link rel="icon" href="{% static 'images/favicons/favicon.ico' %}" sizes="32x32">
+    <link rel="icon" href="{% static 'images/favicons/favicon.svg'%}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{% static 'images/favicons/apple-touch-icon.png' %}">
+    <link rel="manifest" href="{% static 'images/favicons/favicon.webmanifest' %}">
+{% endif %}
 
 <meta name="theme-color" content="#26899E"/>
 

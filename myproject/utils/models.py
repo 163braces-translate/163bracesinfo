@@ -394,3 +394,25 @@ class BasePage(SocialFields, ListingFields, Page):
 
 BasePage._meta.get_field("seo_title").verbose_name = "Title tag"
 BasePage._meta.get_field("search_description").verbose_name = "Meta description"
+
+@register_setting
+class BrandingSettings(BaseSiteSetting):
+    logo = models.ForeignKey(
+        "images.CustomImage",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Logo for the site header"
+    )
+    favicon = models.ForeignKey(
+        "images.CustomImage",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Favicon for browser tabs"
+    )
+
+    panels = [
+        FieldPanel("logo"),
+        FieldPanel("favicon"),
+    ]

@@ -1,5 +1,6 @@
-{% load wagtailcore_tags wagtailsettings_tags %}
+{% load wagtailcore_tags wagtailsettings_tags wagtailimages_tags %}
 {% wagtail_site as current_site %}
+{% get_settings %}
 
 <style>
 /* 簡單的下拉選單樣式 */
@@ -75,8 +76,13 @@
         <a 
             href="{% if CURRENT_LANGUAGE == 'en' %}/en/{% else %}/{% endif %}"
             data-header-logo
-            class="header-logo z-30 uppercase font-semibold text-3xl"
+            class="header-logo z-30 uppercase font-semibold text-3xl flex items-center gap-2"
             aria-label="Go to the Wagtail Starter Kit homepage">
+            {% if settings.utils.BrandingSettings.logo %}
+                {% if settings.utils.BrandingSettings.logo %}
+                    {% image settings.utils.BrandingSettings.logo fill-80x80 class="h-12 w-12 mr-2" %}
+                {% endif %}
+            {% endif %}
             {{ current_site.site_name|default:"Site name" }}
         </a>
 
