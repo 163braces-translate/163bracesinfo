@@ -232,6 +232,31 @@
         data-mobile-menu-content
     >
     <nav aria-label="Primary" class="py-32">
+        
+        <!-- Add this language switcher for mobile -->
+        <div class="flex gap-3 mt-6 justify-center">
+            {% load i18n %}
+            {% get_current_language as CURRENT_LANGUAGE %}
+            <a href="{% if CURRENT_LANGUAGE == 'en' %}{{ request.get_full_path|slice:'3:' }}{% else %}/{% endif %}" 
+                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
+                        {% if CURRENT_LANGUAGE == 'zh-hant' %}
+                            bg-white text-mackerel-300
+                        {% else %}
+                            bg-mackerel-400 text-white border border-white
+                        {% endif %}">
+                中
+            </a>
+            <a href="{% if CURRENT_LANGUAGE == 'zh-hant' %}/en{{ request.get_full_path }}{% else %}{{ request.get_full_path }}{% endif %}" 
+                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
+                        {% if CURRENT_LANGUAGE == 'en' %}
+                            bg-white text-mackerel-300
+                        {% else %}
+                            bg-mackerel-400 text-white border border-white
+                        {% endif %}">
+                EN
+            </a>
+        </div>
+        
         <ul class="flex flex-col pt-5">
             {% for link in settings.navigation.NavigationSettings.primary_navigation %}
                 <li class="
@@ -265,31 +290,11 @@
             {% endfor %}
         </ul>
         {% include "components/search.html" with variant="mobile-menu" %}
-        {% include "components/theme-toggle.html" %}
 
-        <!-- Add this language switcher for mobile -->
-        <div class="flex gap-3 mt-6 justify-center">
-            {% load i18n %}
-            {% get_current_language as CURRENT_LANGUAGE %}
-            <a href="{% if CURRENT_LANGUAGE == 'en' %}{{ request.get_full_path|slice:'3:' }}{% else %}/{% endif %}" 
-                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
-                        {% if CURRENT_LANGUAGE == 'zh-hant' %}
-                            bg-white text-mackerel-300
-                        {% else %}
-                            bg-mackerel-400 text-white border border-white
-                        {% endif %}">
-                中
-            </a>
-            <a href="{% if CURRENT_LANGUAGE == 'zh-hant' %}/en{{ request.get_full_path }}{% else %}{{ request.get_full_path }}{% endif %}" 
-                class="px-4 py-2 text-sm font-semibold rounded-full transition-all
-                        {% if CURRENT_LANGUAGE == 'en' %}
-                            bg-white text-mackerel-300
-                        {% else %}
-                            bg-mackerel-400 text-white border border-white
-                        {% endif %}">
-                EN
-            </a>
-        </div>
+        {% comment %}
+        {% include "components/theme-toggle.html" %}
+        {% endcomment %}
+        
     </nav>
     </section>
 
