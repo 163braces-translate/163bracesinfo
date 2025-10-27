@@ -163,6 +163,8 @@
                         {% endif %}
                     </li>
                 {% endfor %}
+
+                {% comment %}
                 <li class="flex items-center">
                     <button 
                         data-toggle-search-panel
@@ -178,6 +180,7 @@
                         {% include "icons/magnifying-glass.html" with class="fill-current w-5 h-5" %}
                     </button>
                 </li>
+                {% endcomment %}
                 
                 {% comment %}
                 <li>
@@ -289,7 +292,9 @@
                 </li>
             {% endfor %}
         </ul>
+        {% comment %}
         {% include "components/search.html" with variant="mobile-menu" %}
+        {% endcomment %}
 
         {% comment %}
         {% include "components/theme-toggle.html" %}
