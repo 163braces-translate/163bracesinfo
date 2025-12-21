@@ -9,7 +9,6 @@ class Migration(migrations.Migration):
     dependencies = [
         ("images", "0001_initial"),
         ("performances", "0010_city_name_en_performance_event_name_en_and_more"),
-        ("wagtailcore", "0096_delete_embed"),
     ]
 
     operations = [
