@@ -5,10 +5,16 @@ from myproject.utils.models import BasePage
 from wagtail.fields import RichTextField
 from wagtail.admin.panels import FieldPanel
 
+from wagtail.images import get_image_model
+
 from django.db.models import Count, Q
 from django.db.models.functions import Extract
 import json
 import calendar
+import datetime
+
+from wagtail.images import get_image_model
+
 
 @register_snippet
 class EventType(models.Model):
@@ -67,6 +73,109 @@ class Performance(models.Model):
             return self.venue_en
         return self.venue
     
+@register_snippet
+class Album(models.Model):
+    name = models.CharField("專輯名稱", max_length=255)
+    name_en = models.CharField("English Album Name", max_length=255, blank=True)
+    order = models.PositiveIntegerField("排序順序", default=0)
+
+    # ✨ 新增：專輯封面圖片 (非必填)
+    cover_image = models.ForeignKey(
+        get_image_model(),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name="專輯封面",
+        help_text="非必填。建議使用正方形圖片。",
+    )
+
+    panels = [
+        FieldPanel('name'),
+        FieldPanel('name_en'),
+        FieldPanel('order'),
+        FieldPanel('cover_image'), # ✨ 加入到管理後台面板
+    ]
+
+    class Meta:
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+    
+    def get_name(self, language='zh-hant'):
+        if language == 'en' and self.name_en:
+            return self.name_en
+        return self.name
+    
+@register_snippet
+class Song(models.Model):
+    title = models.CharField("歌曲名稱", max_length=255)
+    title_en = models.CharField("English Title", max_length=255, blank=True)
+    artist = models.CharField("演唱者", max_length=255, blank=True)
+    artist_en = models.CharField("English Artist", max_length=255, blank=True)
+    album = models.ForeignKey(
+        Album,
+        on_delete=models.PROTECT,
+        default=1,  # You'll need to create "Single(單曲)" first with id=1
+        verbose_name="專輯",
+        help_text="選擇專輯，預設為單曲"
+    )
+    order = models.PositiveIntegerField("排序順序", default=0)
+    
+    # ✨ 新增：單曲封面圖片 (非必填)
+    single_image = models.ForeignKey(
+        get_image_model(),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name="單曲封面",
+        help_text="如果歌曲被設定為單曲 (Album ID=1)，可選填此欄位。",
+    )
+
+    panels = [
+        FieldPanel('title'),
+        FieldPanel('title_en'),
+        FieldPanel('artist'),
+        FieldPanel('artist_en'),
+        FieldPanel('album'),
+        FieldPanel('single_image'), # ✨ 加入到管理後台面板
+        FieldPanel('order'),
+    ]
+    
+    def __str__(self):
+        return f"{self.title} - {self.artist}" if self.artist else self.title
+    
+    def get_title(self, language='zh-hant'):
+        if language == 'en' and self.title_en:
+            return self.title_en
+        return self.title
+    
+    def get_artist(self, language='zh-hant'):
+        if language == 'en' and self.artist_en:
+            return self.artist_en
+        return self.artist
+    
+    # ✨ 新增：獲取封面圖片的方法
+    def get_cover_image(self):
+        """
+        如果歌曲是單曲且有單曲封面，則使用單曲封面；
+        否則，如果專輯有封面，則使用專輯封面。
+        """
+        # 假設 ID=1 是「單曲」
+        if self.album_id == 1 and self.single_image:
+            return self.single_image
+        
+        if self.album and self.album.cover_image:
+            return self.album.cover_image
+            
+        return None # 無封面圖片
+    
+    class Meta:
+        verbose_name = "Song"
+        verbose_name_plural = "Songs"
+        ordering = ['order', 'title']
 
 from .models import Performance, City, EventType
 
@@ -209,7 +318,10 @@ class PerformanceStatsPage(BasePage):
         }
         
         # 為每個演出類型創建數據集
-        colors = ['#FF7F7F', '#87CEEB', '#FFB347', '#90EE90']
+        colors = [ '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
+                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
+                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
+                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5']
         
         for i, event_type in enumerate(all_types):
             dataset = {
@@ -281,7 +393,10 @@ class PerformanceStatsPage(BasePage):
             'datasets': []
         }
 
-        history_colors = ['#FF7F7F', '#87CEEB', '#FFB347', '#90EE90']
+        history_colors = [ '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
+                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
+                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
+                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5']
 
         for i, event_type in enumerate(all_types_for_history):
             dataset = {
@@ -306,3 +421,86 @@ class PerformanceStatsPage(BasePage):
         })
         
         return context
+    
+class ReplayPage(BasePage):
+    """
+    2025 Replay Page - Interactive dashboard for users to create their year-end review
+    """
+    template = "pages/replay_page.html"
+    intro = RichTextField(blank=True)
+    
+    logo = models.ForeignKey(
+        get_image_model(),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name='Logo',
+        help_text='Logo to display in top left corner'
+    )
+
+
+    content_panels = BasePage.content_panels + [
+        FieldPanel('intro'),
+        FieldPanel('logo'),
+    ]
+    
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+        
+        from django.utils.translation import get_language
+        current_language = get_language()
+        
+        # Get all songs for selection
+        context['songs'] = Song.objects.all().order_by('order', 'title')
+        
+        # Get all 2025 performances (you can change the year as needed)
+        from datetime import datetime
+        current_year = datetime.now().year
+        selected_year = request.GET.get('year', current_year)
+        
+        try:
+            selected_year = int(selected_year)
+        except (ValueError, TypeError):
+            selected_year = current_year
+        
+        performances = Performance.objects.filter(
+            event_date__year=selected_year
+        ).select_related('city', 'event_type').order_by('event_date')
+        
+        context['performances'] = performances
+        context['selected_year'] = selected_year
+        context['current_language'] = current_language
+        
+        # Get available years for year selector
+        available_years = Performance.objects.dates('event_date', 'year').values_list(
+            'event_date__year', flat=True
+        ).distinct().order_by('-event_date__year')
+        context['available_years'] = list(available_years)
+
+        event_types_data = {}
+        for et in EventType.objects.all():
+            event_types_data[et.name] = {
+                'order': et.order,
+                'name_en': et.name_en or et.name
+            }
+        context['event_types_data'] = json.dumps(event_types_data)
+
+        cities_data = {}
+        for city in City.objects.all():
+            cities_data[city.name] = {
+                'order': city.order,
+                'name_en': city.name_en or city.name
+            }
+        context['cities_data'] = json.dumps(cities_data)
+
+        if self.logo:
+            logo_rendition = self.logo.get_rendition('width-200')
+            context['logo_url'] = logo_rendition.url
+        else:
+            context['logo_url'] = None
+        
+        return context
+    
+    class Meta:
+        verbose_name = "回顧頁面 / Replay Page"
