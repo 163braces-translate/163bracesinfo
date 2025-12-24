@@ -1239,7 +1239,7 @@
                 
                 if (lines.length >= maxLines - 1) {
                     // 已經達到最大行數，剩下的加 ...
-                    const remaining = words.slice(i).join('');
+                    const remaining = words.slice(i + 1).join('');
                     let lastLine = currentLine + remaining;
                     
                     while (ctx.measureText(lastLine + '...').width > maxWidth && lastLine.length > 0) {

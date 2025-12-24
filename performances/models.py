@@ -160,11 +160,10 @@ class Song(models.Model):
     # ✨ 新增：獲取封面圖片的方法
     def get_cover_image(self):
         """
-        如果歌曲是單曲且有單曲封面，則使用單曲封面；
+        如果歌曲有單曲封面，則使用單曲封面；
         否則，如果專輯有封面，則使用專輯封面。
         """
-        # 假設 ID=1 是「單曲」
-        if self.album_id == 1 and self.single_image:
+        if self.single_image:
             return self.single_image
         
         if self.album and self.album.cover_image:
