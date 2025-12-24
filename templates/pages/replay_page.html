@@ -395,6 +395,25 @@
             {% endfor %}
         </div>
     </div>
+
+    <!-- 新增：給 163 的話 -->
+    <div class="section-card">
+        <h2 class="section-title">💬 {% trans "要對 163braces 說的話" %} / Message to 163braces</h2>
+        <p class="section-subtitle">{% trans "如果沒有選擇演出，這段話會出現在圖片中" %} / This message will appear if no performances are selected</p>
+        <div class="name-input-group">
+            <textarea 
+                id="userMessage" 
+                class="name-input" 
+                placeholder="{% trans '寫下你想對 163braces 說的話...' %} / Write your message to 163braces..."
+                maxlength="200"
+                rows="4"
+                style="resize: vertical; font-family: inherit;"
+            ></textarea>
+            <div style="text-align: right; color: #999; font-size: 12px; margin-top: 5px;">
+                <span id="messageCount">0</span> / 200
+            </div>
+        </div>
+    </div>
     
     <!-- Generate Button -->
     <button class="generate-btn" id="generateBtn" disabled>
@@ -407,7 +426,13 @@
         <h2 class="section-title">✨ {% trans "你的" %} {{ selected_year }} {% trans "回顧" %} / Your {{ selected_year }} Replay</h2>
         <div class="preview-container">
             <canvas id="replayCanvas" width="1080" height="1920"></canvas>
-            <br>
+            <!-- 圖片會動態插入到這裡 -->
+            
+            <p style="color: #666; font-size: 14px; margin-top: 15px;">
+                📱 手機用戶：長按圖片選擇「儲存影像」即可存到相簿<br>
+                💻 電腦用戶：點擊下方按鈕下載
+            </p>
+            
             <button class="download-btn" id="downloadBtn">
                 📥 {% trans "下載圖片" %} / Download Image
             </button>
@@ -422,6 +447,7 @@
     let selectedSongs = [];
     let selectedPerformances = [];
     let userName = '';
+    let userMessage = '';
     const selectedYear = {{ selected_year }};
     const currentLanguage = '{{ current_language }}';
     const eventTypesData = {{ event_types_data|safe }};
@@ -460,6 +486,17 @@
         updateGenerateButton();
     });
     
+    // User message input（新增這段）
+    const userMessageInput = document.getElementById('userMessage');
+    const messageCount = document.getElementById('messageCount');
+
+    userMessageInput.addEventListener('input', (e) => {
+        userMessage = e.target.value.trim();
+        messageCount.textContent = e.target.value.length;
+        // 不需要 updateGenerateButton()，因為訊息不是必填
+    });
+
+
     // Song selection (max 3)
     songGrid.addEventListener('click', (e) => {
         const card = e.target.closest('.song-card');
@@ -544,9 +581,9 @@
     function updateGenerateButton() {
         const hasName = userName.length > 0;
         const hasSongs = selectedSongs.length > 0;
-        const hasPerformances = selectedPerformances.length > 0;
         
-        generateBtn.disabled = !(hasName && (hasSongs || hasPerformances));
+        // 有名字 AND 至少一首歌 → 可以生成
+        generateBtn.disabled = !(hasName && hasSongs);
     }
     
     // Generate button click
@@ -556,14 +593,29 @@
         
         await generateReplayImage();
 
-        // 手機版調整 canvas 顯示尺寸
-        if (window.innerWidth <= 768) {
-            canvas.style.width = '400px';
-            canvas.style.height = '711px';
-        } else {
-            canvas.style.width = '1080px';
-            canvas.style.height = '1920px';
+        // 將 Canvas 轉換成 Image（讓手機可以長按儲存）
+        const resultImage = document.getElementById('resultImage');
+        if (!resultImage) {
+            // 第一次生成：建立 img 元素
+            const img = document.createElement('img');
+            img.id = 'resultImage';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.style.borderRadius = '8px';
+            img.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+            
+            // 手機版調整尺寸
+            if (window.innerWidth <= 768) {
+                img.style.width = '400px';
+            }
+            
+            // 將 img 插入到 canvas 後面
+            canvas.parentNode.insertBefore(img, canvas.nextSibling);
+            canvas.style.display = 'none';  // 隱藏 canvas
         }
+        
+        // 更新圖片內容
+        document.getElementById('resultImage').src = canvas.toDataURL('image/png');
         
         previewSection.style.display = 'block';
         previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -576,10 +628,19 @@
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = `${userName}_${selectedYear}_163braces_回顧.png`;
-        link.href = canvas.toDataURL('image/png');
+        
+        // 從 resultImage 取得圖片，如果沒有就從 canvas 取得
+        const resultImage = document.getElementById('resultImage');
+        if (resultImage && resultImage.src) {
+            link.href = resultImage.src;
+        } else {
+            link.href = canvas.toDataURL('image/png');
+        }
+        
         link.click();
     });
-    
+
+
     // Generate the replay image
     async function generateReplayImage() {
         // Clear canvas with mint cream background
@@ -750,13 +811,48 @@
             
             yPos += 100;
             await drawStackedBarChart(yPos);
+        } else if (userMessage) {
+            // 沒有選演出，但有填訊息：顯示訊息
+            ctx.fillStyle = '#FFF0F5';
+            drawRoundedRect(ctx, 80, yPos, 920, 50, 25);
+            ctx.fillStyle = '#555555';
+            ctx.font = 'bold 32px "Source Sans 3", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('💬 給 163braces 的話', 540, yPos + 35);
+            
+            yPos += 80;
+            
+            // 繪製訊息框
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 2;
+            const messageBoxHeight = 200;
+            drawRoundedRect(ctx, 100, yPos, 880, messageBoxHeight, 15);
+            ctx.stroke();
+            
+            // 繪製訊息文字（支援換行）
+            ctx.fillStyle = '#333333';
+            ctx.font = '24px "Source Sans 3", sans-serif';
+            ctx.textAlign = 'center';
+            
+            // 使用 wrapText 函數處理換行
+            const messageLines = wrapText(ctx, userMessage, 840, 6);
+            const lineHeight = 32;
+            const startY = yPos + (messageBoxHeight - (messageLines.length * lineHeight)) / 2 + 20;
+            
+            messageLines.forEach((line, index) => {
+                ctx.fillText(line, 540, startY + (index * lineHeight));
+            });
+            
+            yPos += messageBoxHeight + 30;
         }
         
         // Footer
+        const footerY = Math.min(yPos + 350, 1850);  // 至少在 yPos+50，最多在 1850
         ctx.fillStyle = '#333333';
         ctx.font = '22px "Source Sans 3", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Generated at 163braces.info', 540, 1880);
+        ctx.fillText('Generated at 163braces.info/replay', 540, footerY);
     }
     
     function aggregateByCity() {
