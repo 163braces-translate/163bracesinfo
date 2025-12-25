@@ -209,12 +209,13 @@ STORAGES = {
     },
 }
 
+# Cache configuration
 CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "replay-cache",
-        "OPTIONS": {
-            "MAX_ENTRIES": 1000
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',  # ← 改成記憶體快取
+        'LOCATION': 'unique-snowflake',
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,  # 最多 1000 個項目
         }
     }
 }
