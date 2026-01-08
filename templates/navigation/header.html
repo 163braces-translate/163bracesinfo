@@ -1,4 +1,4 @@
-{% load wagtailcore_tags wagtailsettings_tags wagtailimages_tags %}
+{% load wagtailcore_tags wagtailsettings_tags wagtailimages_tags util_tags %}
 {% wagtail_site as current_site %}
 {% get_settings %}
 
@@ -61,11 +61,46 @@
 .nav-dropdown-arrow {
     margin-left: 4px;
     transition: transform 0.2s;
+    display: inline-block;
 }
 
 .nav-dropdown:hover .nav-dropdown-arrow {
     transform: rotate(180deg);
 }
+
+.mobile-nav-item {
+    position: relative;
+}
+
+.mobile-dropdown-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.mobile-dropdown-content {
+    display: none;
+    padding-left: 20px;
+    margin-top: 8px;
+}
+
+.mobile-dropdown-content.show {
+    display: block;
+}
+
+.mobile-dropdown-arrow {
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+.mobile-dropdown-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+
 </style>
 
 <header class="site-container w-full px-10 pt-14 pb-8 md:py-8 md:px-20">
@@ -107,11 +142,9 @@
                 {% for link in settings.navigation.NavigationSettings.primary_navigation %}
                     <li>
                         {% if link.value.page.live %}
-                            {% comment %}
-                            檢查頁面是否有子頁面（這裡我們直接檢查，不依賴 template tag）
-                            {% endcomment %}
-                            {% with children=link.value.page.get_children.live.in_menu %}
-                                {% if children and link.value.show_children|default:False %}
+                            {% if link.value.show_children %}
+                                {% get_nav_children link.value.page link.value.max_children_depth as children %}
+                                {% if children %}
                                     <div class="nav-dropdown">
                                         <a 
                                             class="
@@ -141,6 +174,7 @@
                                         </div>
                                     </div>
                                 {% else %}
+                                    {# show_children 勾選了但沒有子頁面 - 顯示普通連結 #}
                                     <a 
                                         class="
                                         flex 
@@ -159,7 +193,26 @@
                                         {{ link.value.get_title }}
                                     </a>
                                 {% endif %}
-                            {% endwith %}
+                            {% else %}
+                                {# show_children 沒勾選 - 顯示普通連結 #}
+                                <a 
+                                    class="
+                                    flex 
+                                    text-base 
+                                    items-center 
+                                    font-semibold 
+                                    font-sans3
+                                    underline
+                                    underline-offset-8
+                                    decoration-[1.5px]
+                                    decoration-mackerel-200
+                                    hover:decoration-mackerel-300
+                                    " 
+                                    href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ link.value.get_url }}" 
+                                >
+                                    {{ link.value.get_title }}
+                                </a>
+                            {% endif %}
                         {% endif %}
                     </li>
                 {% endfor %}
@@ -267,27 +320,80 @@
                     border-dashed
                     border-mackerel-200
                     last-of-type:border-b-[1px]
+                    mobile-nav-item
                 ">
-                    {% if link.value.page %}
-                        <a 
-                            class="
-                            flex
-                            py-6
-                            text-lg
-                            items-center 
-                            font-semibold 
-                            font-codepro
-                            underline
-                            underline-offset-8
-                            text-white
-                            decoration-transparent
-                            hover:decoration-white
-                            decoration-[1.5px]
-                            " 
-                            href="{{ link.value.get_url }}" 
-                        >
-                            {{ link.value.get_title }}
-                        </a>
+                    {% if link.value.page.live %}
+                        {% comment %} 檢查是否要顯示子頁面 {% endcomment %}
+                        {% with children=link.value.page.get_children.live.in_menu %}
+                            {% if children and link.value.show_children|default:False %}
+                                {% comment %} 有子頁面 - 顯示下拉選單 {% endcomment %}
+                                <div class="mobile-dropdown-toggle flex justify-between items-center" data-mobile-dropdown-toggle>
+                                    <a 
+                                        class="
+                                        flex
+                                        py-6
+                                        text-lg
+                                        items-center 
+                                        font-semibold 
+                                        font-codepro
+                                        underline
+                                        underline-offset-8
+                                        text-white
+                                        decoration-transparent
+                                        hover:decoration-white
+                                        decoration-[1.5px]
+                                        flex-grow
+                                        " 
+                                        href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ link.value.get_url }}"
+                                    >
+                                        {{ link.value.get_title }}
+                                    </a>
+                                    <span class="mobile-dropdown-arrow text-white text-sm pr-2">▼</span>
+                                </div>
+                                
+                                {% comment %} 子頁面列表 {% endcomment %}
+                                <div class="mobile-dropdown-content pl-6">
+                                    {% for child in children %}
+                                        <a 
+                                            href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ child.url }}"
+                                            class="
+                                            block
+                                            py-3
+                                            text-base
+                                            font-semibold
+                                            font-codepro
+                                            text-white
+                                            text-opacity-80
+                                            hover:text-opacity-100
+                                            "
+                                        >
+                                            {{ child.title }}
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {% comment %} 沒有子頁面 - 普通連結 {% endcomment %}
+                                <a 
+                                    class="
+                                    flex
+                                    py-6
+                                    text-lg
+                                    items-center 
+                                    font-semibold 
+                                    font-codepro
+                                    underline
+                                    underline-offset-8
+                                    text-white
+                                    decoration-transparent
+                                    hover:decoration-white
+                                    decoration-[1.5px]
+                                    " 
+                                    href="{% if CURRENT_LANGUAGE == 'en' %}/en{% endif %}{{ link.value.get_url }}"
+                                >
+                                    {{ link.value.get_title }}
+                                </a>
+                            {% endif %}
+                        {% endwith %}
                     {% endif %}
                 </li>
             {% endfor %}
@@ -324,4 +430,37 @@
     >
         {% include "components/search.html" with variant="search-panel" %}
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropdownToggles = document.querySelectorAll('[data-mobile-dropdown-toggle]');
+    
+    dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            // 只在點擊箭頭時觸發
+            if (e.target.classList.contains('mobile-dropdown-arrow')) {
+                e.preventDefault();
+                const content = this.nextElementSibling;
+                const arrow = this.querySelector('.mobile-dropdown-arrow');
+                
+                content.classList.toggle('show');
+                arrow.classList.toggle('rotated');
+            }
+        });
+        
+        // 讓箭頭可以單獨點擊
+        const arrow = toggle.querySelector('.mobile-dropdown-arrow');
+        if (arrow) {
+            arrow.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const content = toggle.nextElementSibling;
+                content.classList.toggle('show');
+                this.classList.toggle('rotated');
+            });
+        }
+    });
+});
+</script>
+
 </header>
