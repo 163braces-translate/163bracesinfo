@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "wagtail_color_panel",
     "performances",
     "django.contrib.sitemaps",
+    "lyrics",
 ]
 
 MIDDLEWARE = [

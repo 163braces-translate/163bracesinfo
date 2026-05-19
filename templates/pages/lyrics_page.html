@@ -1,0 +1,222 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags wagtailimages_tags static %}
+
+{% block title %}{{ page.title }}{% if page.artist %} — {{ page.artist }}{% endif %}{% endblock %}
+
+{% block content %}
+{% block breadcrumbs %}
+    {% include "navigation/breadcrumbs.html" %}
+{% endblock %}
+
+<style>
+  .lyrics-page {
+    --lh: {{ page.line_height }};
+    --line-gap: {{ page.line_gap }}px;
+    --section-gap: {{ page.section_gap }}px;
+    --col-gap: {{ page.column_gap }}px;
+    --fs: {{ page.font_size }}px;
+    max-width: 960px;
+    margin: 2rem auto 4rem;
+    padding: 0 1.25rem;
+  }
+
+  .lyrics-meta { margin-bottom: 2rem; color: #6b7280; }
+  .lyrics-meta h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 .5rem; color: #111; }
+  .lyrics-meta p { margin: .15rem 0; font-size: .9rem; }
+
+  .lyrics-column-headers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--col-gap);
+    padding: 1rem 1.25rem .75rem;
+    margin: 0 -1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, .92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    }
+
+    /* 桌機版 badge：跟手機行內 badge 同色系，但稍大一點 */
+    .col-header {
+    width: fit-content;
+    padding: 3px 10px;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    border-radius: 4px;
+    }
+    .col-header.left {
+    background: #eef2ff;
+    color: #4338ca;
+    }
+    .col-header.right {
+    background: #fef3c7;
+    color: #b45309;
+    }
+
+  .lyrics-section { margin-bottom: var(--section-gap); }
+
+  .lyrics-section-name {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--col-gap);
+    margin-bottom: .75rem;
+    font-size: .9rem;
+    font-weight: 600;
+    color: #6366f1;
+    letter-spacing: .03em;
+  }
+
+  /* display: contents 讓 .lyrics-row 消失，讓左右 cell 直接成為 grid cell，
+     這樣每行的左右欄會自動對齊。即使某行只有一邊有字也不會錯位。 */
+  .lyrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--col-gap);
+    row-gap: var(--line-gap);
+  }
+  .lyrics-row { display: contents; }
+  .lyrics-cell {
+    font-size: var(--fs);
+    line-height: var(--lh);
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+    color: #1f2937;
+  }
+  .lyrics-cell:empty::before {
+    content: "·";
+    color: #d1d5db;
+  }
+
+  /* ── 單欄模式 ─────────────────────────────────────── */
+  .mode-single .lyrics-column-headers,
+  .mode-single .lyrics-section-name,
+  .mode-single .lyrics-grid { grid-template-columns: 1fr; }
+  .mode-single .lyrics-cell.right,
+  .mode-single .col-header.right { display: none; }
+
+  /* ── 對唱模式：右欄用不同顏色暗示是另一位主唱 ─── */
+  .mode-duet .lyrics-cell.right { color: #c2410c; font-style: italic; }
+
+  /* ── 註解區塊 ─────────────────────────────────────── */
+  .lyrics-note {
+    margin-top: var(--section-gap);
+    padding: 1rem 1.25rem;
+    background: #f9fafb;
+    border-left: 3px solid #6366f1;
+    border-radius: 4px;
+    font-size: .9rem;
+    color: #4b5563;
+  }
+
+  /* ── 手機版：左右欄改上下堆疊 ─────────────────────── */
+  @media (max-width: 640px) {
+    .lyrics-page { --col-gap: 0; }
+
+    /* 上方雙欄 header 在堆疊版面下沒意義，藏起來 */
+    .lyrics-column-headers { display: none; }
+
+    /* 段落名稱只顯示左側那個版本 */
+    .lyrics-section-name { grid-template-columns: 1fr; }
+    .lyrics-section-name span:nth-child(2) { display: none; }
+
+    /* 一欄堆疊 */
+    .lyrics-grid { grid-template-columns: 1fr; }
+
+    /* 共通 cell 樣式：左側彩色 border 條 */
+    .lyrics-cell {
+        padding-left: .75rem;
+        border-left: 3px solid transparent;
+    }
+    .lyrics-cell:empty { display: none; }   /* 空白行整個隱藏，不留佔位 */
+
+    /* 左欄：靛藍 */
+    .lyrics-cell.left {
+        border-left-color: #6366f1;
+        color: #1f2937;
+    }
+    /* 右欄：琥珀 + 縮排（像聊天回覆） */
+    .lyrics-cell.right {
+        border-left-color: #f59e0b;
+        color: #6b7280;
+        margin-left: 1rem;
+    }
+
+    /* 行首標籤 badge，從 data-label 屬性讀取 */
+    .lyrics-cell[data-label]::before {
+        content: attr(data-label);
+        display: inline-block;
+        margin-right: .5rem;
+        padding: 1px 6px;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        vertical-align: 2px;
+        border-radius: 3px;
+    }
+    .lyrics-cell.left[data-label]::before {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+    .lyrics-cell.right[data-label]::before {
+        background: #fef3c7;
+        color: #b45309;
+    }
+
+    /* 對唱模式：右欄保持斜體 */
+    .mode-duet .lyrics-cell.right { font-style: italic; }
+    /* 單欄模式：右欄不顯示 */
+    .mode-single .lyrics-cell.right { display: none; }
+    }
+</style>
+
+<article class="lyrics-page mode-{{ page.display_mode }}">
+
+  <header class="lyrics-meta">
+    <h1>{{ page.title }}</h1>
+    {% if page.artist %}<p>演唱：{{ page.artist }}</p>{% endif %}
+    {% if page.composer %}<p>作曲：{{ page.composer }}</p>{% endif %}
+    {% if page.lyricist %}<p>作詞：{{ page.lyricist }}</p>{% endif %}
+    {% if page.release_year %}<p>{{ page.release_year }}</p>{% endif %}
+  </header>
+
+  {% if page.display_mode != 'single' %}
+    <div class="lyrics-column-headers">
+      <span class="col-header left">{{ page.left_label }}</span>
+      <span class="col-header right">{{ page.right_label }}</span>
+    </div>
+  {% endif %}
+
+  {% for block in page.body %}
+    {% if block.block_type == 'section' %}
+      <section class="lyrics-section">
+        {% if block.value.section_name %}
+          <div class="lyrics-section-name">
+            <span>{{ block.value.section_name }}</span>
+            {% if page.display_mode != 'single' %}
+              <span>{{ block.value.section_name_alt|default:block.value.section_name }}</span>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="lyrics-grid">
+          {% for line in block.value.lines %}
+            <div class="lyrics-row">
+                <div class="lyrics-cell left" data-label="{{ page.left_label }}">{{ line.left }}</div>
+                <div class="lyrics-cell right" data-label="{{ page.right_label }}">{{ line.right }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+    {% elif block.block_type == 'note' %}
+      <div class="lyrics-note">{{ block.value|richtext }}</div>
+    {% endif %}
+  {% endfor %}
+
+</article>
+{% endblock %}
