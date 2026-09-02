@@ -37,3 +37,5 @@ static/
 
 # Node modules
 node_modules/
+# Google Cloud SDK (local tooling, not project source)
+google-cloud-sdk/

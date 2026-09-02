@@ -37,3 +37,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Google Cloud SDK
+google-cloud-sdk/
