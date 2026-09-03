@@ -1,156 +1,200 @@
-# Wagtail News Template
+# 163braces 資訊站
 
-This project template is designed for creating [Wagtail](https://wagtail.org) builds quickly, intended for developers to bootstrap their Wagtail site development using `wagtail start --template=`. The template comes with pre-defined pages, blocks, functionalities, and fixtures to streamline the initial setup process.
+163braces 樂團的中英雙語資訊站，以 Wagtail CMS 建置。
+核心是**演出資料庫**（`performances`）—— 收錄樂團歷年演出紀錄，提供查詢、統計圖表與年度回顧。
 
-## Getting Started
+- 正式站：<https://163braces.info>
+- 技術堆疊：Django 4.2 + Wagtail 6.4 + Tailwind CSS + SQLite
+- 部署：Azure App Service（GitHub Actions 自動部署）
 
-1. **Check that you have an appropriate version of Python 3** You want to make sure that you have a [compatible version](https://docs.wagtail.org/en/stable/releases/upgrading.html#compatible-django-python-versions) installed:
+---
 
-   ```sh
-   python --version
-   # Or:
-   python3 --version
-   # **On Windows** (cmd.exe, with the Python Launcher for Windows):
-   py --version
-   ```
+## 演出功能（performances）
 
-2. **Create a Virtual Environment**: Set up a virtual environment to isolate your project dependencies. These instructions are for GNU/Linux or MacOS, but there are [other operating systems in the Wagtail docs](https://docs.wagtail.org/en/stable/getting_started/tutorial.html#create-and-activate-a-virtual-environment).
+這是本站的主體。三個頁面共用同一份演出資料，各自針對不同的使用情境。
 
-   ```bash
-   python -m venv myproject/env
-   source myproject/env/bin/activate
-   ```
+### 1. 演出列表 `/performances/`
 
-3. **Navigate to Project Directory**: Move into the newly created project directory.
+以表格呈現全部演出紀錄，欄位為：日期、活動名稱、類型、地點、城市。
 
-   ```bash
-   cd myproject
-   ```
+**篩選與排序**（皆透過網址參數，可自由組合）
 
-4. **Install Wagtail**: Install the Wagtail CMS package using pip.
+| 參數 | 說明 | 範例 |
+|---|---|---|
+| `q` | 依活動名稱關鍵字搜尋 | `?q=演唱會` |
+| `city` | 依城市篩選，可複選 | `?city=1&city=6` |
+| `event_type` | 依類型篩選，可複選 | `?event_type=3` |
+| `date_filter_type` | 日期模式：`range` / `before` / `after` | `?date_filter_type=after` |
+| `date_from` / `date_to` | 日期起訖（`YYYY-MM-DD`） | `?date_from=2025-01-01` |
+| `sort` | `event_date_desc`（預設）或 `event_date_asc` | `?sort=event_date_asc` |
 
-   ```bash
-   pip install wagtail
-   ```
+日期篩選有三種模式，前端會依選擇動態顯示對應欄位，並防止結束日期早於開始日期。
 
-5. **Initialize Project**: Use the `wagtail start` command to create a new project based on the Wagtail Starter Kit template.
+> **注意**：此頁目前**沒有分頁**，會一次載入全部演出。資料量大幅成長時需要留意。
 
-   ```bash
-   wagtail start --template=https://github.com/wagtail/news-template/archive/refs/heads/main.zip myproject .
-   ```
+### 2. 演出統計 `/performances/stats/`
 
-6. **Install Project Dependencies**: Install the project's dependencies into a virtual environment.
+用 Chart.js 呈現三張圖表，可切換年份或選擇「全部時間」（`?year=2025` 或 `?year=all`）。
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+| 圖表 | 型態 | 內容 |
+|---|---|---|
+| 每月演出分布 | 堆疊長條圖 | 選定年份中，各類型在 1–12 月的演出數 |
+| 城市比例 | 圓餅圖 | 各城市演出場次占比 |
+| 歷史趨勢 | 堆疊長條圖 | 不受年份篩選影響，涵蓋全部歷史的逐月統計 |
 
-All commands from now on should be run from inside the virtual environment.
+### 3. 年度回顧 `/replay/`
 
-8. **Load Dummy Data**: Load in some dummy data to populate the site with some content.
+讓粉絲自行製作年度回顧卡片的互動頁面，流程為：填名字 → 選歌曲 → 選當年參與過的演出 → 留言 → 產生圖片下載。
 
-   ```bash
-   make load-data
-   ```
+整張卡片以 Canvas 在瀏覽器端繪製後輸出 PNG，**不會將任何輸入回傳伺服器**，因此沒有留言的儲存或審核機制。
 
-9. **Start the Server**: Start the Django development server.
+---
 
-   ```bash
-   make start
-   ```
+## 資料模型
 
-10. **Access the Site and Admin**: Once the server is running, you can view the site at `localhost:8000` and access the Wagtail admin interface at `localhost:8000/admin`. Log in with the default credentials provided by :
+演出資料以 Wagtail **Snippet** 管理，在後台「程式碼片段（Snippets）」中維護，不需要改程式。
 
-    - Username: admin
-    - Password: password
+```
+Performance（演出紀錄）
+├── event_date   演出日期
+├── event_name   活動名稱     + event_name_en
+├── venue        地點         + venue_en
+├── event_type   ─→ EventType（類型）
+└── city         ─→ City（城市）
 
-### Deploying
+Album（專輯）──┐
+               ├─ Song（歌曲，供 replay 頁選取）
+               └─ cover_image / single_image
+```
 
-Once you have your own copy of the template, you can extend and configure it however you like.
+| Snippet | 用途 | 欄位重點 |
+|---|---|---|
+| `EventType` | 演出類型 | 校唱、商演、專場、音樂祭、演講 |
+| `City` | 城市 | 台北市、新北市、桃園市…（`order` 控制下拉選單順序） |
+| `Performance` | 單場演出 | 關聯類型與城市 |
+| `Album` | 專輯 | 可上傳封面 |
+| `Song` | 歌曲 | 隸屬專輯，可另外設定單曲封面 |
 
-To get it deployed, follow the instructions below for your hosting provider of choice.
+`EventType`、`City`、`Album`、`Song` 都有 `order` 欄位，數字越小越前面。
 
-Don't see your preference here? Contributions are always welcome!
+### 新增一場演出
 
-#### fly.io
+後台 → Snippets → Performances → Add，填入日期、名稱、選擇類型與城市即可。類型或城市不存在時，要先到對應的 Snippet 新增。
 
-Before you can deploy to [fly.io](https://fly.io/), you will need an account and the `fly` CLI tool will need to be [installed on your machine](https://fly.io/docs/flyctl/install/).
+---
 
-1. In the root directory of your project (the one with a `fly.toml` file), run `fly launch`
-   1. When prompted about copying the existing `fly.toml` file to a new app, choose "Yes".
+## 雙語處理
 
-> [!CAUTION]
-> Choosing "No" (the default) here will result in a broken deployment, as the `fly.toml` file requires configuration needed for the project to run correctly.
+網站支援繁體中文（預設，無網址前綴）與英文（`/en/` 前綴），由 `wagtail-localize` 處理頁面層級的翻譯。
 
-2. When prompted about continuing the setup in the web UI, or tweak the generated settings, choose "No".
-   1. The "Region" will be selected automatically. If you wish to change this, choose "Yes" instead, and modify the region in the browser.
-3. Once the launch is successful, you'll need to [generate a secret key](https://realorangeone.github.io/django-secret-key-generator/)
-   1. This can be done using `fly secrets set SECRET_KEY=<key>`, or through the web UI.
-4. Finally (optional), load in the dummy data, to help get you started
-   1. `fly ssh console -u wagtail -C "./manage.py load_initial_data"`
+演出資料的雙語則是**在同一筆資料上並存**：每個名稱欄位都有對應的 `_en` 版本（`event_name` / `event_name_en`）。模板依當前語言決定顯示哪一個，英文欄位留空時**自動退回中文**：
 
-> [!NOTE]
-> If you receive "error connecting to SSH server" when running the above command, It likely means the `fly.toml` above wasn't picked up correctly. Unfortunately, you'll need to delete your application and start again, resetting the changes to the `fly.toml` file.
-> If the error still persists, check the application logs.
+```django
+{% if current_language == 'en' and p.event_name_en %}
+    {{ p.event_name_en }}
+{% else %}
+    {{ p.event_name }}
+{% endif %}
+```
 
-You can now visit your wagtail site at the URL provided by `fly`. We strongly recommend setting strong password for your user.
+> 模型上另有 `get_name(language=...)` 這類方法，但 Django 模板無法傳參數給方法呼叫，實際上永遠取得預設的中文。**請沿用上面的模板寫法**，不要改用那些方法。
 
-The database and user-uploaded media are stored in the attached volume. To save costs and improve efficiency, the app will automatically stop when not in use, but will automatically restart when the browser loads.
+---
 
-#### Divio Cloud
+## 本機開發
 
-[![Deploy to Divio](https://docs.divio.com/deploy-to-divio.svg)](https://control.divio.com/app/new/?template_url=https://github.com/wagtail/news-template/archive/refs/heads/main.zip)
+需要 Python 3.9 以上（正式環境為 3.11）與 Node.js 18。
 
-Easily deploy your application to [Divio Cloud](https://www.divio.com/) using the steps below:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-1. **Getting Started**
-   Follow the [Getting Started](#getting-started) instructions to set up your project locally.
+python manage.py migrate
+python manage.py collectstatic --noinput   # 必要，靜態檔採用 manifest 機制
+python manage.py createsuperuser
+python manage.py runserver
+```
 
-2. **Push Your Repository**
-   Upload your project to GitHub or another Git provider.
+開啟 <http://127.0.0.1:8000>，後台在 `/admin/`。
 
-3. **Create a New Application**
-   Log in to the [Divio Control Panel](https://control.divio.com/) and create a new application and
+**`collectstatic` 不可省略。** 設定使用 `ManifestStaticFilesStorage`，缺少 manifest 會讓每個頁面回傳 500。執行後需重啟伺服器才會生效（manifest 在啟動時載入）。
 
-   - Choose "**I already have a repository**.".
-   - Connect your Git provider and proceed by clicking "**Next**.".
-   - Give your application a suitable name and select the "**Free Trial**" plan, then click **"Create application."**.
+### 前端資源
 
-   Your application will be created with two environments: **Test** and **Live**.
+```bash
+npm install
+npm run build      # 編譯一次
+npm run start      # 監看模式
+```
 
-4. **Add a Database service**
-   From the **Services** view of your application, add a [database](https://docs.divio.com/introduction/aldryn-django/django-05-database/) service.
+Sass 與 Tailwind 原始碼在 `static_src/`，編譯後輸出到 `static_compiled/`（此目錄需進版控）。
 
-5. **Deploy Your Application**
-   From the "Environments" view, click "**Deploy**" on the **Test** environment. Once the deployment completes, access your site using the "Env URL" link.
+> `npm run start:reload` 目前無法使用 —— `webpack.config.js` 的 devServer 設定寫的是 webpack-dev-server v3 語法，但安裝的是 v5。請改用 `npm run start`。
 
-6. **Additional Configuration**
-   **Migrations and Environment Variables**:
+### 匯入正式站資料
 
-   To automatically run migrations on every deployment, add a "Release command" within the **Settings** section of your application with the value `python manage.py migrate`.
-You can add additional commands as needed.
+正式站資料庫位於 Azure 的 `/home/data/db.sqlite3`，下載後覆蓋專案根目錄的 `db.sqlite3` 即可。圖片檔另存於 Azure 的 `/home/media`，需一併下載到 `media/` 才不會破圖。
 
-   Use the **Env Variables** section to set variables such as `SECRET_KEY` ([generator](https://realorangeone.github.io/django-secret-key-generator/)) for the test and live environments.
+> `make load-data` 目前無法使用 —— 該指令需要 `fixtures/media/` 目錄，但專案中並不存在。
 
-   **Media Storage**: From the **Services** view of your application, add an [object storage](https://docs.divio.com/reference/work-media-storage/) to store user-uploaded files.
+---
 
-## Contributing
+## 部署
 
-To customize this template, you can either make changes directly or backport changes from a generated project (via the `wagtail start` command) by following these steps:
+推送到 `main` 分支會觸發 `.github/workflows/main_163bracesinfo.yml`，自動部署到 Azure App Service。
 
-1. Create a new project using the provided instructions in the [Getting Started](#getting-started) section.
-2. Make changes within the new project.
-3. Once you've completed your changes, you'll need to copy them over to the original project template, making sure to:
+關鍵環境變數（於 Azure Portal → 組態設定）：
 
-   3.1. Replace occurrences of `myproject` with `{{ project_name }}`
+| 變數 | 值 |
+|---|---|
+| `DJANGO_SETTINGS_MODULE` | `myproject.settings.base` |
+| `ALLOWED_HOSTS` | 網域清單，以逗號分隔 |
+| `SECRET_KEY` | 隨機字串 |
+| `DEBUG` | `False` |
 
-   3.2. Rename the project directory from `myproject` to `project_name` (without double curly brackets this time).
+**為什麼用 `settings.base` 而非 `settings.production`**：`production.py` 目前同時定義了 `STATICFILES_STORAGE` 與繼承自 `base.py` 的 `STORAGES`，這兩者在 Django 4.2 起互斥，會在啟動階段拋出 `ImproperlyConfigured`。在修正之前，請勿將設定模組改為 `production`。
 
-   3.3. Wrap template code (`.html` files under the templates directory), with a [verbatim tag](https://docs.djangoproject.com/en/5.0/ref/templates/builtins/#std-templatetag-verbatim) or similar [templatetag](https://docs.djangoproject.com/en/5.0/ref/templates/builtins/#templatetag) to prevent template tags being rendered on `wagtail start` ([see django's rendering warning](https://docs.djangoproject.com/en/5.0/ref/django-admin/#render-warning)).
+注意 `base.py` 會偵測 Azure 的 `WEBSITE_SITE_NAME` 環境變數，並強制將資料庫指向 `/home/data/db.sqlite3`、媒體目錄指向 `/home/media`。因此 `DATABASE_URL` 在 Azure 上不會生效。
 
-4. Update compiled static assets using `npm run build:prod`.
-5. Update fixtures using `make dump-data`
+---
 
-Make sure to test any changes by reviewing them against a newly created project, by following the [Getting Started](#getting-started) instructions again.
+## 專案結構
 
-Happy coding with Wagtail! If you encounter any issues or have suggestions for improvement, feel free to contribute or open an issue.
+```
+performances/          演出功能（本站核心）
+├── models.py          Snippet 模型與三個頁面類型
+└── migrations/
+myproject/
+├── settings/          base.py（正式環境使用）/ dev.py / production.py
+├── news/              文章與文章列表
+├── standardpages/     一般內容頁
+├── home/              首頁
+├── navigation/        選單設定
+└── utils/             共用模型、blocks、樣板標籤
+lyrics/                歌詞頁（雙欄對照／對唱模式）
+templates/pages/       頁面模板
+static_src/            前端原始碼（Sass、JS）
+static_compiled/       webpack 產出
+```
+
+---
+
+## 已知問題
+
+以下皆已實測確認，動到相關程式碼前請先了解：
+
+| 問題 | 影響 |
+|---|---|
+| `production.py` 無法啟動 | `STATICFILES_STORAGE` 與 `STORAGES` 互斥。目前靠 Azure 指定 `settings.base` 繞過，但 `wsgi.py` 與 `Dockerfile` 指向的都是 `production` —— 啟動方式一變就整站掛掉 |
+| `SECRET_KEY` 與程式碼中的預設值相同 | `base.py` 寫死的備援值已進版控。應在 Azure 換成隨機值，並讓正式環境在未設定時直接報錯，而非默默退回公開的那把 |
+| 外部連結未轉義 | `utils/wagtail_hooks.py` 以 f-string 拼接 href，未經 `escape()`，編輯輸入的網址會原樣輸出 |
+| 統計資料以 `\|safe` 注入 `<script>` | 應改用 `json_script` |
+| 演出列表無分頁 | 204 筆全部一次渲染 |
+| 「不列入搜尋結果」勾選無效 | 提供 `SEO_NOINDEX` 的 context processor 未註冊於 `TEMPLATES` |
+| replay 頁的 `{% trans %}` 未翻譯 | 專案無 `locale/` 目錄，英文版會顯示中文原文 |
+| `<html lang="en">` | `base.html` 寫死，但網站主要語言為中文 |
+| 測試套件無法執行 | `search/tests/test_view.py` 未匯入 `reverse` |
+| 後台無法新增／改名文章主題 | `ArticleTopic.save()` 用到四個未匯入的名稱。不影響前台與日常編輯文章 |
+
+另有幾項較小的：`utils/blocks.py` 的 `AccordionBlock` 重複定義、卡片搭配外部連結會 `KeyError`、`Song.album` 預設值寫死 `id=1`、統計頁使用 SQLite 專屬的 `strftime`（換 PostgreSQL 會失效）、Chart.js 由 CDN 載入且無 SRI。
