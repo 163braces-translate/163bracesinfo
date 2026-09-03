@@ -1,7 +1,8 @@
 from django.conf import settings
 from django.db import models
 from django.db.models.functions import Coalesce
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.http import Http404
 from wagtail.admin.panels import FieldPanel, HelpPanel, InlinePanel, MultiFieldPanel
 from wagtail.fields import RichTextField
 from wagtail.search import index
@@ -99,10 +100,8 @@ class NewsListingPage(BasePage):
         paginator = Paginator(queryset, settings.DEFAULT_PER_PAGE)
         try:
             page = paginator.page(page_number)
-        except PageNotAnInteger:
-            page = paginator.page(1)
-        except EmptyPage:
-            page = paginator.page(paginator.num_pages)
+        except (PageNotAnInteger, EmptyPage):
+            raise Http404("Invalid page number")
         return (paginator, page, page.object_list, page.has_other_pages())
 
     def get_context(self, request, *args, **kwargs):
