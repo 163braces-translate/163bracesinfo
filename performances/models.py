@@ -192,7 +192,7 @@ class PerformanceListPage(BasePage):
         from django.utils.translation import get_language
         current_language = get_language()
 
-        performances = Performance.objects.all()
+        performances = Performance.objects.select_related("city", "event_type")
 
         # 搜尋名稱
         query = request.GET.get("q", "")
