@@ -2,6 +2,7 @@ from django.db import models
 from wagtail.snippets.models import register_snippet
 
 from myproject.utils.models import BasePage
+from myproject.utils.dates import weekday_labels
 from wagtail.fields import RichTextField
 from wagtail.admin.panels import FieldPanel
 
@@ -350,6 +351,61 @@ class PerformanceStatsPage(BasePage):
             }]
         }
         
+        # 3. 堆疊長條圖數據：各類型的星期分布
+        # iso_week_day: 1=週一 … 7=週日。用 ORM lookup 而非 strftime，
+        # 這樣換資料庫也不會壞。
+        # all_types 與 colors 沿用上面月度圖表的定義，讓兩張圖的
+        # 類型順序與配色完全一致。
+        weekday_matrix = {
+            day: {event_type.name: 0 for event_type in all_types}
+            for day in range(1, 8)
+        }
+
+        weekday_stats = performances.values(
+            "event_date__iso_week_day", "event_type__name"
+        ).annotate(count=Count("id"))
+
+        for stat in weekday_stats:
+            day = stat["event_date__iso_week_day"]
+            type_name = stat["event_type__name"]
+            if type_name in weekday_matrix[day]:
+                weekday_matrix[day][type_name] = stat["count"]
+
+        weekday_data = {
+            "labels": weekday_labels(),
+            "datasets": [
+                {
+                    "label": event_type.name,
+                    "data": [
+                        weekday_matrix[day][event_type.name] for day in range(1, 8)
+                    ],
+                    "backgroundColor": colors[i % len(colors)],
+                    "borderColor": colors[i % len(colors)],
+                    "borderWidth": 1,
+                }
+                for i, event_type in enumerate(all_types)
+            ],
+        }
+
+        # 星期圓餅圖：各星期總場次，由多到少排序
+        weekday_totals = [
+            (label, sum(weekday_matrix[day].values()))
+            for day, label in zip(range(1, 8), weekday_labels())
+        ]
+        # 沒有演出的星期不放進圓餅圖，零面積的扇形只會擠壓圖例
+        weekday_totals = [item for item in weekday_totals if item[1]]
+        weekday_totals.sort(key=lambda item: item[1], reverse=True)
+
+        weekday_pie_data = {
+            "labels": [label for label, _ in weekday_totals],
+            "datasets": [
+                {
+                    "data": [count for _, count in weekday_totals],
+                    "backgroundColor": colors[: len(weekday_totals)],
+                }
+            ],
+        }
+
         # 獲取可選年份列表
         available_years = Performance.objects.dates('event_date', 'year').values_list(
             'event_date__year', flat=True
@@ -415,6 +471,8 @@ class PerformanceStatsPage(BasePage):
             'chart_data': json.dumps(chart_data),
             'pie_data': json.dumps(pie_data),
             'historical_chart_data': json.dumps(historical_chart_data),
+            'weekday_data': json.dumps(weekday_data),
+            'weekday_pie_data': json.dumps(weekday_pie_data),
             'total_performances': performances.count(),
             'city_stats': city_stats,
         })

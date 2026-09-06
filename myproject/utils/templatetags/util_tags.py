@@ -7,6 +7,8 @@ from django.http.request import QueryDict
 
 from wagtail.models import Page
 
+from myproject.utils.dates import weekday_label
+
 register = template.Library()
 
 MODE_ADD = "__add"
@@ -283,3 +285,13 @@ def clean_querydict(querydict, remove_blanks=False, remove_utm=True):
             querydict.setlist(key, cleaned_values)
         else:
             del querydict[key]
+
+
+@register.filter
+def weekday(date) -> str:
+    """
+    Weekday label for a date, in the active language: 一…日 / Mon.…Sun.
+
+    Derived from the date itself, so it cannot drift out of step with it.
+    """
+    return weekday_label(date)

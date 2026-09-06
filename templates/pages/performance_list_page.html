@@ -1,5 +1,5 @@
 {% extends "base_page.html" %}
-{% load wagtailcore_tags static %}
+{% load wagtailcore_tags static util_tags %}
 
 {% block content %}
 
@@ -206,7 +206,7 @@
                 <tbody>
                     {% for p in performances %}
                         <tr class="hover:bg-gray-50">
-                            <td class="p-2 border">{{ p.event_date|date:"Y/m/d" }}</td>
+                            <td class="p-2 border whitespace-nowrap">{{ p.event_date|date:"Y/m/d" }}<span class="text-grey-600 ml-1">({{ p.event_date|weekday }})</span></td>
                             <td class="p-2 border">
                                 {% if current_language == 'en' and p.event_name_en %}
                                     {{ p.event_name_en }}

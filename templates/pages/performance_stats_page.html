@@ -202,6 +202,19 @@
         </div>
     </div>
     
+    <!-- 星期分布 -->
+    <div class="stats-grid">
+        <div class="chart-container">
+            <div class="chart-title">各類型星期分布統計</div>
+            <canvas id="weekdayChart" width="400" height="200"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">星期演出比例</div>
+            <canvas id="weekdayPieChart" width="300" height="300"></canvas>
+        </div>
+    </div>
+
     <!-- 城市統計詳情 -->
     <div class="chart-container">
         <div class="chart-title">城市演出詳情</div>
@@ -226,6 +239,8 @@
 const chartData = {{ chart_data|safe }};
 const pieData = {{ pie_data|safe }};
 const historicalData = {{ historical_chart_data|safe }};
+const weekdayData = {{ weekday_data|safe }};
+const weekdayPieData = {{ weekday_pie_data|safe }};
 
 // 堆疊長條圖
 const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
@@ -286,7 +301,66 @@ const cityChart = new Chart(cityCtx, {
     }
 });
 
-// ===== 新增：歷史演出堆疊長條圖 =====
+// 星期圓餅圖
+const weekdayPieCtx = document.getElementById('weekdayPieChart').getContext('2d');
+const weekdayPieChart = new Chart(weekdayPieCtx, {
+    type: 'pie',
+    data: weekdayPieData,
+    options: {
+        responsive: true,
+        plugins: {
+            title: {
+                display: true,
+                text: '星期演出比例'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.raw;
+                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${label}: ${value}場 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 星期分布堆疊長條圖
+const weekdayCtx = document.getElementById('weekdayChart').getContext('2d');
+const weekdayChart = new Chart(weekdayCtx, {
+    type: 'bar',
+    data: weekdayData,
+    options: {
+        responsive: true,
+        scales: {
+            x: {
+                stacked: true,
+            },
+            y: {
+                stacked: true,
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        },
+        plugins: {
+            title: {
+                display: true,
+                text: '各類型星期分布統計'
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        }
+    }
+});
+
+// ===== 歷史演出堆疊長條圖 =====
 const historicalCtx = document.getElementById('historicalChart').getContext('2d');
 const historicalChart = new Chart(historicalCtx, {
     type: 'bar',
