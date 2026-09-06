@@ -1,10 +1,15 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import get_language
+from modelcluster.fields import ParentalKey
+from modelcluster.models import ClusterableModel
+from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
 from myproject.utils.models import BasePage
 from myproject.utils.dates import weekday_labels
 from wagtail.fields import RichTextField
-from wagtail.admin.panels import FieldPanel
+from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 
 from wagtail.images import get_image_model
 
@@ -52,14 +57,40 @@ class City(models.Model):
         return self.name
 
 @register_snippet
-class Performance(models.Model):
+class Performance(ClusterableModel):
     event_date = models.DateField("表演日期")
     event_name = models.CharField("表演名稱", max_length=255)
     event_name_en = models.CharField("English Event Name", max_length=255, blank=True)
     event_type = models.ForeignKey(EventType, on_delete=models.PROTECT)
     venue = models.CharField("地點", max_length=255)
     venue_en = models.CharField("English Venue", max_length=255, blank=True)
-    city = city = models.ForeignKey(City, on_delete=models.PROTECT)
+    city = models.ForeignKey(City, on_delete=models.PROTECT)
+
+    panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("event_date"),
+                FieldPanel("event_name"),
+                FieldPanel("event_name_en"),
+                FieldPanel("event_type"),
+            ],
+            heading="演出資訊",
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("venue"),
+                FieldPanel("venue_en"),
+                FieldPanel("city"),
+            ],
+            heading="地點",
+        ),
+        InlinePanel(
+            "setlist",
+            label="曲目",
+            heading="歌單",
+            help_text="從曲庫選歌；翻唱或曲庫沒有的歌，改填自訂曲名。可拖曳調整順序。",
+        ),
+    ]
 
     def __str__(self):
         return f"{self.event_date} - {self.event_name}"
@@ -177,6 +208,89 @@ class Song(models.Model):
         verbose_name_plural = "Songs"
         ordering = ['order', 'title']
 
+class SetlistItem(Orderable):
+    """
+    One line of a performance's setlist.
+
+    Either pick a song from the library, or type a title for anything the
+    library does not cover — covers, guest spots, one-off songs.
+    """
+
+    performance = ParentalKey(
+        Performance,
+        on_delete=models.CASCADE,
+        related_name="setlist",
+    )
+    song = models.ForeignKey(
+        "performances.Song",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="setlist_items",
+        verbose_name="曲庫歌曲",
+        help_text="從曲庫選一首。翻唱或曲庫沒有的歌請留空，改填下方自訂曲名。",
+    )
+    custom_title = models.CharField(
+        "自訂曲名",
+        max_length=255,
+        blank=True,
+        help_text="只在曲庫沒有這首歌時填寫。",
+    )
+    note = models.CharField(
+        "備註",
+        max_length=255,
+        blank=True,
+        help_text="例如「Cover」、「Encore」、「與 XXX 合唱」。",
+    )
+
+    panels = [
+        FieldPanel("song"),
+        FieldPanel("custom_title"),
+        FieldPanel("note"),
+    ]
+
+    class Meta(Orderable.Meta):
+        verbose_name = "曲目"
+        verbose_name_plural = "曲目"
+
+    def clean(self):
+        super().clean()
+        if not self.song and not self.custom_title:
+            raise ValidationError(
+                {"song": "請從曲庫選一首歌，或在自訂曲名填入歌名。"}
+            )
+        if self.song and self.custom_title:
+            raise ValidationError(
+                {"custom_title": "已選了曲庫歌曲，請清空自訂曲名以免兩者不一致。"}
+            )
+
+    def __str__(self):
+        return self.display_title
+
+    # These read the active language themselves, so templates can use them
+    # as plain attributes — Django templates cannot pass arguments.
+    @property
+    def display_title(self) -> str:
+        if not self.song:
+            return self.custom_title
+        if self._english and self.song.title_en:
+            return self.song.title_en
+        return self.song.title
+
+    @property
+    def display_artist(self) -> str:
+        """Performer, shown only for songs that are not the band's own."""
+        if not self.song:
+            return ""
+        if self._english and self.song.artist_en:
+            return self.song.artist_en
+        return self.song.artist
+
+    @property
+    def _english(self) -> bool:
+        return (get_language() or "").lower().startswith("en")
+
+
 from .models import Performance, City, EventType
 
 class PerformanceListPage(BasePage):
@@ -193,7 +307,9 @@ class PerformanceListPage(BasePage):
         from django.utils.translation import get_language
         current_language = get_language()
 
-        performances = Performance.objects.select_related("city", "event_type")
+        performances = Performance.objects.select_related(
+            "city", "event_type"
+        ).prefetch_related("setlist__song")
 
         # 搜尋名稱
         query = request.GET.get("q", "")

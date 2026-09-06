@@ -1,6 +1,156 @@
 {% extends "base_page.html" %}
 {% load wagtailcore_tags static util_tags %}
 
+{% block extra_css %}
+<style>
+    /* 歌單展開 */
+    /* 這些規則寫成純 CSS，不用 Tailwind class：Tailwind 會在建置時
+       移除模板中未出現過的 class，新加的 class 在重新 npm run build
+       之前不會存在於 static_compiled/css/main.css。 */
+    .performances-table {
+        table-layout: auto;
+    }
+
+    /* 日期本身不斷行；星期是獨立元素，空間不夠時會掉到第二行 */
+    .perf-date {
+        white-space: nowrap;
+    }
+    .perf-weekday {
+        white-space: nowrap;
+        color: #808080;
+    }
+
+    /* 欄寬提示。用 table-auto 而非 table-fixed：table-auto 一定會
+       保留每欄的最小內容寬度，日期加了 nowrap，所以 2026/09/06
+       永遠不會被壓斷；這些百分比只用來分配剩下的空間，避免少數
+       過長的地點名稱把寬度從活動名稱那裡搶走。 */
+    /* 日期、類型、城市的內容長度固定（城市一律 3 字、類型最多 3 字），
+       用 width:1% + nowrap 讓它們縮到剛好容納內容。剩下的空間全部
+       留給長度會變動的活動名稱與地點。 */
+    .performances-table th:nth-child(1),
+    .performances-table td:nth-child(1),
+    .performances-table th:nth-child(3),
+    .performances-table td:nth-child(3),
+    .performances-table th:nth-child(5),
+    .performances-table td:nth-child(5) {
+        width: 1%;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 640px) {
+        /* 日期的星期可以掉到第二行；perf-date 自己的 nowrap
+           仍然保證 2026/09/06 不會被切開 */
+        .performances-table td:nth-child(1) {
+            white-space: normal;
+        }
+
+        /* 手機上類型與城市不必遷就字數，讓它們正常換行 */
+        .performances-table th:nth-child(3),
+        .performances-table td:nth-child(3),
+        .performances-table th:nth-child(5),
+        .performances-table td:nth-child(5) {
+            width: auto;
+            white-space: normal;
+        }
+    }
+
+    /* 會變長的兩欄分配剩餘空間 */
+    .performances-table th:nth-child(2),
+    .performances-table td:nth-child(2) { width: 55%; }   /* 活動名稱 */
+    .performances-table th:nth-child(4),
+    .performances-table td:nth-child(4) { width: 45%; }   /* 地點 */
+
+    /* 展開的歌單列橫跨整個表格，不套用上面的欄寬 */
+    .setlist-row td { width: auto !important; }
+
+    .performances-table td { word-break: break-word; }
+
+    .setlist-toggle {
+        display: inline;
+        text-align: left;
+        cursor: pointer;
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+    }
+    .setlist-toggle:hover .setlist-toggle__name {
+        text-decoration: underline;
+    }
+    .setlist-toggle:focus-visible {
+        outline: 2px solid #26899E;
+        outline-offset: 2px;
+    }
+
+    .setlist-badge {
+        display: inline-block;
+        margin-left: .4rem;
+        vertical-align: middle;
+        font-size: .75rem;
+        line-height: 1;
+        padding: .2rem .45rem;
+        border-radius: 999px;
+        background: #E6E6E6;
+        color: #4D4D4D;
+        white-space: nowrap;
+    }
+    .setlist-toggle[aria-expanded="true"] .setlist-badge {
+        background: #26899E;
+        color: #fff;
+    }
+
+    .setlist-row > td {
+        background: #F7F7F7;
+    }
+
+    /* 表格會橫向捲動，用 sticky 讓歌單內容留在可視範圍的左緣 */
+    .setlist-panel {
+        position: sticky;
+        left: 0;
+        max-width: 100vw;
+        padding: .75rem 1rem 1rem;
+    }
+
+    .setlist-panel__title {
+        font-size: .75rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: #808080;
+        margin: 0 0 .5rem;
+    }
+
+    .setlist-list {
+        margin: 0;
+        padding-left: 1.4rem;
+        list-style: decimal;
+        columns: 2;
+        column-gap: 2rem;
+    }
+    @media (max-width: 640px) {
+        .setlist-list { columns: 1; }
+    }
+    .setlist-list li {
+        break-inside: avoid;
+        padding: .15rem 0;
+    }
+    .setlist-list__artist {
+        color: #808080;
+        font-size: .85em;
+        margin-left: .4rem;
+    }
+    .setlist-list__note {
+        display: inline-block;
+        margin-left: .4rem;
+        padding: .05rem .4rem;
+        border-radius: 3px;
+        background: #E6E6E6;
+        color: #4D4D4D;
+        font-size: .75em;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
     {% block breadcrumbs %}
@@ -183,7 +333,7 @@
 
         <!-- 表格 -->
         <div class="overflow-x-auto">
-            <table class="w-full table-auto border-collapse border border-gray-300 text-left">
+            <table class="performances-table w-full border-collapse border border-gray-300 text-left">
                 <thead class="bg-gray-100">
                     <tr>
                         <th class="p-2 border">
@@ -205,13 +355,24 @@
                 </thead>
                 <tbody>
                     {% for p in performances %}
+                        {% with items=p.setlist.all %}
                         <tr class="hover:bg-gray-50">
-                            <td class="p-2 border whitespace-nowrap">{{ p.event_date|date:"Y/m/d" }}<span class="text-grey-600 ml-1">({{ p.event_date|weekday }})</span></td>
+                            <td class="p-2 border"><span class="perf-date">{{ p.event_date|date:"Y/m/d" }}</span> <span class="perf-weekday">({{ p.event_date|weekday }})</span></td>
                             <td class="p-2 border">
-                                {% if current_language == 'en' and p.event_name_en %}
-                                    {{ p.event_name_en }}
+                                {% if items %}
+                                    <button type="button"
+                                            class="setlist-toggle"
+                                            aria-expanded="false"
+                                            aria-controls="setlist-{{ p.pk }}">
+                                        <span class="setlist-toggle__name">{% if current_language == 'en' and p.event_name_en %}{{ p.event_name_en }}{% else %}{{ p.event_name }}{% endif %}</span>
+                                        <span class="setlist-badge">♪ {{ items|length }}</span>
+                                    </button>
                                 {% else %}
-                                    {{ p.event_name }}
+                                    {% if current_language == 'en' and p.event_name_en %}
+                                        {{ p.event_name_en }}
+                                    {% else %}
+                                        {{ p.event_name }}
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td class="p-2 border">
@@ -236,6 +397,25 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        {% if items %}
+                        <tr id="setlist-{{ p.pk }}" class="setlist-row" hidden>
+                            <td colspan="5" class="p-0 border">
+                                <div class="setlist-panel">
+                                    <h4 class="setlist-panel__title">{% if current_language == 'en' %}Setlist{% else %}歌單{% endif %}</h4>
+                                    <ol class="setlist-list">
+                                        {% for item in items %}
+                                            <li>
+                                                <span class="setlist-list__title">{{ item.display_title }}</span>
+                                                {% if item.display_artist %}<span class="setlist-list__artist">{{ item.display_artist }}</span>{% endif %}
+                                                {% if item.note %}<span class="setlist-list__note">{{ item.note }}</span>{% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ol>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endwith %}
                     {% empty %}
                         <tr>
                             <td colspan="5" class="p-4 text-center">
@@ -314,4 +494,21 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <!-- ===== 日期區間檢查 JavaScript 結束 ===== -->
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 點活動名稱展開／收合該場次的歌單
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.setlist-toggle').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var row = document.getElementById(button.getAttribute('aria-controls'));
+            if (!row) return;
+            var open = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', String(!open));
+            row.hidden = open;
+        });
+    });
+});
+</script>
 {% endblock %}
