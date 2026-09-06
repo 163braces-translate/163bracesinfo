@@ -1,7 +1,7 @@
 # 163braces 資訊站
 
-163braces 樂團的中英雙語資訊站，以 Wagtail CMS 建置。
-核心是**演出資料庫**（`performances`）—— 收錄樂團歷年演出紀錄，提供查詢、統計圖表與年度回顧。
+163braces 的中英雙語資訊站，以 Wagtail CMS 建置。
+核心是**演出資料庫**（`performances`）—— 收錄其歷年演出紀錄，提供查詢、統計圖表與年度回顧。
 
 - 正式站：<https://163braces.info>
 - 技術堆疊：Django 4.2 + Wagtail 6.4 + Tailwind CSS + SQLite
@@ -116,49 +116,6 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-開啟 <http://127.0.0.1:8000>，後台在 `/admin/`。
-
-**`collectstatic` 不可省略。** 設定使用 `ManifestStaticFilesStorage`，缺少 manifest 會讓每個頁面回傳 500。執行後需重啟伺服器才會生效（manifest 在啟動時載入）。
-
-### 前端資源
-
-```bash
-npm install
-npm run build      # 編譯一次
-npm run start      # 監看模式
-```
-
-Sass 與 Tailwind 原始碼在 `static_src/`，編譯後輸出到 `static_compiled/`（此目錄需進版控）。
-
-> `npm run start:reload` 目前無法使用 —— `webpack.config.js` 的 devServer 設定寫的是 webpack-dev-server v3 語法，但安裝的是 v5。請改用 `npm run start`。
-
-### 匯入正式站資料
-
-正式站資料庫位於 Azure 的 `/home/data/db.sqlite3`，下載後覆蓋專案根目錄的 `db.sqlite3` 即可。圖片檔另存於 Azure 的 `/home/media`，需一併下載到 `media/` 才不會破圖。
-
-> `make load-data` 目前無法使用 —— 該指令需要 `fixtures/media/` 目錄，但專案中並不存在。
-
----
-
-## 部署
-
-推送到 `main` 分支會觸發 `.github/workflows/main_163bracesinfo.yml`，自動部署到 Azure App Service。
-
-關鍵環境變數（於 Azure Portal → 組態設定）：
-
-| 變數 | 值 |
-|---|---|
-| `DJANGO_SETTINGS_MODULE` | `myproject.settings.base` |
-| `ALLOWED_HOSTS` | 網域清單，以逗號分隔 |
-| `SECRET_KEY` | 隨機字串 |
-| `DEBUG` | `False` |
-
-**為什麼用 `settings.base` 而非 `settings.production`**：`production.py` 目前同時定義了 `STATICFILES_STORAGE` 與繼承自 `base.py` 的 `STORAGES`，這兩者在 Django 4.2 起互斥，會在啟動階段拋出 `ImproperlyConfigured`。在修正之前，請勿將設定模組改為 `production`。
-
-注意 `base.py` 會偵測 Azure 的 `WEBSITE_SITE_NAME` 環境變數，並強制將資料庫指向 `/home/data/db.sqlite3`、媒體目錄指向 `/home/media`。因此 `DATABASE_URL` 在 Azure 上不會生效。
-
----
-
 ## 專案結構
 
 ```
@@ -177,24 +134,3 @@ templates/pages/       頁面模板
 static_src/            前端原始碼（Sass、JS）
 static_compiled/       webpack 產出
 ```
-
----
-
-## 已知問題
-
-以下皆已實測確認，動到相關程式碼前請先了解：
-
-| 問題 | 影響 |
-|---|---|
-| `production.py` 無法啟動 | `STATICFILES_STORAGE` 與 `STORAGES` 互斥。目前靠 Azure 指定 `settings.base` 繞過，但 `wsgi.py` 與 `Dockerfile` 指向的都是 `production` —— 啟動方式一變就整站掛掉 |
-| `SECRET_KEY` 與程式碼中的預設值相同 | `base.py` 寫死的備援值已進版控。應在 Azure 換成隨機值，並讓正式環境在未設定時直接報錯，而非默默退回公開的那把 |
-| 外部連結未轉義 | `utils/wagtail_hooks.py` 以 f-string 拼接 href，未經 `escape()`，編輯輸入的網址會原樣輸出 |
-| 統計資料以 `\|safe` 注入 `<script>` | 應改用 `json_script` |
-| 演出列表無分頁 | 204 筆全部一次渲染 |
-| 「不列入搜尋結果」勾選無效 | 提供 `SEO_NOINDEX` 的 context processor 未註冊於 `TEMPLATES` |
-| replay 頁的 `{% trans %}` 未翻譯 | 專案無 `locale/` 目錄，英文版會顯示中文原文 |
-| `<html lang="en">` | `base.html` 寫死，但網站主要語言為中文 |
-| 測試套件無法執行 | `search/tests/test_view.py` 未匯入 `reverse` |
-| 後台無法新增／改名文章主題 | `ArticleTopic.save()` 用到四個未匯入的名稱。不影響前台與日常編輯文章 |
-
-另有幾項較小的：`utils/blocks.py` 的 `AccordionBlock` 重複定義、卡片搭配外部連結會 `KeyError`、`Song.album` 預設值寫死 `id=1`、統計頁使用 SQLite 專屬的 `strftime`（換 PostgreSQL 會失效）、Chart.js 由 CDN 載入且無 SRI。
