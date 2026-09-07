@@ -65,6 +65,11 @@ class Performance(ClusterableModel):
     venue = models.CharField("地點", max_length=255)
     venue_en = models.CharField("English Venue", max_length=255, blank=True)
     city = models.ForeignKey(City, on_delete=models.PROTECT)
+    setlist_order_uncertain = models.BooleanField(
+        "不確定順序",
+        default=False,
+        help_text="勾選後，前台的歌單標記會改用淺黃色，表示曲序未經確認。",
+    )
 
     panels = [
         MultiFieldPanel(
@@ -84,6 +89,7 @@ class Performance(ClusterableModel):
             ],
             heading="地點",
         ),
+        FieldPanel("setlist_order_uncertain"),
         InlinePanel(
             "setlist",
             label="曲目",

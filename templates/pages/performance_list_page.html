@@ -100,6 +100,17 @@
         color: #fff;
     }
 
+    /* 曲序未確認：淺黃色。必須排在上面的展開規則之後，
+       兩者特異性相同，後宣告者才會勝出。 */
+    .setlist-badge--uncertain {
+        background: #FBF0C4;
+        color: #7A5A00;
+    }
+    .setlist-toggle[aria-expanded="true"] .setlist-badge--uncertain {
+        background: #C8951B;
+        color: #fff;
+    }
+
     .setlist-row > td {
         background: #F7F7F7;
     }
@@ -118,6 +129,17 @@
         text-transform: uppercase;
         color: #808080;
         margin: 0 0 .5rem;
+    }
+
+    /* 與未確認徽章同一組琥珀色，讓兩處的訊號看起來是同一件事 */
+    .setlist-panel__warning {
+        margin: 0 0 .6rem;
+        padding: .35rem .6rem;
+        border-radius: 4px;
+        background: #FBF0C4;
+        color: #7A5A00;
+        font-size: .8125rem;
+        line-height: 1.5;
     }
 
     .setlist-list {
@@ -365,7 +387,7 @@
                                             aria-expanded="false"
                                             aria-controls="setlist-{{ p.pk }}">
                                         <span class="setlist-toggle__name">{% if current_language == 'en' and p.event_name_en %}{{ p.event_name_en }}{% else %}{{ p.event_name }}{% endif %}</span>
-                                        <span class="setlist-badge">♪ {{ items|length }}</span>
+                                        <span class="setlist-badge{% if p.setlist_order_uncertain %} setlist-badge--uncertain{% endif %}"{% if p.setlist_order_uncertain %} title="{% if current_language == 'en' %}Order not confirmed{% else %}曲序未確認{% endif %}"{% endif %}>♪ {{ items|length }}</span>
                                     </button>
                                 {% else %}
                                     {% if current_language == 'en' and p.event_name_en %}
@@ -402,6 +424,9 @@
                             <td colspan="5" class="p-0 border">
                                 <div class="setlist-panel">
                                     <h4 class="setlist-panel__title">{% if current_language == 'en' %}Setlist{% else %}歌單{% endif %}</h4>
+                                    {% if p.setlist_order_uncertain %}
+                                        <p class="setlist-panel__warning">⚠️ {% if current_language == 'en' %}The order of this setlist has not been confirmed{% else %}此場次曲序不確定{% endif %}</p>
+                                    {% endif %}
                                     <ol class="setlist-list">
                                         {% for item in items %}
                                             <li>
