@@ -1,0 +1,275 @@
+{% extends "base_page.html" %}
+{% load wagtailcore_tags %}
+
+{% block extra_css %}
+<style>
+    .setlist-progress {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 0 1rem 4rem;
+    }
+
+    /* ── 進度 ───────────────────────────────────────────── */
+    .progress-card {
+        background: #F7F7F7;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .progress-figures {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: .5rem 1rem;
+        margin-bottom: .9rem;
+    }
+    .progress-percent {
+        font-size: 2.75rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #26899E;
+        font-variant-numeric: tabular-nums;
+    }
+    .progress-detail {
+        color: #4D4D4D;
+        font-size: .95rem;
+    }
+
+    .progress-track {
+        height: 14px;
+        border-radius: 999px;
+        background: #E0E0E0;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: #26899E;
+        /* 比例為 0 時仍留一點寬度，讓進度條看得出是空的而非壞掉 */
+        min-width: 3px;
+    }
+
+    .progress-call {
+        margin-top: 1.25rem;
+        padding: .9rem 1.1rem;
+        border-radius: 8px;
+        background: #FBF0C4;
+        color: #7A5A00;
+        line-height: 1.7;
+    }
+    .progress-call strong {
+        font-size: 1.15em;
+    }
+
+    /* ── 圖表 ───────────────────────────────────────────── */
+    .chart-card {
+        background: #fff;
+        border: 1px solid #E6E6E6;
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .chart-card__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .9rem;
+    }
+    .chart-card__title {
+        font-weight: 700;
+        font-size: 1.05rem;
+        margin: 0;
+    }
+    .chart-card__note {
+        color: #808080;
+        font-size: .85rem;
+        margin: .25rem 0 0;
+    }
+
+    .song-toggle {
+        display: inline-flex;
+        border: 1px solid #CCCCCC;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .song-toggle button {
+        border: 0;
+        background: #fff;
+        color: #4D4D4D;
+        font: inherit;
+        font-size: .85rem;
+        padding: .3rem .9rem;
+        cursor: pointer;
+    }
+    .song-toggle button[aria-pressed="true"] {
+        background: #26899E;
+        color: #fff;
+    }
+    .song-toggle button:focus-visible {
+        outline: 2px solid #26899E;
+        outline-offset: 2px;
+    }
+
+    .chart-holder {
+        position: relative;
+        height: 340px;
+    }
+    @media (max-width: 640px) {
+        .chart-holder { height: 260px; }
+    }
+
+    .chart-empty {
+        color: #808080;
+        text-align: center;
+        padding: 2.5rem 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    {% block breadcrumbs %}
+        {% include "navigation/breadcrumbs.html" %}
+    {% endblock %}
+
+    <div class="setlist-progress">
+        <div class="pt-32 tall:pt-40 pb-8">
+            <h1 class="font-serif4 font-bold text-7xl lg:text-10xl">{{ page.title }}</h1>
+            {% if page.intro %}
+                <div class="pt-6 rich-text">{{ page.intro|richtext }}</div>
+            {% endif %}
+        </div>
+
+        <!-- 收集進度 -->
+        <section class="progress-card">
+            <div class="progress-figures">
+                <span class="progress-percent">{{ percent }}%</span>
+                <span class="progress-detail">
+                    {% if english %}
+                        {{ with_setlist }} of {{ total_past }} past performances have a setlist
+                        &middot; {{ missing }} still missing
+                    {% else %}
+                        已發生的 {{ total_past }} 場演出中，有 {{ with_setlist }} 場填了歌單
+                        &middot; 還缺 {{ missing }} 場
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="progress-track"
+                 role="progressbar"
+                 aria-valuenow="{{ percent }}"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-label="{% if english %}Setlist collection progress{% else %}歌單收集進度{% endif %}">
+                <div class="progress-fill" style="width: {{ percent }}%"></div>
+            </div>
+
+            <p class="progress-call">
+                {% if english %}
+                    Help us fill in the setlists. For every performance that gains one,
+                    I will donate <strong>NT${{ page.donation_amount }}</strong>.
+                {% else %}
+                    請大家協助投稿歌單，每新增一場表演的歌單，我將捐出新台幣 <strong>{{ page.donation_amount }}</strong> 元。
+                {% endif %}
+            </p>
+        </section>
+
+        <!-- 圖表一：各類型累積演出場次 -->
+        <section class="chart-card">
+            <div class="chart-card__head">
+                <div>
+                    <h2 class="chart-card__title">
+                        {% if english %}Cumulative performances by type{% else %}各類型累積演出場次{% endif %}
+                    </h2>
+                    <p class="chart-card__note">
+                        {% if english %}Every performance to date, accumulated month by month.{% else %}涵蓋所有已發生的演出，逐月累加。{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="chart-holder"><canvas id="typeChart"></canvas></div>
+        </section>
+
+        <!-- 圖表二：各歌曲累積演出次數 -->
+        <section class="chart-card">
+            <div class="chart-card__head">
+                <div>
+                    <h2 class="chart-card__title">
+                        {% if english %}Cumulative plays by song{% else %}各歌曲累積演出次數{% endif %}
+                    </h2>
+                    <p class="chart-card__note">
+                        {% if english %}Counted from collected setlists only, so it grows as more are submitted.{% else %}僅根據已收集的歌單統計，會隨投稿增加而成長。{% endif %}
+                    </p>
+                </div>
+                <div class="song-toggle">
+                    <button type="button" id="songTop" aria-pressed="true">
+                        {% if english %}Top {{ top_songs_count }}{% else %}前 {{ top_songs_count }} 名{% endif %}
+                    </button>
+                    <button type="button" id="songAll" aria-pressed="false">
+                        {% if english %}All{% else %}全部{% endif %}
+                    </button>
+                </div>
+            </div>
+            <div class="chart-holder"><canvas id="songChart"></canvas></div>
+            <p class="chart-empty" id="songEmpty" hidden>
+                {% if english %}No setlists collected yet.{% else %}目前還沒有任何歌單資料。{% endif %}
+            </p>
+        </section>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+const typeData = {{ type_chart_data|safe }};
+const songTopData = {{ song_chart_top|safe }};
+const songAllData = {{ song_chart_all|safe }};
+
+const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { ticks: { maxTicksLimit: 12, autoSkip: true } }
+    },
+    plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } }
+    }
+};
+
+new Chart(document.getElementById('typeChart').getContext('2d'), {
+    type: 'line',
+    data: typeData,
+    options: lineOptions
+});
+
+const songCanvas = document.getElementById('songChart');
+const songEmpty = document.getElementById('songEmpty');
+
+if (!songAllData.datasets.length) {
+    songCanvas.hidden = true;
+    songEmpty.hidden = false;
+} else {
+    const songChart = new Chart(songCanvas.getContext('2d'), {
+        type: 'line',
+        data: songTopData,
+        options: lineOptions
+    });
+
+    const topButton = document.getElementById('songTop');
+    const allButton = document.getElementById('songAll');
+
+    function show(data, pressed, other) {
+        songChart.data = data;
+        songChart.update();
+        pressed.setAttribute('aria-pressed', 'true');
+        other.setAttribute('aria-pressed', 'false');
+    }
+
+    topButton.addEventListener('click', () => show(songTopData, topButton, allButton));
+    allButton.addEventListener('click', () => show(songAllData, allButton, topButton));
+}
+</script>
+{% endblock %}

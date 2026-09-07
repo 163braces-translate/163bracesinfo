@@ -14,12 +14,20 @@ from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.images import get_image_model
 
 from django.db.models import Count, Q
-from django.db.models.functions import Extract
+from django.db.models.functions import Extract, TruncMonth
 import json
 import calendar
 import datetime
 
 from wagtail.images import get_image_model
+
+
+CHART_COLORS = [
+    "#87CEEB", "#FFB347", "#FF7F7F", "#FFE55C", "#90EE90", "#DDA0DD",
+    "#FFB6C1", "#E0E0E0", "#FFEFD5", "#F0E68C", "#E6E6FA", "#FDF5E6",
+    "#F5DEB3", "#D3D3D3", "#FFE4E1", "#F0F8FF", "#FAF0E6", "#E0FFFF",
+    "#FFF8DC", "#F5F5DC", "#FFFACD", "#F0FFF0", "#FFF0F5",
+]
 
 
 @register_snippet
@@ -440,10 +448,7 @@ class PerformanceStatsPage(BasePage):
         }
         
         # 為每個演出類型創建數據集
-        colors = [ '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
-                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
-                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
-                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5']
+        colors = CHART_COLORS
         
         for i, event_type in enumerate(all_types):
             dataset = {
@@ -464,12 +469,7 @@ class PerformanceStatsPage(BasePage):
             'labels': [stat['city__name'] for stat in city_stats],
             'datasets': [{
                 'data': [stat['count'] for stat in city_stats],
-                'backgroundColor': [
-                '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
-                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
-                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
-                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5'
-            ][:len(city_stats)]
+                'backgroundColor': CHART_COLORS[: len(city_stats)]
             }]
         }
         
@@ -570,10 +570,7 @@ class PerformanceStatsPage(BasePage):
             'datasets': []
         }
 
-        history_colors = [ '#87CEEB', '#FFB347', '#FF7F7F', '#FFE55C', '#90EE90', '#DDA0DD',
-                '#FFB6C1', '#E0E0E0', '#FFEFD5', '#F0E68C', '#E6E6FA', '#FDF5E6',
-                '#F5DEB3', '#D3D3D3', '#FFE4E1', '#F0F8FF', '#FAF0E6', '#E0FFFF',
-                '#FFF8DC', '#F5F5DC', '#FFFACD', '#F0FFF0', '#FFF0F5']
+        history_colors = CHART_COLORS
 
         for i, event_type in enumerate(all_types_for_history):
             dataset = {
@@ -683,3 +680,161 @@ class ReplayPage(BasePage):
     
     class Meta:
         verbose_name = "回顧頁面 / Replay Page"
+
+
+class SetlistProgressPage(BasePage):
+    """
+    Crowd-sourcing page for setlists: how much of the back catalogue has
+    been collected so far, and what the collected data already shows.
+    """
+
+    template = "pages/setlist_progress_page.html"
+    parent_page_types = ["performances.PerformanceListPage"]
+
+    intro = RichTextField(blank=True)
+    donation_amount = models.PositiveIntegerField(
+        "每份歌單捐款金額（新台幣）",
+        default=10,
+        help_text="顯示在號召文字裡的金額。",
+    )
+    top_songs_count = models.PositiveIntegerField(
+        "歌曲圖表預設顯示首數",
+        default=10,
+        help_text="累積演出次數最高的前幾首。讀者仍可在頁面上切換為全部。",
+    )
+
+    content_panels = BasePage.content_panels + [
+        FieldPanel("intro"),
+        FieldPanel("donation_amount"),
+        FieldPanel("top_songs_count"),
+    ]
+
+    class Meta:
+        verbose_name = "歌單募集頁"
+
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+
+        from django.utils import timezone
+        from django.utils.translation import get_language
+
+        today = timezone.localdate()
+        english = (get_language() or "").lower().startswith("en")
+
+        # ── 進度：只計算已經發生的演出 ──────────────────────────
+        past = Performance.objects.filter(event_date__lte=today)
+        total_past = past.count()
+        with_setlist = past.annotate(items=Count("setlist")).filter(items__gt=0).count()
+
+        context.update(
+            {
+                "total_past": total_past,
+                "with_setlist": with_setlist,
+                "missing": total_past - with_setlist,
+                "percent": round(with_setlist / total_past * 100, 1) if total_past else 0,
+            }
+        )
+
+        # ── 圖表一：各類型的累積演出場次 ─────────────────────────
+        context["type_chart_data"] = json.dumps(
+            self._cumulative_by_type(past)
+        )
+
+        # ── 圖表二：各歌曲的累積演出次數 ─────────────────────────
+        song_all, song_top = self._cumulative_by_song(today)
+        context["song_chart_all"] = json.dumps(song_all)
+        context["song_chart_top"] = json.dumps(song_top)
+        context["top_songs_count"] = self.top_songs_count
+        context["english"] = english
+
+        return context
+
+    # ── 以下為資料組裝，皆用 TruncMonth 而非 SQLite 專屬的 strftime ──
+
+    @staticmethod
+    def _months(values):
+        """Sorted YYYY-MM labels covering every month that has data."""
+        return sorted({v.strftime("%Y-%m") for v in values if v})
+
+    @staticmethod
+    def _accumulate(per_month, months):
+        """Turn {month: count} into a running total across `months`."""
+        running, series = 0, []
+        for month in months:
+            running += per_month.get(month, 0)
+            series.append(running)
+        return series
+
+    def _cumulative_by_type(self, queryset):
+        rows = list(
+            queryset.annotate(month=TruncMonth("event_date"))
+            .values("month", "event_type__name")
+            .annotate(count=Count("id"))
+        )
+        months = self._months(r["month"] for r in rows)
+
+        by_type = {}
+        for row in rows:
+            label = row["event_type__name"]
+            key = row["month"].strftime("%Y-%m")
+            by_type.setdefault(label, {})[key] = row["count"]
+
+        # 沿用演出類型自訂的排序，讓這裡的顏色與統計頁一致
+        ordered = [
+            event_type.name
+            for event_type in EventType.objects.all().order_by("order")
+            if event_type.name in by_type
+        ]
+
+        return {
+            "labels": months,
+            "datasets": [
+                {
+                    "label": name,
+                    "data": self._accumulate(by_type[name], months),
+                    "borderColor": CHART_COLORS[i % len(CHART_COLORS)],
+                    "backgroundColor": CHART_COLORS[i % len(CHART_COLORS)],
+                    "borderWidth": 2,
+                    "tension": 0.2,
+                    "pointRadius": 0,
+                }
+                for i, name in enumerate(ordered)
+            ],
+        }
+
+    def _cumulative_by_song(self, today):
+        rows = list(
+            SetlistItem.objects.filter(performance__event_date__lte=today)
+            .annotate(month=TruncMonth("performance__event_date"))
+            .values("month", "song__title", "custom_title")
+            .annotate(count=Count("id"))
+        )
+        months = self._months(r["month"] for r in rows)
+
+        by_song, totals = {}, {}
+        for row in rows:
+            label = row["song__title"] or row["custom_title"]
+            key = row["month"].strftime("%Y-%m")
+            by_song.setdefault(label, {})[key] = row["count"]
+            totals[label] = totals.get(label, 0) + row["count"]
+
+        ranked = sorted(totals, key=lambda name: totals[name], reverse=True)
+
+        def build(names):
+            return {
+                "labels": months,
+                "datasets": [
+                    {
+                        "label": name,
+                        "data": self._accumulate(by_song[name], months),
+                        "borderColor": CHART_COLORS[i % len(CHART_COLORS)],
+                        "backgroundColor": CHART_COLORS[i % len(CHART_COLORS)],
+                        "borderWidth": 2,
+                        "tension": 0.2,
+                        "pointRadius": 0,
+                    }
+                    for i, name in enumerate(names)
+                ],
+            }
+
+        return build(ranked), build(ranked[: self.top_songs_count])
