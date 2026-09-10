@@ -121,6 +121,58 @@
         .chart-holder { height: 260px; }
     }
 
+    /* ── 數據分析表格 ─────────────────────────────────── */
+    .stats-table-wrap {
+        overflow-x: auto;
+    }
+    .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .925rem;
+    }
+    .stats-table th,
+    .stats-table td {
+        border-bottom: 1px solid #E6E6E6;
+        padding: .6rem .5rem;
+        text-align: left;
+        vertical-align: top;
+    }
+    .stats-table thead th {
+        border-bottom: 2px solid #CCCCCC;
+        font-size: .8rem;
+        letter-spacing: .04em;
+        color: #4D4D4D;
+        white-space: nowrap;
+    }
+    .stats-table .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .stats-table .type-name {
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .stats-extreme {
+        line-height: 1.45;
+    }
+    .stats-extreme__date {
+        display: block;
+        color: #808080;
+        font-size: .85em;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-extreme__ties {
+        color: #808080;
+        font-size: .85em;
+    }
+    .stats-note {
+        margin: .9rem 0 0;
+        color: #808080;
+        font-size: .85rem;
+        line-height: 1.6;
+    }
+
     .chart-empty {
         color: #808080;
         text-align: center;
@@ -215,6 +267,78 @@
             <p class="chart-empty" id="songEmpty" hidden>
                 {% if english %}No setlists collected yet.{% else %}目前還沒有任何歌單資料。{% endif %}
             </p>
+        </section>
+
+        <!-- 數據分析：各類型的曲目數分布 -->
+        <section class="chart-card">
+            <div class="chart-card__head">
+                <div>
+                    <h2 class="chart-card__title">
+                        {% if english %}Songs per performance, by type{% else %}各類型每場曲目數分析{% endif %}
+                    </h2>
+                    <p class="chart-card__note">
+                        {% if english %}Based on the setlists collected so far.{% else %}根據目前已收集的歌單統計。{% endif %}
+                    </p>
+                </div>
+            </div>
+
+            {% if type_stats %}
+                <div class="stats-table-wrap">
+                    <table class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>{% if english %}Type{% else %}類型{% endif %}</th>
+                                <th class="num">{% if english %}Shows{% else %}場次{% endif %}</th>
+                                <th class="num">{% if english %}Min{% else %}最少{% endif %}</th>
+                                <th class="num">{% if english %}Mean{% else %}平均{% endif %}</th>
+                                <th class="num">{% if english %}Median{% else %}中位數{% endif %}</th>
+                                <th class="num">{% if english %}Max{% else %}最多{% endif %}</th>
+                                <th>{% if english %}Fewest songs{% else %}最少的場次{% endif %}</th>
+                                <th>{% if english %}Most songs{% else %}最多的場次{% endif %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in type_stats %}
+                                <tr>
+                                    <td class="type-name">
+                                        {% if english and row.event_type.name_en %}{{ row.event_type.name_en }}{% else %}{{ row.event_type.name }}{% endif %}
+                                    </td>
+                                    <td class="num">{{ row.count }}</td>
+                                    <td class="num">{{ row.min }}</td>
+                                    <td class="num">{{ row.mean }}</td>
+                                    <td class="num">{{ row.median }}</td>
+                                    <td class="num">{{ row.max }}</td>
+                                    <td class="stats-extreme">
+                                        {% if english and row.min_performance.event_name_en %}{{ row.min_performance.event_name_en }}{% else %}{{ row.min_performance.event_name }}{% endif %}
+                                        <span class="stats-extreme__date">{{ row.min_performance.event_date|date:"Y/m/d" }}</span>
+                                        {% if row.min_ties %}
+                                            <span class="stats-extreme__ties">{% if english %}+{{ row.min_ties }} tied{% else %}另有 {{ row.min_ties }} 場並列{% endif %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="stats-extreme">
+                                        {% if english and row.max_performance.event_name_en %}{{ row.max_performance.event_name_en }}{% else %}{{ row.max_performance.event_name }}{% endif %}
+                                        <span class="stats-extreme__date">{{ row.max_performance.event_date|date:"Y/m/d" }}</span>
+                                        {% if row.max_ties %}
+                                            <span class="stats-extreme__ties">{% if english %}+{{ row.max_ties }} tied{% else %}另有 {{ row.max_ties }} 場並列{% endif %}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="stats-note">
+                    {% if english %}
+                        Performances with {{ stats_min_songs|add:"-1" }} songs or fewer are excluded.
+                    {% else %}
+                        已排除曲目數 {{ stats_min_songs|add:"-1" }} 首（含）以下的場次
+                    {% endif %}
+                </p>
+            {% else %}
+                <p class="chart-empty">
+                    {% if english %}Not enough setlists collected yet.{% else %}目前收集到的歌單還不足以統計。{% endif %}
+                </p>
+            {% endif %}
         </section>
     </div>
 {% endblock %}

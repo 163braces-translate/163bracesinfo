@@ -682,6 +682,11 @@ class ReplayPage(BasePage):
         verbose_name = "回顧頁面 / Replay Page"
 
 
+# 曲目數少於這個數字的場次不列入統計：一兩首多半是資料還沒補齊，
+# 不是那場真的只唱了那麼少。
+SETLIST_STATS_MIN_SONGS = 3
+
+
 class SetlistProgressPage(BasePage):
     """
     Crowd-sourcing page for setlists: how much of the back catalogue has
@@ -747,7 +752,68 @@ class SetlistProgressPage(BasePage):
         context["top_songs_count"] = self.top_songs_count
         context["english"] = english
 
+        # ── 表格：各類型的曲目數分布 ────────────────────────────
+        context["type_stats"] = self._song_count_stats(today)
+        context["stats_min_songs"] = SETLIST_STATS_MIN_SONGS
+
         return context
+
+    @staticmethod
+    def _song_count_stats(today):
+        """
+        Per event type: how many songs a performance runs to.
+
+        Performances with fewer than SETLIST_STATS_MIN_SONGS tracks are left
+        out — a one or two song entry almost always means the setlist is only
+        part-filled, and averaging those in drags every figure down.
+        """
+        from statistics import mean, median
+
+        rows = list(
+            Performance.objects.filter(event_date__lte=today)
+            .annotate(song_count=Count("setlist"))
+            .filter(song_count__gte=SETLIST_STATS_MIN_SONGS)
+            .select_related("event_type")
+            .order_by("song_count", "event_date")
+        )
+
+        grouped = {}
+        for row in rows:
+            grouped.setdefault(row.event_type, []).append(row)
+
+        stats = []
+        # 沿用類型自訂排序，與頁面上其他圖表一致
+        for event_type in EventType.objects.all().order_by("order"):
+            performances = grouped.get(event_type)
+            if not performances:
+                continue
+
+            counts = [p.song_count for p in performances]
+            lowest, highest = min(counts), max(counts)
+
+            def latest_with(count):
+                """Most recent performance whose setlist runs to `count` songs."""
+                return max(
+                    (p for p in performances if p.song_count == count),
+                    key=lambda p: p.event_date,
+                )
+
+            stats.append(
+                {
+                    "event_type": event_type,
+                    "count": len(counts),
+                    "min": lowest,
+                    "max": highest,
+                    "mean": round(mean(counts), 1),
+                    "median": round(median(counts), 1),
+                    "min_performance": latest_with(lowest),
+                    "max_performance": latest_with(highest),
+                    "min_ties": counts.count(lowest) - 1,
+                    "max_ties": counts.count(highest) - 1,
+                }
+            )
+
+        return stats
 
     # ── 以下為資料組裝，皆用 TruncMonth 而非 SQLite 專屬的 strftime ──
 
