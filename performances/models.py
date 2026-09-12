@@ -30,6 +30,68 @@ CHART_COLORS = [
 ]
 
 
+# ── 累積折線圖的共用組裝 ──────────────────────────────────────
+# 一律用 TruncMonth，不用歷史圖表那種 SQLite 專屬的 strftime。
+
+
+def month_labels(values):
+    """Sorted YYYY-MM labels covering every month that has data."""
+    return sorted({v.strftime("%Y-%m") for v in values if v})
+
+
+def accumulate(per_month, months):
+    """Turn {month: count} into a running total across `months`."""
+    running, series = 0, []
+    for month in months:
+        running += per_month.get(month, 0)
+        series.append(running)
+    return series
+
+
+def line_dataset(label, data, index):
+    """One line for a cumulative chart, coloured from the shared palette."""
+    return {
+        "label": label,
+        "data": data,
+        "borderColor": CHART_COLORS[index % len(CHART_COLORS)],
+        "backgroundColor": CHART_COLORS[index % len(CHART_COLORS)],
+        "borderWidth": 2,
+        "tension": 0.2,
+        "pointRadius": 0,
+    }
+
+
+def cumulative_performances_by_type(queryset):
+    """Running total of performances per event type, month by month."""
+    rows = list(
+        queryset.annotate(month=TruncMonth("event_date"))
+        .values("month", "event_type__name")
+        .annotate(count=Count("id"))
+    )
+    months = month_labels(r["month"] for r in rows)
+
+    by_type = {}
+    for row in rows:
+        by_type.setdefault(row["event_type__name"], {})[
+            row["month"].strftime("%Y-%m")
+        ] = row["count"]
+
+    # 沿用演出類型自訂的排序，讓顏色與頁面上其他圖表一致
+    ordered = [
+        event_type.name
+        for event_type in EventType.objects.all().order_by("order")
+        if event_type.name in by_type
+    ]
+
+    return {
+        "labels": months,
+        "datasets": [
+            line_dataset(name, accumulate(by_type[name], months), i)
+            for i, name in enumerate(ordered)
+        ],
+    }
+
+
 @register_snippet
 class EventType(models.Model):
     name = models.CharField("類型", max_length=50)
@@ -592,6 +654,11 @@ class PerformanceStatsPage(BasePage):
             'historical_chart_data': json.dumps(historical_chart_data),
             'weekday_data': json.dumps(weekday_data),
             'weekday_pie_data': json.dumps(weekday_pie_data),
+            # 累積折線圖涵蓋全部歷史，與上方的年份篩選無關，
+            # 跟「歷史演出統計」那張圖一樣。
+            'cumulative_type_data': json.dumps(
+                cumulative_performances_by_type(all_performances)
+            ),
             'total_performances': performances.count(),
             'city_stats': city_stats,
         })
@@ -740,12 +807,7 @@ class SetlistProgressPage(BasePage):
             }
         )
 
-        # ── 圖表一：各類型的累積演出場次 ─────────────────────────
-        context["type_chart_data"] = json.dumps(
-            self._cumulative_by_type(past)
-        )
-
-        # ── 圖表二：各歌曲的累積演出次數 ─────────────────────────
+        # ── 圖表：各歌曲的累積演出次數 ──────────────────────────
         song_all, song_top = self._cumulative_by_song(today)
         context["song_chart_all"] = json.dumps(song_all)
         context["song_chart_top"] = json.dumps(song_top)
@@ -815,59 +877,6 @@ class SetlistProgressPage(BasePage):
 
         return stats
 
-    # ── 以下為資料組裝，皆用 TruncMonth 而非 SQLite 專屬的 strftime ──
-
-    @staticmethod
-    def _months(values):
-        """Sorted YYYY-MM labels covering every month that has data."""
-        return sorted({v.strftime("%Y-%m") for v in values if v})
-
-    @staticmethod
-    def _accumulate(per_month, months):
-        """Turn {month: count} into a running total across `months`."""
-        running, series = 0, []
-        for month in months:
-            running += per_month.get(month, 0)
-            series.append(running)
-        return series
-
-    def _cumulative_by_type(self, queryset):
-        rows = list(
-            queryset.annotate(month=TruncMonth("event_date"))
-            .values("month", "event_type__name")
-            .annotate(count=Count("id"))
-        )
-        months = self._months(r["month"] for r in rows)
-
-        by_type = {}
-        for row in rows:
-            label = row["event_type__name"]
-            key = row["month"].strftime("%Y-%m")
-            by_type.setdefault(label, {})[key] = row["count"]
-
-        # 沿用演出類型自訂的排序，讓這裡的顏色與統計頁一致
-        ordered = [
-            event_type.name
-            for event_type in EventType.objects.all().order_by("order")
-            if event_type.name in by_type
-        ]
-
-        return {
-            "labels": months,
-            "datasets": [
-                {
-                    "label": name,
-                    "data": self._accumulate(by_type[name], months),
-                    "borderColor": CHART_COLORS[i % len(CHART_COLORS)],
-                    "backgroundColor": CHART_COLORS[i % len(CHART_COLORS)],
-                    "borderWidth": 2,
-                    "tension": 0.2,
-                    "pointRadius": 0,
-                }
-                for i, name in enumerate(ordered)
-            ],
-        }
-
     def _cumulative_by_song(self, today):
         rows = list(
             SetlistItem.objects.filter(performance__event_date__lte=today)
@@ -875,7 +884,7 @@ class SetlistProgressPage(BasePage):
             .values("month", "song__title", "custom_title")
             .annotate(count=Count("id"))
         )
-        months = self._months(r["month"] for r in rows)
+        months = month_labels(r["month"] for r in rows)
 
         by_song, totals = {}, {}
         for row in rows:
@@ -890,15 +899,7 @@ class SetlistProgressPage(BasePage):
             return {
                 "labels": months,
                 "datasets": [
-                    {
-                        "label": name,
-                        "data": self._accumulate(by_song[name], months),
-                        "borderColor": CHART_COLORS[i % len(CHART_COLORS)],
-                        "backgroundColor": CHART_COLORS[i % len(CHART_COLORS)],
-                        "borderWidth": 2,
-                        "tension": 0.2,
-                        "pointRadius": 0,
-                    }
+                    line_dataset(name, accumulate(by_song[name], months), i)
                     for i, name in enumerate(names)
                 ],
             }

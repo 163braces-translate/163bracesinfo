@@ -166,6 +166,13 @@
     </div>
     <!-- ===== 歷史圖表結束 ===== -->
 
+    <!-- ===== 各類型累積演出場次（所有年份）===== -->
+    <div class="chart-container" style="margin-bottom: 30px;">
+        <div class="chart-title">各類型累積演出場次（所有年份）</div>
+        <canvas id="cumulativeTypeChart" width="400" height="200"></canvas>
+    </div>
+    <!-- ===== 累積圖表結束 ===== -->
+
     <!-- 年份選擇器 -->
     <div class="year-selector">
         <label for="year-select">選擇年份：</label>
@@ -239,6 +246,7 @@
 const chartData = {{ chart_data|safe }};
 const pieData = {{ pie_data|safe }};
 const historicalData = {{ historical_chart_data|safe }};
+const cumulativeTypeData = {{ cumulative_type_data|safe }};
 const weekdayData = {{ weekday_data|safe }};
 const weekdayPieData = {{ weekday_pie_data|safe }};
 
@@ -356,6 +364,25 @@ const weekdayChart = new Chart(weekdayCtx, {
                 mode: 'index',
                 intersect: false,
             }
+        }
+    }
+});
+
+// 各類型累積演出場次（折線圖，涵蓋所有年份）
+const cumulativeTypeCtx = document.getElementById('cumulativeTypeChart').getContext('2d');
+const cumulativeTypeChart = new Chart(cumulativeTypeCtx, {
+    type: 'line',
+    data: cumulativeTypeData,
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } },
+            x: { ticks: { maxTicksLimit: 12, autoSkip: true } }
+        },
+        plugins: {
+            title: { display: true, text: '各類型累積演出場次' },
+            tooltip: { mode: 'index', intersect: false }
         }
     }
 });

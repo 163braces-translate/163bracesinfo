@@ -228,22 +228,7 @@
             </p>
         </section>
 
-        <!-- 圖表一：各類型累積演出場次 -->
-        <section class="chart-card">
-            <div class="chart-card__head">
-                <div>
-                    <h2 class="chart-card__title">
-                        {% if english %}Cumulative performances by type{% else %}各類型累積演出場次{% endif %}
-                    </h2>
-                    <p class="chart-card__note">
-                        {% if english %}Every performance to date, accumulated month by month.{% else %}涵蓋所有已發生的演出，逐月累加。{% endif %}
-                    </p>
-                </div>
-            </div>
-            <div class="chart-holder"><canvas id="typeChart"></canvas></div>
-        </section>
-
-        <!-- 圖表二：各歌曲累積演出次數 -->
+        <!-- 各歌曲累積演出次數 -->
         <section class="chart-card">
             <div class="chart-card__head">
                 <div>
@@ -346,7 +331,6 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
-const typeData = {{ type_chart_data|safe }};
 const songTopData = {{ song_chart_top|safe }};
 const songAllData = {{ song_chart_all|safe }};
 
@@ -362,12 +346,6 @@ const lineOptions = {
         legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } }
     }
 };
-
-new Chart(document.getElementById('typeChart').getContext('2d'), {
-    type: 'line',
-    data: typeData,
-    options: lineOptions
-});
 
 const songCanvas = document.getElementById('songChart');
 const songEmpty = document.getElementById('songEmpty');
