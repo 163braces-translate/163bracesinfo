@@ -218,14 +218,16 @@
                 <div class="progress-fill" style="width: {{ percent }}%"></div>
             </div>
 
-            <p class="progress-call">
-                {% if english %}
-                    Help us fill in the setlists. For every performance that gains one,
-                    I will donate <strong>NT${{ page.donation_amount }}</strong>.
-                {% else %}
-                    請大家協助投稿歌單，每新增一場表演的歌單，我將捐出新台幣 <strong>{{ page.donation_amount }}</strong> 元。
-                {% endif %}
-            </p>
+            {% if page.show_donation_call %}
+                <p class="progress-call">
+                    {% if english %}
+                        Help us fill in the setlists. For every performance that gains one,
+                        I will donate <strong>NT${{ page.donation_amount }}</strong>.
+                    {% else %}
+                        請大家協助投稿歌單，每新增一場表演的歌單，我將捐出新台幣 <strong>{{ page.donation_amount }}</strong> 元。
+                    {% endif %}
+                </p>
+            {% endif %}
         </section>
 
         <!-- 各歌曲累積演出次數 -->

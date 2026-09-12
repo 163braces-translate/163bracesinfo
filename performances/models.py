@@ -764,10 +764,15 @@ class SetlistProgressPage(BasePage):
     parent_page_types = ["performances.PerformanceListPage"]
 
     intro = RichTextField(blank=True)
+    show_donation_call = models.BooleanField(
+        "顯示捐款號召",
+        default=True,
+        help_text="取消勾選後，進度條下方的黃色號召框就不會出現。",
+    )
     donation_amount = models.PositiveIntegerField(
         "每份歌單捐款金額（新台幣）",
         default=10,
-        help_text="顯示在號召文字裡的金額。",
+        help_text="顯示在號召文字裡的金額。未勾選上方欄位時不會用到。",
     )
     top_songs_count = models.PositiveIntegerField(
         "歌曲圖表預設顯示首數",
@@ -777,7 +782,13 @@ class SetlistProgressPage(BasePage):
 
     content_panels = BasePage.content_panels + [
         FieldPanel("intro"),
-        FieldPanel("donation_amount"),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_donation_call"),
+                FieldPanel("donation_amount"),
+            ],
+            heading="捐款號召",
+        ),
         FieldPanel("top_songs_count"),
     ]
 
