@@ -749,8 +749,9 @@ class ReplayPage(BasePage):
         verbose_name = "回顧頁面 / Replay Page"
 
 
-# 曲目數少於這個數字的場次不列入統計：一兩首多半是資料還沒補齊，
-# 不是那場真的只唱了那麼少。
+# 曲目數少於這個數字的場次視為離群值，不列入統計。一兩首的場次
+# 通常是短暫嘉賓之類的特例，跟一般演出不是同一回事，放進來會把
+# 每個數字都往下拉。
 SETLIST_STATS_MIN_SONGS = 3
 
 
@@ -837,8 +838,9 @@ class SetlistProgressPage(BasePage):
         Per event type: how many songs a performance runs to.
 
         Performances with fewer than SETLIST_STATS_MIN_SONGS tracks are left
-        out — a one or two song entry almost always means the setlist is only
-        part-filled, and averaging those in drags every figure down.
+        out as outliers. A one or two song appearance is usually a guest spot
+        or similar, not a show of its own, and averaging those in drags every
+        figure down.
         """
         from statistics import mean, median
 
