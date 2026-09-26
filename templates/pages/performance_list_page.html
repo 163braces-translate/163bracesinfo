@@ -209,6 +209,21 @@
                 </a>
             </div>
 
+            <div class="pt-4 pb-3">
+                <br>
+                {# 不加 /en/ 前綴：歌單頁目前只有中文版，跟上面的 /replay/ 同樣處理 #}
+                <a href="/performances/setlist/" 
+                style="color: #3b82f6"
+                onmouseover="this.style.color='#26899e'"
+                onmouseout="this.style.color='#3b82f6'">
+                    {% if current_language == 'en' %}
+                        🎵 View Setlist Statistics
+                    {% else %}
+                        🎵 查看歌單統計分析
+                    {% endif %}
+                </a>
+            </div>
+
             {% if page.intro %}
                 <p class="max-w-[636px] pt-7 rich-text">
                     {{ page.intro|richtext }}
