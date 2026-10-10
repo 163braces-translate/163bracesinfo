@@ -4,7 +4,6 @@ from django.utils.translation import get_language
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
 from wagtail.models import Orderable
-from wagtail.snippets.models import register_snippet
 
 from myproject.utils.models import BasePage
 from myproject.utils.dates import weekday_labels
@@ -92,7 +91,6 @@ def cumulative_performances_by_type(queryset):
     }
 
 
-@register_snippet
 class EventType(models.Model):
     name = models.CharField("類型", max_length=50)
     name_en = models.CharField("English Name", max_length=50, blank=True)
@@ -109,7 +107,6 @@ class EventType(models.Model):
             return self.name_en
         return self.name
 
-@register_snippet
 class City(models.Model):
     name = models.CharField("城市", max_length=50)
     name_en = models.CharField("English Name", max_length=50, blank=True)
@@ -126,7 +123,6 @@ class City(models.Model):
             return self.name_en
         return self.name
 
-@register_snippet
 class Performance(ClusterableModel):
     event_date = models.DateField("表演日期")
     event_name = models.CharField("表演名稱", max_length=255)
@@ -181,7 +177,6 @@ class Performance(ClusterableModel):
             return self.venue_en
         return self.venue
     
-@register_snippet
 class Album(models.Model):
     name = models.CharField("專輯名稱", max_length=255)
     name_en = models.CharField("English Album Name", max_length=255, blank=True)
@@ -216,7 +211,6 @@ class Album(models.Model):
             return self.name_en
         return self.name
     
-@register_snippet
 class Song(models.Model):
     title = models.CharField("歌曲名稱", max_length=255)
     title_en = models.CharField("English Title", max_length=255, blank=True)

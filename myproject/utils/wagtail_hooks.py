@@ -4,6 +4,10 @@ from wagtail.admin.rich_text.converters.html_to_contentstate import (
     InlineStyleElementHandler,
 )
 from wagtail.rich_text import LinkHandler
+from wagtail.snippets.models import register_snippet
+from wagtail.snippets.views.snippets import SnippetViewSet
+
+from myproject.utils.models import ArticleTopic, AuthorSnippet, Statistic
 
 
 class ExternalLinkHandler(LinkHandler):
@@ -70,3 +74,26 @@ def register_text_color_features(features):
             },
         )
 
+
+# 後台 snippet 列表的搜尋（同 performances/wagtail_hooks.py，用資料庫 icontains 查詢）
+class AuthorSnippetViewSet(SnippetViewSet):
+    model = AuthorSnippet
+    search_backend_name = None
+    search_fields = ["title", "title_en"]
+
+
+class ArticleTopicViewSet(SnippetViewSet):
+    model = ArticleTopic
+    search_backend_name = None
+    search_fields = ["title", "title_en", "slug", "slug_en"]
+
+
+class StatisticViewSet(SnippetViewSet):
+    model = Statistic
+    search_backend_name = None
+    search_fields = ["statistic", "statistic_en", "description", "description_en"]
+
+
+register_snippet(AuthorSnippetViewSet)
+register_snippet(ArticleTopicViewSet)
+register_snippet(StatisticViewSet)
