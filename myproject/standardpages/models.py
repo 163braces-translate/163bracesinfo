@@ -18,8 +18,6 @@ class StandardPage(BasePage):
     body = StreamField(StoryBlock())
     featured_section_title = models.TextField(blank=True)
 
-    color = ColorField(default="#000000")
-
     search_fields = BasePage.search_fields + [index.SearchField("introduction")]
 
     content_panels = BasePage.content_panels + [
@@ -37,7 +35,6 @@ class StandardPage(BasePage):
             ],
             heading="Featured section",
         ),
-        NativeColorPanel('color'),
     ]
 
 

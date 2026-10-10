@@ -141,3 +141,47 @@
         }
     }
 }
+
+// 以下放在 @layer 外，避免 Tailwind 因 template 中找不到 class 而清除
+// 文字顏色（Draftail 自訂功能，見 myproject/utils/wagtail_hooks.py）
+.rich-text {
+    .text-color-red { color: #dc2626; }
+    .text-color-sky { color: #0ea5e9; }
+    .text-color-blue { color: #2563eb; }
+    .text-color-black { color: #000000; }
+    .text-color-white { color: #ffffff; }
+}
+
+// 表格（TableBlock），欄寬由後台設定，見 components/streamfield/blocks/table_block.html
+.table-block {
+    table {
+        @apply mx-auto border-collapse text-base md:text-lg;
+
+        // 有存欄寬時照像素輸出，不讓瀏覽器自動調整
+        &.table-fixed {
+            table-layout: fixed;
+        }
+    }
+
+    caption {
+        @apply text-center mb-3 font-medium;
+    }
+
+    th,
+    td {
+        @apply border border-gray-300 px-3 py-2 align-top text-left break-words;
+    }
+
+    th {
+        @apply font-semibold bg-gray-100 dark:bg-mackerel-100;
+    }
+
+    // 後台右鍵「對齊」產生的 class
+    .htLeft { text-align: left; }
+    .htCenter { text-align: center; }
+    .htRight { text-align: right; }
+    .htJustify { text-align: justify; }
+    .htTop { vertical-align: top; }
+    .htMiddle { vertical-align: middle; }
+    .htBottom { vertical-align: bottom; }
+}

@@ -1,15 +1,17 @@
 from collections import defaultdict
 
+from django import forms
 from django.core.exceptions import ValidationError
 from django.forms.utils import ErrorList
+from django.utils.functional import cached_property
 from wagtail import blocks
 from wagtail.blocks.struct_block import StructBlockValidationError
 from wagtail.documents.blocks import DocumentChooserBlock
 from wagtail.images.blocks import ImageBlock, ImageChooserBlock
 from wagtail.snippets.blocks import SnippetChooserBlock
-from wagtail.contrib.table_block.blocks import TableBlock
-
-from wagtail_color_panel.blocks import NativeColorBlock
+from wagtail.contrib.table_block.blocks import TableBlock, TableInput, TableInputAdapter
+from wagtail.admin.staticfiles import versioned_static
+from wagtail.telepath import register
 
 from myproject.utils.struct_values import CardStructValue, LinkStructValue
 
@@ -253,13 +255,135 @@ class YouTubeEmbedBlock(blocks.StructBlock):
 
 #YT結束
 
+# 表格：右鍵選單可在任意儲存格上下左右插入欄列、刪除、合併儲存格、對齊、複製/剪下
+TABLE_OPTIONS = {
+    "startRows": 3,
+    "startCols": 3,
+    "minSpareRows": 0,
+    # 欄標題列（A、B、C）只在後台顯示，拖拉欄寬的把手在這一列上
+    "colHeaders": True,
+    "rowHeaders": True,
+    "mergeCells": True,
+    "copyPaste": True,
+    "contextMenu": [
+        "row_above",
+        "row_below",
+        "---------",
+        "col_left",
+        "col_right",
+        "---------",
+        "remove_row",
+        "remove_col",
+        "---------",
+        "mergeCells",
+        "alignment",
+        "---------",
+        "copy",
+        "cut",
+        "---------",
+        "undo",
+        "redo",
+    ],
+    "editor": "text",
+    # 不自動撐滿，欄寬以拖拉後的像素為準，前台一比一輸出
+    "stretchH": "none",
+    "colWidths": 150,
+    "manualColumnResize": True,
+    "height": 216,
+    "renderer": "text",
+    "autoColumnSize": False,
+}
+
+# 表格編輯器介面文字改成中文（Wagtail 內建繁中翻譯沒有這些字串）
+TABLE_STRINGS_ZH = {
+    "Row header": "第一欄為標題",
+    "Table headers": "表格標題格",
+    "Display the first row as a header": "第一列當標題",
+    "Display the first column as a header": "第一欄當標題",
+    "Column header": "第一列為標題",
+    "Display the first row AND first column as headers": "第一列和第一欄都當標題",
+    "No headers": "不設標題",
+    "Which cells should be displayed as headers?": "哪些格子要顯示成標題（前台粗體、灰底）？",
+    "Table caption": "表格說明",
+    "A heading that identifies the overall topic of the table, and is useful for screen reader users.": "顯示在表格上方的說明文字，可留空。",
+    "Table": "表格",
+}
+
+
+class ResizableTableInput(TableInput):
+    """加上 resizable_table.js：把後台拖拉的欄寬存進 value["colWidths"]"""
+
+    @cached_property
+    def media(self):
+        # 明確列出順序：resizable_table.js 必須在 table.js 之後載入
+        return forms.Media(
+            css={
+                "all": [
+                    versioned_static(
+                        "table_block/css/vendor/handsontable-6.2.2.full.min.css"
+                    ),
+                ]
+            },
+            js=[
+                versioned_static(
+                    "table_block/js/vendor/handsontable-6.2.2.full.min.js"
+                ),
+                versioned_static("table_block/js/table.js"),
+                versioned_static("utils/js/resizable_table.js"),
+            ],
+        )
+
+
+class ResizableTableInputAdapter(TableInputAdapter):
+    js_constructor = "myproject.widgets.ResizableTableInput"
+
+    def js_args(self, widget):
+        return [widget.table_options, TABLE_STRINGS_ZH]
+
+
+register(ResizableTableInputAdapter(), ResizableTableInput)
+
+
+class ResizableTableBlock(TableBlock):
+    @cached_property
+    def field(self):
+        return forms.CharField(
+            widget=ResizableTableInput(table_options=self.table_options),
+            **self.field_options,
+        )
+
+    def render(self, value, context=None):
+        col_widths = [
+            int(w)
+            for w in (value or {}).get("colWidths") or []
+            if isinstance(w, (int, float))
+        ]
+        context = dict(context or {})
+        context.update(col_widths=col_widths, table_width=sum(col_widths))
+        return super().render(value, context)
+
+# 段落文字顏色（對應 wagtail_hooks.py 註冊的 Draftail 功能）
+TEXT_COLOR_FEATURES = [
+    "text-red",
+    "text-sky",
+    "text-blue",
+    "text-black",
+    "text-white",
+]
+
 class SectionBlocks(blocks.StreamBlock):
     paragraph = blocks.RichTextBlock(
-        features=["bold", "italic", "link", "ol", "ul", "h3", "embed", "image"],
+        features=["bold", "italic", "link", "ol", "ul", "h3", "embed", "image"]
+        + TEXT_COLOR_FEATURES,
         template="components/streamfield/blocks/paragraph_block.html",
     )
     image = CaptionedImageBlock()
     youtube = YouTubeEmbedBlock()
+    table = ResizableTableBlock(
+        table_options=TABLE_OPTIONS,
+        label="表格",
+        template="components/streamfield/blocks/table_block.html",
+    )
 
 
 class SectionBlock(blocks.StructBlock):
