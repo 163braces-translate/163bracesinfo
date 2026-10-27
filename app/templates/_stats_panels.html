@@ -1,0 +1,174 @@
+{# 演出頁的三個統計分頁：演出統計、歌單統計、年度回顧。由 performances.html 引入。 #}
+{# ------------------------------------------------------------ 演出統計 #}
+<section class="tab-panel" id="panel-charts" role="tabpanel" aria-labelledby="tab-charts" {{ 'hidden' if tab != 'charts' }}>
+  {% if charts_intro %}<div class="intro muted prose" style="margin-bottom: 16px">{{ charts_intro | safe }}</div>{% endif %}
+  <div class="chart-grid">
+    <div class="card wide">
+      <div class="card-head"><h2>{{ t('chart_history') }}</h2></div>
+      <div class="chart-box scroll"><div><canvas data-chart="history" data-type="bar" data-stacked="1"></canvas></div></div>
+    </div>
+    <div class="card wide">
+      <div class="card-head"><h2>{{ t('chart_cumulative') }}</h2></div>
+      <div class="chart-box"><canvas data-chart="cumulative" data-type="line"></canvas></div>
+    </div>
+  </div>
+
+  <form class="toolbar" method="get" action="{{ link(tab_urls.charts) }}" style="margin-top: 24px">
+    <label for="year" class="muted">{{ t('year') }}</label>
+    <select id="year" name="year" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if year == 'all' }}>{{ t('all_time') }}</option>
+      {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}
+    </select>
+    <noscript><button class="btn small">{{ t('apply') }}</button></noscript>
+    <div class="stat-tiles"><span class="stat-tile"><b>{{ charts.total }}</b>{{ t('total_shows') }}</span></div>
+  </form>
+  <div class="chart-grid">
+    <div class="card wide">
+      <div class="card-head"><h2>{{ t('chart_monthly') }}</h2></div>
+      <div class="chart-box"><canvas data-chart="monthly" data-type="bar" data-stacked="1"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>{{ t('chart_city') }}</h2></div>
+      <div class="chart-box tall"><canvas data-chart="city_pie" data-type="doughnut"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>{{ t('chart_weekday_pie') }}</h2></div>
+      <div class="chart-box tall"><canvas data-chart="weekday_pie" data-type="doughnut"></canvas></div>
+    </div>
+    <div class="card wide">
+      <div class="card-head"><h2>{{ t('chart_weekday') }}</h2></div>
+      <div class="chart-box"><canvas data-chart="weekday" data-type="bar" data-stacked="1"></canvas></div>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------ 歌單統計 #}
+<section class="tab-panel stack" id="panel-setlist" role="tabpanel" aria-labelledby="tab-setlist" {{ 'hidden' if tab != 'setlist' }}>
+  <div class="card">
+    <div class="card-head"><h2>{{ t('setlist_progress') }}</h2><b>{{ progress.percent }}%</b></div>
+    {% if setlist_intro %}<div class="prose muted">{{ setlist_intro | safe }}</div>{% endif %}
+    <div class="progress" role="progressbar" aria-valuenow="{{ progress.percent }}" aria-valuemin="0" aria-valuemax="100"><span style="width: {{ progress.percent }}%"></span></div>
+    <p class="small muted" style="margin: 0">{{ t('setlist_progress_text', total=progress.total, done=progress.done, missing=progress.missing) }}</p>
+    {% if show_donation %}<div class="callout">{{ t('donation_call', amount=donation_amount) }}</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>{{ t('chart_song_cumulative') }}</h2>
+      <div class="seg" role="group" id="song-range">
+        <button type="button" data-range="top" aria-pressed="true">{{ t('show_top', n=top_n) }}</button>
+        <button type="button" data-range="all" aria-pressed="false">{{ t('show_all') }}</button>
+      </div>
+    </div>
+    <div class="chart-box tall"><canvas data-chart="song_top" data-type="line" id="song-chart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>{{ t('setlist_length') }}</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>{{ t('type') }}</th><th>{{ t('shows') }}</th><th>{{ t('min') }}</th><th>{{ t('mean') }}</th><th>{{ t('median') }}</th><th>{{ t('max') }}</th></tr></thead>
+        <tbody>
+          {% for s in length_stats %}
+            <tr>
+              <td>{{ tr(s.type, 'name') }}</td>
+              <td class="num">{{ s.count }}</td>
+              <td class="num">{{ s.min }}
+                <span class="sub">{{ s.min_perf.event_date | replace('-', '/') }} {{ tr(s.min_perf, 'event_name') }}{% if s.min_ties %} · {{ t('ties', n=s.min_ties) }}{% endif %}</span></td>
+              <td class="num">{{ s.mean }}</td>
+              <td class="num">{{ s.median }}</td>
+              <td class="num">{{ s.max }}
+                <span class="sub">{{ s.max_perf.event_date | replace('-', '/') }} {{ tr(s.max_perf, 'event_name') }}{% if s.max_ties %} · {{ t('ties', n=s.max_ties) }}{% endif %}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted" style="margin: 10px 0 0">{{ t('setlist_length_hint', n=min_songs) }}</p>
+  </div>
+</section>
+
+{# ------------------------------------------------------------ 年度回顧 #}
+<section class="tab-panel stack replay" id="panel-replay" role="tabpanel" aria-labelledby="tab-replay" {{ 'hidden' if tab != 'replay' }}>
+  <div class="card">
+    {% if replay_intro %}<div class="prose">{{ replay_intro | safe }}</div>{% endif %}
+    <div class="toolbar" style="margin: 12px 0 0">
+      <label for="year-select" class="muted">{{ t('year') }}</label>
+      <select id="year-select">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y == ryear }}>{{ y }}</option>{% endfor %}</select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>👤 你的名字 / Your Name</h2>
+    <input type="text" id="userName" maxlength="20" placeholder="請輸入你的名字 / Enter your name">
+  </div>
+
+  <div class="card">
+    <h2>🎵 選擇歌曲 / Select Songs</h2>
+    <p class="small muted">選擇最多 3 首你最喜歡的歌曲 / Select up to 3 favorite songs · 已選擇 <span id="songCount">0</span> / 3</p>
+    <div class="selection-grid" id="songGrid">
+      {% for s in replay.songs %}
+        {%- set cid = song_cover_id(s) %}
+        <div class="selection-card song-card" data-type="song" data-id="{{ s.id }}" data-title="{{ s.title }}"
+             data-title-en="{{ s.title_en }}" data-artist="{{ s.artist }}" data-artist-en="{{ s.artist_en }}"
+             data-album="{{ s.album_name }}" data-image-url="{{ image_url(cid, 600) if cid else '' }}">
+          <span class="selection-badge"></span>
+          {% if cid %}<img src="{{ image_url(cid, 120) }}" alt="" class="album-cover" loading="lazy">{% else %}<span class="cover-ph album-cover"></span>{% endif %}
+          <div class="song-info">
+            <div class="album-name">{{ tr(s, 'album_name') }}</div>
+            <h3>{{ tr(s, 'title') }}</h3>
+            {% if s.artist %}<div class="artist-name">{{ tr(s, 'artist') }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎭 選擇演出 / Select Performances</h2>
+    <p class="small muted">選擇你參加過的 {{ ryear }} 年演出 / Select {{ ryear }} performances you attended · 已選擇 <span id="perfCount">0</span></p>
+    <div class="selection-grid" id="performanceGrid">
+      {% for p in replay.performances %}
+        <div class="selection-card performance-card" data-type="performance" data-id="{{ p.id }}"
+             data-title="{{ p.event_name }}" data-city="{{ p.city_name }}" data-city-en="{{ p.city_name_en }}"
+             data-city-order="{{ p.city_order }}" data-performance-type="{{ p.type_name }}"
+             data-performance-type-en="{{ p.type_name_en }}" data-performance-type-order="{{ p.type_order }}"
+             data-date="{{ p.event_date }}">
+          <span class="selection-badge">✓</span>
+          <h3>{{ tr(p, 'event_name') }}</h3>
+          <div class="performance-meta small muted">
+            {{ p.event_date | replace('-', '/') }} · {{ tr(p, 'city_name') }} · {{ tr(p, 'type_name') }}<br>{{ tr(p, 'venue') }}
+          </div>
+        </div>
+      {% else %}
+        <p class="muted">—</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💬 要對 163braces 說的話 / Message to 163braces</h2>
+    <p class="small muted">如果沒有選擇演出，這段話會出現在圖片中 / This message will appear if no performances are selected</p>
+    <textarea id="userMessage" maxlength="200" rows="4" placeholder="寫下你想對 163braces 說的話… / Write your message to 163braces…"></textarea>
+    <div class="small muted" style="text-align: right"><span id="messageCount">0</span> / 200</div>
+  </div>
+
+  <button class="btn primary generate-btn" id="generateBtn" disabled>🎨 生成我的 {{ ryear }} 回顧 / Generate My Replay</button>
+
+  <div id="previewSection" style="display: none;" class="card">
+    <h2>✨ 你的 {{ ryear }} 回顧 / Your {{ ryear }} Replay</h2>
+    <div class="preview-container">
+      <canvas id="replayCanvas" width="1080" height="1920"></canvas>
+      <p class="small muted">📱 手機用戶：長按圖片選擇「儲存影像」即可存到相簿<br>💻 電腦用戶：點擊下方按鈕下載</p>
+      <button class="btn primary download-btn" id="downloadBtn">📥 下載圖片 / Download Image</button>
+    </div>
+  </div>
+</section>
+
+<script id="chart-data" type="application/json">{{ {
+  "history": charts.history, "cumulative": charts.cumulative, "monthly": charts.monthly,
+  "city_pie": charts.city_pie, "weekday_pie": charts.weekday_pie, "weekday": charts.weekday,
+  "song_top": song_top, "song_all": song_all} | tojson }}</script>
+<script id="replay-data" type="application/json">{{ {
+  "year": ryear | int, "lang": 'en' if lang == 'en' else 'zh-hant', "eventTypes": replay.event_types,
+  "cities": replay.cities, "logoUrl": replay.logo_url} | tojson }}</script>

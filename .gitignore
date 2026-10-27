@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 env.bak/
 venv.bak/
@@ -20,9 +21,9 @@ local_settings.py
 # Media files
 media/
 
-# Static files
-staticfiles/
-static/
+# Static files（只排除根目錄的 collectstatic 產出，app/static/ 是新站的原始碼）
+/staticfiles/
+/static/
 
 # IDE
 .vscode/

@@ -1,0 +1,81 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}{{ row.event_name if row and row.event_name else '新增演出' }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/performances/">← 演出與歌單</a></p>
+<h1>{{ '編輯演出' if row and row.id else '新增演出' }}</h1>
+<form class="form" method="post" action="/admin/performances/{{ row.id if row and row.id else 'new' }}" data-setlist-form>
+  <div class="card">
+    <h2>演出資訊</h2>
+    <div class="grid-2">
+      {{ fx.text('event_date', row.event_date if row else '', '日期', required=true, type='date') }}
+      <div class="form-row">
+        <label class="field" for="f-type">類型 <span class="req">*</span></label>
+        <select id="f-type" name="event_type_id" required>
+          <option value="">請選擇</option>
+          {% for t in types %}<option value="{{ t.id }}" {{ 'selected' if row and t.id == row.event_type_id }}>{{ t.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ fx.text('event_name', row.event_name if row else '', '活動名稱', required=true) }}
+      {{ fx.text('event_name_en', row.event_name_en if row else '', '英文名稱', help='空白時英文版顯示中文名稱') }}
+      {{ fx.text('venue', row.venue if row else '', '地點') }}
+      {{ fx.text('venue_en', row.venue_en if row else '', '英文地點') }}
+      <div class="form-row">
+        <label class="field" for="f-city">城市 <span class="req">*</span></label>
+        <select id="f-city" name="city_id" required>
+          <option value="">請選擇</option>
+          {% for c in cities %}<option value="{{ c.id }}" {{ 'selected' if row and c.id == row.city_id }}>{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="admin-head">
+      <h2>歌單</h2>
+      <span class="muted small" data-setlist-count></span>
+    </div>
+    {{ fx.check('setlist_order_uncertain', row and row.setlist_order_uncertain, '曲序不確定', '勾選後，前台的歌單標記會改用淺黃色。') }}
+    <p class="help">從曲庫選歌；翻唱或曲庫沒有的，選單留在「自訂曲名」再輸入歌名。可以拖曳左邊的 ⋮⋮ 或用箭頭調整順序。</p>
+    <ol class="setlist-editor" data-setlist>
+      {% for it in items %}
+        <li class="setlist-row" draggable="true">
+          <span class="handle" aria-hidden="true">⋮⋮</span>
+          <select name="item_song" aria-label="曲庫歌曲">
+            <option value="">（自訂曲名）</option>
+            {% for s in songs %}<option value="{{ s.id }}" {{ 'selected' if s.id == it.song_id }}>{{ s.title }}{% if s.artist %} — {{ s.artist }}{% endif %}</option>{% endfor %}
+          </select>
+          <input type="text" name="item_custom" value="{{ it.custom_title }}" placeholder="自訂曲名" aria-label="自訂曲名">
+          <input type="text" name="item_note" value="{{ it.note }}" placeholder="備註（Cover、Encore…）" aria-label="備註">
+          <span class="row-tools"><button type="button" data-up aria-label="上移">↑</button><button type="button" data-down aria-label="下移">↓</button><button type="button" data-remove aria-label="刪除">✕</button></span>
+        </li>
+      {% endfor %}
+    </ol>
+    <template data-setlist-template>
+      <li class="setlist-row" draggable="true">
+        <span class="handle" aria-hidden="true">⋮⋮</span>
+        <select name="item_song" aria-label="曲庫歌曲">
+          <option value="">（自訂曲名）</option>
+          {% for s in songs %}<option value="{{ s.id }}" data-titles="{{ s.title | lower }}|{{ (s.title_en or '') | lower }}">{{ s.title }}{% if s.artist %} — {{ s.artist }}{% endif %}</option>{% endfor %}
+        </select>
+        <input type="text" name="item_custom" value="" placeholder="自訂曲名" aria-label="自訂曲名">
+        <input type="text" name="item_note" value="" placeholder="備註（Cover、Encore…）" aria-label="備註">
+        <span class="row-tools"><button type="button" data-up aria-label="上移">↑</button><button type="button" data-down aria-label="下移">↓</button><button type="button" data-remove aria-label="刪除">✕</button></span>
+      </li>
+    </template>
+    <div class="row-actions">
+      <button type="button" class="btn small" data-add-row>＋ 加一首</button>
+      <details class="paste">
+        <summary class="btn small">貼上整份歌單</summary>
+        <div class="paste-box">
+          <p class="help">一行一首。曲名跟曲庫一樣（中文或英文都可以）的會自動選好，其他的當成自訂曲名。行尾用「｜」接備註，例如：<code>愛情限時批｜Cover</code></p>
+          <textarea data-paste rows="8"></textarea>
+          <button type="button" class="btn small primary" data-paste-apply>加到歌單後面</button>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  {{ fx.actions(row and row.id, save_new=true) }}
+</form>
+{% endblock %}

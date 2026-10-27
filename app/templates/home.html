@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% macro show_item(p) %}
+  <li class="show-item">
+    <span class="date-badge">
+      <span class="m">{{ p.event_date[:4] }}/{{ p.event_date[5:7] }}</span>
+      <span class="d">{{ p.event_date[8:10] | int }}</span>
+      <span class="w">{{ weekday(p.event_date) }}</span>
+    </span>
+    <div class="info">
+      <div class="name">{{ tr(p, 'event_name') }}</div>
+      <div class="meta">{{ tr(p, 'type_name') }} · {{ tr(p, 'city_name') }}{% if p.venue %} · {{ tr(p, 'venue') }}{% endif %}</div>
+    </div>
+  </li>
+{% endmacro %}
+{% block content %}
+<section class="hero {{ 'hero-' ~ hero_mode if hero_image }}"
+  {%- if hero_image %} style="--hero-image: url('{{ image_url(hero_image, 1600) }}'); --hero-overlay: {{ hero_overlay }}"{% endif %}>
+  {% if not hero_image %}<div class="hero-art"></div>{% endif %}
+  <h1>{{ tr(page, 'title') }}</h1>
+  {% if tr(page, 'summary') %}<p>{{ tr(page, 'summary') }}</p>{% endif %}
+  <div class="hero-links">
+    {% for kind in ('performances', 'lyrics') %}
+      {% if kinds[kind] and kinds[kind].published %}
+        <a class="btn {{ 'primary' if loop.first }}" href="{{ link(page_url(kinds[kind])) }}">{{ tr(kinds[kind], 'title') }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if kinds.performances %}<a class="btn" href="{{ link(page_url(kinds.performances)) }}stats/">{{ t('tab_charts') }}</a>{% endif %}
+  </div>
+</section>
+
+<div class="home-grid">
+  <section class="card span-7" aria-labelledby="h-upcoming">
+    <div class="card-head">
+      <h2 id="h-upcoming">{{ t('upcoming') }}</h2>
+      {% if kinds.performances %}<a class="more" href="{{ link(page_url(kinds.performances)) }}">{{ t('all_performances') }} →</a>{% endif %}
+    </div>
+    {% if upcoming %}
+      <ul class="show-list">
+        {% for p in upcoming %}{{ show_item(p) }}{% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">{{ t('upcoming_none') }}</p>
+      {% if recent %}
+        <h3 class="small muted" style="margin: 16px 0 8px">{{ t('recent_shows') }}</h3>
+        <ul class="show-list">{% for p in recent %}{{ show_item(p) }}{% endfor %}</ul>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card span-5" aria-labelledby="h-top">
+    <div class="card-head"><h2 id="h-top">{{ t('top_songs') }}</h2></div>
+    {% if top_songs %}
+      {%- set top_max = top_songs[0].count %}
+      <ol class="rank-list">
+        {% for s in top_songs %}
+          <li class="rank-item">
+            <span class="rank-no">{{ loop.index }}</span>
+            <span class="rank-title">
+              {% if s.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}
+              {% if s.artist %}<span class="small muted"> · {{ s.artist }}</span>{% endif %}
+            </span>
+            <span class="rank-count">{{ s.count }} {{ t('shows') }}</span>
+            <span class="rank-bar"><span style="width: {{ (s.count / top_window * 100) | round(1) }}%"></span></span>
+          </li>
+        {% endfor %}
+      </ol>
+      <p class="small muted" style="margin: 14px 0 0">{{ t('top_songs_hint', n=top_window) }}</p>
+    {% else %}
+      <p class="empty">—</p>
+    {% endif %}
+  </section>
+
+  <section class="card span-12" aria-labelledby="h-listen">
+    <div class="card-head"><h2 id="h-listen">{{ t('random_listen') }}</h2></div>
+    <div id="listen-slot">{% include "_listen.html" %}</div>
+  </section>
+
+  {% if facts %}
+  <section class="span-12 facts" aria-label="Facts">
+    {% for f in facts %}
+      <div class="fact"><b>{{ f.value_en if lang == 'en' and f.value_en else f.value }}</b><span>{{ f.label_en if lang == 'en' and f.label_en else f.label }}</span></div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if articles %}
+  <section class="span-12" aria-labelledby="h-articles">
+    <div class="card-head">
+      <h2 id="h-articles">{{ t('latest_articles') }}</h2>
+      {% if kinds.articles %}<a class="more" href="{{ link(page_url(kinds.articles)) }}">{{ t('read_more') }} →</a>{% endif %}
+    </div>
+    <div class="article-grid">
+      {% for a in articles %}{% include "_article_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% set body = tr(page, 'body_html') %}
+  {% if body %}
+  <section class="card span-12">
+    <div class="prose">{{ body | safe }}</div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

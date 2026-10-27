@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+{% block title %}圖片{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>圖片</h1>
+  <label class="btn primary">上傳圖片<input type="file" accept="image/*" multiple hidden data-upload-page></label>
+</div>
+<p class="muted small">可以一次選很多張。網站會自動產生各種尺寸的縮圖，原圖直接上傳就好。</p>
+<div class="image-grid">
+  {% for img in rows %}
+    <form class="card image-card" method="post" action="/admin/images/{{ img.id }}">
+      <a href="{{ image_url(img.id, 1200) }}" target="_blank" rel="noopener"><img src="{{ image_url(img.id, 240) }}" alt="" loading="lazy"></a>
+      <input type="text" name="title" value="{{ img.title }}" aria-label="圖片名稱">
+      <div class="small muted">{{ img.width }}×{{ img.height }} · #{{ img.id }}</div>
+      <div class="image-card-actions">
+        <button class="btn small" type="submit" name="action" value="save">改名</button>
+        <button class="btn small danger" type="submit" name="action" value="delete" data-confirm="確定要刪除這張圖？">刪除</button>
+        <label class="check small"><input type="checkbox" name="force" value="1"> 仍要刪除</label>
+      </div>
+    </form>
+  {% endfor %}
+</div>
+{% endblock %}

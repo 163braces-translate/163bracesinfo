@@ -1,0 +1,8 @@
+<a class="card article-card" href="{{ link(page_url(a)) }}">
+  <div class="thumb">{% if a.thumbnail_id %}<img src="{{ image_url(a.thumbnail_id, 600) }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}</div>
+  <div class="body">
+    {% if a.published_at %}<span class="small muted">{{ a.published_at[:10] | replace('-', '/') }}</span>{% endif %}
+    <h3>{{ tr(a, 'title') }}</h3>
+    {% if tr(a, 'summary') %}<p>{{ tr(a, 'summary') }}</p>{% endif %}
+  </div>
+</a>

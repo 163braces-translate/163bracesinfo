@@ -1,0 +1,49 @@
+{# 表單欄位的共用寫法 #}
+{% macro image_field(name, value, label='圖片', help='') %}
+  <div class="form-row">
+    <span class="field">{{ label }}</span>
+    <div class="image-field" data-image-field>
+      <input type="hidden" name="{{ name }}" value="{{ value or '' }}">
+      <div class="image-preview">{% if value %}<img src="{{ image_url(value | int, 240) }}" alt="">{% endif %}</div>
+      <div class="image-actions">
+        <button type="button" class="btn small" data-image-choose>選擇圖片</button>
+        <button type="button" class="btn small" data-image-clear {{ 'hidden' if not value }}>移除</button>
+      </div>
+    </div>
+    {% if help %}<p class="help">{{ help }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro rich(name, value, label, help='', small=false) %}
+  <div class="form-row">
+    <span class="field">{{ label }}</span>
+    <div class="rich {{ 'small' if small }}" data-rich="{{ name }}">{{ (value or '') | safe }}</div>
+    <input type="hidden" name="{{ name }}" value="">
+    {% if help %}<p class="help">{{ help }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro text(name, value, label, help='', required=false, type='text', placeholder='') %}
+  <div class="form-row">
+    <label class="field" for="f-{{ name }}">{{ label }}{% if required %} <span class="req">*</span>{% endif %}</label>
+    <input type="{{ type }}" id="f-{{ name }}" name="{{ name }}" value="{{ value if value is not none else '' }}" {{ 'required' if required }} placeholder="{{ placeholder }}">
+    {% if help %}<p class="help">{{ help }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro check(name, checked, label, help='') %}
+  <div class="form-row">
+    <label class="check"><input type="checkbox" name="{{ name }}" value="1" {{ 'checked' if checked }}> {{ label }}</label>
+    {% if help %}<p class="help">{{ help }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro actions(row, can_delete=true, save_new=false) %}
+  <div class="form-actions">
+    <button class="btn primary" type="submit" name="action" value="save">儲存</button>
+    {% if save_new %}<button class="btn" type="submit" name="action" value="save_new">儲存並新增下一筆</button>{% endif %}
+    {% if row and can_delete %}
+      <button class="btn danger" type="submit" name="action" value="delete" formnovalidate data-confirm="確定要刪除？刪除後無法復原。">刪除</button>
+    {% endif %}
+  </div>
+{% endmacro %}

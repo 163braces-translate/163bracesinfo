@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% block title %}帳號與密碼{% endblock %}
+{% block content %}
+<h1>帳號與密碼</h1>
+<div class="dash-grid">
+  <form class="card form" method="post">
+    <h2>改密碼</h2>
+    <input type="hidden" name="action" value="password">
+    <label class="field" for="cur">目前的密碼</label><input type="password" id="cur" name="current" autocomplete="current-password" required>
+    <label class="field" for="new" style="margin-top: 10px">新密碼（至少 8 個字元）</label><input type="password" id="new" name="new" autocomplete="new-password" minlength="8" required>
+    <label class="field" for="cf" style="margin-top: 10px">再輸入一次</label><input type="password" id="cf" name="confirm" autocomplete="new-password" minlength="8" required>
+    <div class="form-actions"><button class="btn primary">更新密碼</button></div>
+  </form>
+  <div class="card">
+    <h2>後台帳號</h2>
+    <ul class="plain">{% for u in users %}<li>{{ u.username }} <span class="muted small">最近登入：{{ u.last_login or '—' }}</span></li>{% endfor %}</ul>
+    <form class="form" method="post" style="margin-top: 14px">
+      <input type="hidden" name="action" value="create">
+      <label class="field" for="nu">新增帳號</label><input type="text" id="nu" name="username" autocomplete="off" required>
+      <label class="field" for="np" style="margin-top: 10px">密碼</label><input type="password" id="np" name="password" autocomplete="new-password" minlength="8" required>
+      <div class="form-actions"><button class="btn">新增</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

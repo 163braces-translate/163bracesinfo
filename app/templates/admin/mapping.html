@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block title %}歌曲 ↔ 歌詞{% endblock %}
+{% block content %}
+<h1>歌曲 ↔ 歌詞</h1>
+<p class="muted">每首歌選一份要顯示的歌詞。改編版、日文版可以跟原曲選同一份，歌名維持各自的寫法。還沒對應的排在最上面。</p>
+<form method="post">
+  <div class="table-card">
+  <table class="admin-table">
+    <thead><tr><th>歌曲</th><th>專輯</th><th>歌詞</th></tr></thead>
+    <tbody>
+      {% for s in songs %}
+        <tr class="{{ 'warn-row' if not s.lyrics_id }}">
+          <td><a href="/admin/m/songs/{{ s.id }}">{{ s.title }}</a>{% if s.title_en %} <span class="muted small">{{ s.title_en }}</span>{% endif %}</td>
+          <td class="muted">{{ s.album_name }}</td>
+          <td>
+            <select name="song_{{ s.id }}" aria-label="{{ s.title }} 的歌詞">
+              <option value="">（沒有歌詞）</option>
+              {% for l in lyrics %}<option value="{{ l.id }}" {{ 'selected' if l.id == s.lyrics_id }}>{{ l.title }}{% if l.title_en %} / {{ l.title_en }}{% endif %}</option>{% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="form-actions sticky"><button class="btn primary" type="submit">儲存對應</button></div>
+</form>
+{% endblock %}

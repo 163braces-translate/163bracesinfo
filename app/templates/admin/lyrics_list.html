@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}歌詞{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>歌詞</h1>
+  <a class="btn primary" href="/admin/lyrics/new">＋ 新增歌詞</a>
+</div>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>曲名</th><th>網址</th><th>對應的歌曲</th><th>模式</th><th>狀態</th></tr></thead>
+  <tbody>
+  {% for l in rows %}
+    {%- set review = l.review_json | fromjson %}
+    <tr class="{{ 'warn-row' if review }}">
+      <td><a href="/admin/lyrics/{{ l.id }}">{{ l.title }}</a>{% if l.title_en %} <span class="muted small">{{ l.title_en }}</span>{% endif %}
+        {% if review %}<div class="small warn-text">⚠️ {{ review | length }} 處待確認</div>{% endif %}</td>
+      <td class="small"><a href="{{ prefix }}{{ l.slug }}/" target="_blank" rel="noopener">{{ prefix }}{{ l.slug }}/</a></td>
+      <td class="small">{{ l.song_titles or '' }}{% if not l.song_titles %}<span class="muted">—</span>{% endif %}</td>
+      <td class="small">{{ {'bilingual': '中英對照', 'duet': '對唱', 'single': '單欄'}[l.display_mode] }}</td>
+      <td>{% if l.published %}<span class="chip blue">已發佈</span>{% else %}<span class="chip">草稿</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

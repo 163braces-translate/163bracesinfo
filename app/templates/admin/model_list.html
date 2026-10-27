@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ spec.title }}{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>{{ spec.title }}</h1>
+  <a class="btn primary" href="/admin/m/{{ model }}/new">＋ 新增{{ spec.title }}</a>
+</div>
+<form class="filterbar" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="搜尋">
+  {% if filter_choices %}
+    <select name="f" onchange="this.form.submit()">
+      <option value="">全部</option>
+      {% for v, label in filter_choices %}<option value="{{ v }}" {{ 'selected' if v == filter_value }}>{{ label }}</option>{% endfor %}
+    </select>
+  {% endif %}
+  <button class="btn small">搜尋</button>
+</form>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr>{% for col, label in spec.columns %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      {% for col, label in spec.columns %}
+        <td>
+          {%- set v = r[col] %}
+          {%- if loop.first and col != 'cover_image_id' %}<a href="/admin/m/{{ model }}/{{ r.id }}">{{ v }}</a>
+          {%- elif col == 'cover_image_id' %}<a href="/admin/m/{{ model }}/{{ r.id }}">{% if v %}<img class="thumb" src="{{ image_url(v, 120) }}" alt="">{% else %}<span class="thumb ph"></span>{% endif %}</a>
+          {%- elif col in lookups %}{% if v is not none and v in lookups[col] %}{{ lookups[col][v] }}{% elif v %}{{ v }}{% else %}<span class="muted">—</span>{% endif %}
+          {%- elif col == 'listen_url' %}{{ '✓' if v else '' }}
+          {%- else %}{{ v if v is not none else '' }}{% endif -%}
+        </td>
+      {% endfor %}
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ spec.columns | length }}" class="muted">沒有資料</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

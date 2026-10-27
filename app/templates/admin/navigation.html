@@ -1,0 +1,34 @@
+{% extends "admin/base.html" %}
+{% block title %}頁首與頁尾{% endblock %}
+{% block content %}
+<h1>頁首與頁尾</h1>
+<form class="form" method="post" data-nav-form>
+  <div class="card">
+    <div class="admin-head"><h2>頁首選單</h2></div>
+    <p class="help">
+      每一項可以連到網站上的某一頁（頁面改網址時選單會自動跟著改），或填自訂網址（站內網址用 / 開頭，也可以是 https://… 、mailto:…）。
+      連到頁面時，「名稱」留空就用頁面標題。項目底下可以加子選單，電腦版滑鼠移上去會展開，手機版直接列在下面。
+      沒發佈的頁面不會出現在選單上。
+    </p>
+    <div class="nav-items" data-header></div>
+    <button type="button" class="btn small" data-add-header>＋ 選單項目</button>
+  </div>
+
+  <div class="card">
+    <div class="admin-head"><h2>頁尾</h2><span class="muted small" data-col-count></span></div>
+    <p class="help">欄位數量不限，在電腦上會排成一列；手機上自動變成兩欄或一欄。每一欄都可以有標題、一段文字和幾個連結，不用的留空就好。</p>
+    <div class="footer-cols-editor" data-footer></div>
+    <button type="button" class="btn small" data-add-column>＋ 欄位</button>
+    <div class="grid-2" style="margin-top: 18px">
+      <div class="form-row"><label class="field" for="note">最下面一行（版權、聲明）</label><input type="text" id="note" data-note></div>
+      <div class="form-row"><label class="field" for="note-en">最下面一行（英文）</label><input type="text" id="note-en" data-note-en></div>
+    </div>
+  </div>
+
+  <input type="hidden" name="header_json">
+  <input type="hidden" name="footer_json">
+  <script type="application/json" data-nav-initial>{{ {"pages": pages, "header": header, "footer": footer} | tojson }}</script>
+  <div class="form-actions sticky"><button class="btn primary" type="submit">儲存</button> <a class="btn" href="/" target="_blank" rel="noopener">看前台 ↗</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="/static/admin-nav.js"></script>{% endblock %}

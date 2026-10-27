@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+{% if page.kind == 'article' and kinds.articles %}
+  <p class="small" style="margin: 0 0 8px"><a href="{{ link(page_url(kinds.articles)) }}">← {{ tr(kinds.articles, 'title') }}</a></p>
+{% endif %}
+<article class="card" style="max-width: 820px; margin: 0 auto; padding: 28px">
+  <header class="page-head" style="margin-top: 0">
+    {% if page.published_at %}<div class="small muted">{{ page.published_at[:10] | replace('-', '/') }}</div>{% endif %}
+    <h1>{{ tr(page, 'title') }}</h1>
+    {% if page.kind == 'article' and tr(page, 'summary') %}<p class="intro">{{ tr(page, 'summary') }}</p>{% endif %}
+  </header>
+  <div class="prose">{{ tr(page, 'body_html') | safe }}</div>
+</article>
+{% endblock %}

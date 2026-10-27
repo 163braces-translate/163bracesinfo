@@ -1,0 +1,11 @@
+{# 圖片挑選視窗：admin.js 的 pickImage() 打開它 #}
+<dialog class="picker" id="image-picker">
+  <div class="picker-head">
+    <h2>選擇圖片</h2>
+    <input type="search" placeholder="搜尋圖片名稱" data-picker-search>
+    <label class="btn small">上傳新圖片<input type="file" accept="image/*" multiple hidden data-picker-upload></label>
+    <button type="button" class="icon-btn" data-picker-close aria-label="關閉">×</button>
+  </div>
+  <p class="small muted" data-picker-status></p>
+  <div class="picker-grid" data-picker-grid></div>
+</dialog>

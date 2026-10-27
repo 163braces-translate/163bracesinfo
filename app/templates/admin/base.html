@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% block title %}後台{% endblock %} · 163braces</title>
+{%- set logo_id = site_logo_id() %}
+{# 網址帶著 Logo 的編號：換了 Logo 網址就變，瀏覽器才不會一直用快取裡的舊圖示 #}
+{% if logo_id %}<link rel="icon" href="/site-icon/32.png?v={{ logo_id }}" type="image/png">
+{% else %}<link rel="icon" href="/static/icon.svg" type="image/svg+xml">{% endif %}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/admin.css">
+{% block head %}{% endblock %}
+{% macro brand_mark(logo_id) %}{% if logo_id %}<img class="brand-mark" src="/site-icon/64.png?v={{ logo_id }}" alt="">{% else %}<span class="brand-mark">163</span>{% endif %}{% endmacro %}
+</head>
+<body class="admin">
+{% if user %}
+<div class="admin-shell">
+  <nav class="admin-nav" aria-label="後台選單">
+    <div class="admin-brand"><a class="brand" href="/admin/">{{ brand_mark(logo_id) }}<span>後台</span></a>
+      <button class="btn small admin-menu" type="button" aria-expanded="false">選單</button></div>
+    <div class="admin-links">
+      {% macro item(key, href, label) %}<a href="{{ href }}" class="{{ 'on' if nav == key }}">{{ label }}</a>{% endmacro %}
+      {{ item('dashboard', '/admin/', '總覽') }}
+      <div class="group">演出資料</div>
+      {{ item('performances', '/admin/performances/', '演出與歌單') }}
+      {{ item('event-types', '/admin/m/event-types/', '演出類型') }}
+      {{ item('cities', '/admin/m/cities/', '城市') }}
+      <div class="group">曲庫</div>
+      {{ item('songs', '/admin/m/songs/', '歌曲') }}
+      {{ item('albums', '/admin/m/albums/', '專輯') }}
+      {{ item('lyrics', '/admin/lyrics/', '歌詞') }}
+      {{ item('mapping', '/admin/mapping', '歌曲 ↔ 歌詞') }}
+      <div class="group">網站</div>
+      {{ item('pages', '/admin/pages/', '頁面與文章') }}
+      {{ item('navigation', '/admin/navigation', '頁首與頁尾') }}
+      {{ item('images', '/admin/images/', '圖片') }}
+      {{ item('settings', '/admin/settings', '設定') }}
+      {{ item('redirects', '/admin/redirects', '轉址') }}
+      <div class="group">{{ user.username }}</div>
+      {{ item('account', '/admin/account', '帳號與密碼') }}
+      <a href="/" target="_blank" rel="noopener">看前台 ↗</a>
+      <form method="post" action="/admin/logout"><button class="linklike" type="submit">登出</button></form>
+    </div>
+  </nav>
+  <main class="admin-main">
+    {% if msg %}<div class="flash" role="status">{{ msg }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+{% block bare %}{% endblock %}
+{% endif %}
+{% include "admin/_picker.html" %}
+<script src="/static/admin.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

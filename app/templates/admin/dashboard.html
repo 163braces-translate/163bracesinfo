@@ -1,0 +1,39 @@
+{% extends "admin/base.html" %}
+{% block title %}總覽{% endblock %}
+{% block content %}
+<h1>總覽</h1>
+<div class="quick">
+  <a class="btn primary" href="/admin/performances/new">＋ 新增演出</a>
+  <a class="btn" href="/admin/pages/new?kind=article">＋ 新增文章</a>
+  <a class="btn" href="/admin/lyrics/new">＋ 新增歌詞</a>
+  <a class="btn" href="/admin/images/">上傳圖片</a>
+</div>
+
+<div class="dash-grid">
+  <section class="card">
+    <h2>待處理</h2>
+    <ul class="todo">
+      {% if review %}
+        {% for l in review %}
+          <li class="warn">⚠️ <a href="/admin/lyrics/{{ l.id }}#review">〈{{ l.title }}〉有 {{ l.review_json | fromjson | length }} 處要確認</a></li>
+        {% endfor %}
+      {% endif %}
+      {% if unmapped %}<li>🎵 <a href="/admin/mapping">{{ unmapped }} 首歌還沒對應到歌詞</a></li>{% endif %}
+      {% if missing_setlists %}<li>📝 <a href="/admin/performances/?missing=1">{{ missing_setlists }} 場已發生的演出還沒有歌單</a></li>{% endif %}
+      {% if not review and not unmapped and not missing_setlists %}<li class="muted">沒有待處理的事 🎉</li>{% endif %}
+    </ul>
+  </section>
+  <section class="card">
+    <h2>即將演出</h2>
+    {% if upcoming %}
+      <ul class="plain">
+        {% for p in upcoming %}<li><a href="/admin/performances/{{ p.id }}">{{ p.event_date | replace('-', '/') }}　{{ p.event_name }}</a> <span class="muted small">{{ p.city_name }}</span></li>{% endfor %}
+      </ul>
+    {% else %}<p class="muted">目前沒有未來的演出。</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>資料量</h2>
+    <div class="facts">{% for label, n in counts.items() %}<div class="fact"><b>{{ n }}</b><span>{{ label }}</span></div>{% endfor %}</div>
+  </section>
+</div>
+{% endblock %}

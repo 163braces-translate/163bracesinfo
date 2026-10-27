@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block head %}{% include "_stats_head.html" %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tr(page, 'title') }}</h1>
+</div>
+
+<nav class="tabs" role="tablist" aria-label="{{ tr(page, 'title') }}">
+  {% for key, label in [('list', t('tab_list')), ('charts', t('tab_charts')), ('setlist', t('tab_setlist')), ('replay', t('tab_replay'))] %}
+    <a role="tab" id="tab-{{ key }}" href="{{ link(tab_urls[key]) }}" data-tab="{{ key }}"
+       data-title="{{ (tr(page, 'title') if key == 'list' else label) }} · {{ site_name }}"
+       aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="tab-panel" id="panel-list" role="tabpanel" aria-labelledby="tab-list" {{ 'hidden' if tab != 'list' }}>
+{% set body = tr(page, 'body_html') %}
+{% if body %}<div class="intro muted prose" style="margin-bottom: 16px">{{ body | safe }}</div>{% endif %}
+<div class="perf-layout">
+  <aside class="perf-side">
+    <form class="card filters-card {{ 'open' if filtered }}" id="filters" method="get" action="{{ link(page_url(page)) }}">
+      <button type="button" class="btn filters-toggle" aria-expanded="{{ 'true' if filtered else 'false' }}">
+        {{ t('filters') }}{% if filtered %} · {{ t('results', n=total) }}{% endif %}
+      </button>
+      <div class="filters">
+        <div>
+          <label class="field" for="q">{{ t('search') }}</label>
+          <input type="search" id="q" name="q" value="{{ f.q }}" placeholder="{{ t('search_placeholder') }}">
+        </div>
+        <fieldset>
+          <legend>{{ t('type') }}</legend>
+          <div class="pills">
+            {% for ty in types %}
+              <label class="pill"><input type="checkbox" name="event_type" value="{{ ty.id }}" {{ 'checked' if ty.id in f.event_type }}><span>{{ tr(ty, 'name') }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <details class="city-list" {{ 'open' if f.city }}>
+          <summary>{{ t('city') }}{% if f.city %} · <b>{{ f.city | length }}</b>{% endif %}</summary>
+          <div class="pills" id="city-pills">
+            {% for c in map_cities if c.n or c.id in f.city %}
+              <label class="pill"><input type="checkbox" name="city" value="{{ c.id }}" {{ 'checked' if c.id in f.city }}><span>{{ tr(c, 'name') }} <small class="muted">{{ c.n }}</small></span></label>
+            {% endfor %}
+          </div>
+        </details>
+        <fieldset>
+          <legend>{{ t('date') }}</legend>
+          <select name="date_filter_type" id="date-mode" aria-label="{{ t('date') }}">
+            <option value="range" {{ 'selected' if f.date_filter_type == 'range' }}>{{ t('date_range') }}</option>
+            <option value="after" {{ 'selected' if f.date_filter_type == 'after' }}>{{ t('date_after') }}</option>
+            <option value="before" {{ 'selected' if f.date_filter_type == 'before' }}>{{ t('date_before') }}</option>
+          </select>
+          <div class="date-row" style="margin-top: 8px">
+            <input type="date" name="date_from" id="date-from" value="{{ f.date_from }}" aria-label="{{ t('from') }}">
+            <input type="date" name="date_to" id="date-to" value="{{ f.date_to }}" aria-label="{{ t('to') }}">
+          </div>
+        </fieldset>
+        <div>
+          <select name="sort" aria-label="Sort">
+            <option value="event_date_desc" {{ 'selected' if f.sort == 'event_date_desc' }}>{{ t('sort_desc') }}</option>
+            <option value="event_date_asc" {{ 'selected' if f.sort == 'event_date_asc' }}>{{ t('sort_asc') }}</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button class="btn primary" type="submit">{{ t('apply') }}</button>
+          <a class="btn" href="{{ link(page_url(page)) }}">{{ t('clear') }}</a>
+        </div>
+      </div>
+    </form>
+
+    <section class="card" aria-labelledby="h-map">
+      <div class="card-head" style="margin-bottom: 4px"><h2 id="h-map">{{ t('map') }}</h2><span class="small muted">{{ t('map_hint') }}</span></div>
+      <svg class="tw-map" viewBox="0 0 {{ map.width }} {{ map.height }}" role="group" aria-label="{{ t('map') }}">
+        <path class="land" d="{{ map.mainland }}"/>
+        {% for d in map.islands %}<path class="land" d="{{ d }}"/>{% endfor %}
+        {% for c in map_cities if c.map_key in map.nodes %}
+          {%- set node = map.nodes[c.map_key] %}
+          {%- set label = tr(c, 'name') if lang == 'en' else node.name %}
+          {% if node.inset %}
+            <rect class="inset" x="{{ node.inset[0] }}" y="{{ node.inset[1] }}" width="{{ node.inset[2] }}" height="{{ node.inset[3] }}" rx="8"/>
+          {% endif %}
+          <g class="node {{ 'on' if c.id in f.city }} {{ 'zero' if not c.n }}" data-city="{{ c.id }}" tabindex="0" role="button"
+             aria-pressed="{{ 'true' if c.id in f.city else 'false' }}" aria-label="{{ label }} {{ c.n }}">
+            <title>{{ tr(c, 'name') }}：{{ c.n }}</title>
+            {#- 看不見的點擊區：圓點加名稱整塊都能點，不用瞄準小圓點。名稱寬度用字數估：中文一字約 11、英文約 6.3 #}
+            {%- set lw = label | length * (6.3 if lang == 'en' else 11) %}
+            {%- set hr = [c.r, 7] | max %}
+            {% if node.inset %}
+              <rect class="hit" x="{{ node.inset[0] }}" y="{{ node.inset[1] }}" width="{{ node.inset[2] }}" height="{{ node.inset[3] }}" rx="8"/>
+            {% elif node.left %}
+              <rect class="hit" x="{{ node.x - c.r - lw - 6 }}" y="{{ node.y - hr - 2 }}" width="{{ c.r * 2 + lw + 9 }}" height="{{ hr * 2 + 4 }}" rx="4"/>
+            {% else %}
+              <rect class="hit" x="{{ node.x - c.r - 3 }}" y="{{ node.y - hr - 2 }}" width="{{ c.r * 2 + lw + 9 }}" height="{{ hr * 2 + 4 }}" rx="4"/>
+            {% endif %}
+            <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ c.r }}"/>
+            {% if c.r >= 7.5 %}<text class="count" x="{{ node.x }}" y="{{ node.y + 2.6 }}" text-anchor="middle">{{ c.n }}</text>{% endif %}
+            {% if node.inset %}
+              <text x="{{ node.x }}" y="{{ node.inset[1] + 11 }}" text-anchor="middle">{{ label }}</text>
+            {% elif node.left %}
+              <text x="{{ node.x - c.r - 2 }}" y="{{ node.y + 3 }}" text-anchor="end">{{ label }}</text>
+            {% else %}
+              <text x="{{ node.x + c.r + 2 }}" y="{{ node.y + 3 }}">{{ label }}</text>
+            {% endif %}
+          </g>
+        {% endfor %}
+      </svg>
+      {% set others = map_cities | rejectattr('map_key') | selectattr('n') | list %}
+      {% if others %}
+        <div class="map-other">
+          {% for c in others %}<button type="button" class="chip {{ 'blue' if c.id in f.city }}" data-city="{{ c.id }}">{{ tr(c, 'name') }} {{ c.n }}</button>{% endfor %}
+        </div>
+      {% endif %}
+    </section>
+  </aside>
+
+  <section aria-label="{{ tr(page, 'title') }}">
+    <div class="results-head">
+      <span class="muted">{{ t('results', n=total) }}</span>
+    </div>
+    {% if not total %}
+      <p class="empty">{{ t('no_results') }}</p>
+    {% else %}
+    <table class="perf-table">
+      <thead><tr><th>{{ t('date') }}</th><th>{{ t('event') }}</th><th>{{ t('type') }}</th><th>{{ t('venue') }}</th><th>{{ t('city') }}</th></tr></thead>
+      <tbody>
+      {% for ym, rows in groups %}
+        <tr class="month-row"><th colspan="5">{{ ym_label(ym) }}</th></tr>
+        {% for p in rows %}
+          {%- set soon = p.event_date >= today %}
+          <tr id="p{{ p.id }}" class="{{ 'soon' if soon }}">
+            <td class="date">{{ p.event_date | replace('-', '/') }} <span class="w">({{ weekday(p.event_date) }})</span></td>
+            <td>
+              {% if p.setlist %}
+                <button type="button" class="perf-name" aria-expanded="false" aria-controls="sl{{ p.id }}">
+                  <span class="t">{{ tr(p, 'event_name') }}</span><span class="chip badge-songs {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span>
+                </button>
+              {% else %}{{ tr(p, 'event_name') }}{% endif %}
+              {% if soon %} <span class="chip blue">{{ t('soon') }}</span>{% endif %}
+            </td>
+            <td><span class="chip">{{ tr(p, 'type_name') }}</span></td>
+            <td>{{ tr(p, 'venue') }}</td>
+            <td class="nowrap">{{ tr(p, 'city_name') }}</td>
+          </tr>
+          {% if p.setlist %}
+          <tr class="setlist-row" id="sl{{ p.id }}" hidden>
+            <td colspan="5">
+              <div class="setlist-content">
+                {% if p.setlist_order_uncertain %}<p class="uncertain">⚠️ {{ t('order_uncertain') }}</p>{% endif %}
+                <ol class="setlist">
+                  {% for it in p.setlist %}
+                    <li>
+                      {%- set title = it.custom_title if it.song_id is none else tr(it, 'title') %}
+                      {% if it.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ it.lyrics_slug ~ '/') }}">{{ title }}</a>{% else %}{{ title }}{% endif %}
+                      {% if it.song_id and it.artist %}<span class="artist"> · {{ tr(it, 'artist') }}</span>{% endif %}
+                      {% if it.note %}<span class="chip note">{{ it.note }}</span>{% endif %}
+                    </li>
+                  {% endfor %}
+                </ol>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="perf-cards">
+      {% for ym, rows in groups %}
+        <h3 class="month-head">{{ ym_label(ym) }}</h3>
+        <div class="card-grid">
+          {% for p in rows %}
+            {%- set soon = p.event_date >= today %}
+            <button type="button" class="perf-card {{ 'soon' if soon }}" data-id="{{ p.id }}"
+                    data-date="{{ p.event_date | replace('-', '/') }} ({{ weekday(p.event_date) }})"
+                    data-name="{{ tr(p, 'event_name') }}" data-type="{{ tr(p, 'type_name') }}"
+                    data-venue="{{ tr(p, 'venue') }}" data-cityname="{{ tr(p, 'city_name') }}">
+              <span class="d">{{ p.event_date[5:] | replace('-', '/') }} ({{ weekday(p.event_date) }})</span>
+              <span class="n">{{ tr(p, 'event_name') }}</span>
+              <span class="m">
+                {{ tr(p, 'city_name') }}
+                {% if p.setlist %}<span class="chip {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span>{% endif %}
+                {% if soon %}<span class="chip blue">{{ t('soon') }}</span>{% endif %}
+              </span>
+            </button>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+</section>
+
+{% include "_stats_panels.html" %}
+
+<div class="drawer-backdrop" hidden></div>
+<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+  <div class="drawer-head">
+    <h2 id="drawer-title"></h2>
+    <button type="button" class="icon-btn" data-close aria-label="{{ t('close') }}">×</button>
+  </div>
+  <div class="drawer-body">
+    <dl>
+      <dt>{{ t('date') }}</dt><dd data-f="date"></dd>
+      <dt>{{ t('type') }}</dt><dd data-f="type"></dd>
+      <dt>{{ t('venue') }}</dt><dd data-f="venue"></dd>
+      <dt>{{ t('city') }}</dt><dd data-f="city"></dd>
+    </dl>
+    <h3>{{ t('setlist') }}</h3>
+    <div data-f="setlist"></div>
+    <template id="no-setlist"><p class="muted">{{ t('no_setlist') }}</p></template>
+  </div>
+</aside>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/stats.js?v={{ asset_version }}"></script>
+<script src="/static/replay.js?v={{ asset_version }}"></script>
+{% endblock %}

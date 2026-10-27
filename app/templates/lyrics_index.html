@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tr(page, 'title') }}</h1>
+  {% set body = tr(page, 'body_html') %}
+  {% if body %}<div class="intro">{{ body | safe }}</div>{% endif %}
+</div>
+
+<div class="album-grid">
+  {% for a in albums %}
+    <section class="card album" aria-labelledby="album-{{ a.id }}">
+      <div class="album-head">
+        {{ m.cover(a.cover_image_id or (a.songs | map(attribute='cover_image_id') | select | first), 240, tr(a, 'name')) }}
+        <div>
+          <h2 id="album-{{ a.id }}">{{ tr(a, 'name') }}</h2>
+          <div class="sub">{% if a.release_date %}{{ a.release_date[:4] }} · {% endif %}{{ t('songs_n', n=a.songs | length) }}</div>
+        </div>
+      </div>
+      <ol class="tracks">
+        {% for s in a.songs %}
+          <li>
+            {% if s.lyrics_slug and s.lyrics_published %}
+              <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">
+                <span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}</span>
+              </a>
+            {% else %}
+              <span class="no-lyrics">{{ tr(s, 'title') }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endfor %}
+
+  {% if orphans %}
+    <section class="card album" aria-labelledby="album-other">
+      <div class="album-head">
+        <span class="cover-ph" aria-hidden="true"></span>
+        <div><h2 id="album-other">{{ t('other_lyrics') }}</h2><div class="sub">{{ t('songs_n', n=orphans | length) }}</div></div>
+      </div>
+      <ol class="tracks">
+        {% for l in orphans %}
+          <li><a href="{{ link(lyrics_prefix ~ l.slug ~ '/') }}"><span>{{ l.title }}{% if l.title_en %} <span class="en">{{ l.title_en }}</span>{% endif %}</span></a></li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

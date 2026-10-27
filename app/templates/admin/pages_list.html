@@ -1,0 +1,29 @@
+{% extends "admin/base.html" %}
+{% block title %}頁面與文章{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>頁面與文章</h1>
+  <div class="quick" style="margin: 0">
+    <a class="btn primary" href="/admin/pages/new?kind=article">＋ 新增文章</a>
+    <a class="btn" href="/admin/pages/new">＋ 新增一般頁面</a>
+  </div>
+</div>
+<p class="muted small">每一頁都能改標題、網址、縮圖和內文。前五個是網站的固定頁面，可以改內容和網址，不能刪除。</p>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th></th><th>標題</th><th>種類</th><th>網址</th><th>狀態</th></tr></thead>
+  <tbody>
+  {% for p in rows %}
+    <tr>
+      <td><a href="/admin/pages/{{ p.id }}">{% if p.thumbnail_id %}<img class="thumb" src="{{ image_url(p.thumbnail_id, 120) }}" alt="">{% else %}<span class="thumb ph"></span>{% endif %}</a></td>
+      <td><a href="/admin/pages/{{ p.id }}">{{ p.title }}</a>{% if p.title_en %} <span class="muted small">{{ p.title_en }}</span>{% endif %}
+        {% if p.published_at %}<div class="muted small">{{ p.published_at }}</div>{% endif %}</td>
+      <td class="small">{{ kinds[p.kind] }}</td>
+      <td class="small"><a href="{{ page_url(p) }}" target="_blank" rel="noopener">{{ page_url(p) }}</a></td>
+      <td>{% if p.published %}<span class="chip blue">已發佈</span>{% else %}<span class="chip">草稿</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

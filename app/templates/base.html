@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{#- 演出頁的統計、歌單、年度回顧分頁用分頁名稱當標題 #}
+{%- set page_title = tab_title or (tr(page, 'title') if page else '') %}
+<title>{% block title %}{% if page_title and page and page.kind != 'home' %}{{ page_title }} · {% endif %}{{ site_name }}{% endblock %}</title>
+{%- set description = tr(page, 'summary') if page else '' %}
+{% if description %}<meta name="description" content="{{ description }}">{% endif %}
+<meta property="og:title" content="{{ page_title or site_name }}">
+{% if description %}<meta property="og:description" content="{{ description }}">{% endif %}
+{% if page and page.thumbnail_id %}<meta property="og:image" content="{{ request.base_url | string | trim('/') }}{{ image_url(page.thumbnail_id, 1200) }}">{% endif %}
+{# 標準網址不含查詢參數（篩選條件），搜尋引擎才不會把每種篩選都當成不同頁面 #}
+<link rel="canonical" href="{{ request.base_url | string | trim('/') }}{{ current_path }}">
+<link rel="alternate" hreflang="zh-Hant" href="{{ current_path if lang == 'zh' else alt_url }}">
+<link rel="alternate" hreflang="en" href="{{ alt_url if lang == 'zh' else current_path }}">
+{% if logo_id %}
+<link rel="icon" href="/site-icon/32.png?v={{ logo_id }}" type="image/png">
+<link rel="apple-touch-icon" href="/site-icon/180.png?v={{ logo_id }}">
+{% else %}
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+{% endif %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="{{ link('/') }}">{% if logo_id %}<img class="brand-mark" src="/site-icon/64.png?v={{ logo_id }}" alt="">{% else %}<span class="brand-mark">163</span>{% endif %}<span>{{ site_name }}</span></a>
+    <button class="btn small nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">{{ t('menu') }}</button>
+    {% macro nav_link(item, cls='') -%}
+      <a href="{{ item.href }}" class="{{ cls }}"{% if item.external %} target="_blank" rel="noopener"{% endif %}>{{ item.label }}</a>
+    {%- endmacro %}
+    <nav class="site-nav" id="site-nav">
+      {% for item in nav %}
+        {% if item.children %}
+          <div class="nav-group {{ 'on' if item.on }}">
+            {% if item.href %}{{ nav_link(item, 'on' if item.on else '') }}{% else %}<span class="nav-label {{ 'on' if item.on }}">{{ item.label }}</span>{% endif %}
+            <button type="button" class="nav-caret" aria-expanded="false" aria-label="{{ item.label }}">▾</button>
+            <div class="nav-sub">{% for c in item.children %}{{ nav_link(c) }}{% endfor %}</div>
+          </div>
+        {% else %}
+          {{ nav_link(item, 'on' if item.on else '') }}
+        {% endif %}
+      {% endfor %}
+      <a class="lang" href="{{ alt_url }}" hreflang="{{ 'zh-Hant' if lang == 'en' else 'en' }}">{{ t('lang_switch') }}</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+<footer class="site-footer">
+  {% if footer.columns %}
+  <div class="wrap footer-cols" style="--cols: {{ footer.columns | length }}">
+    {% for col in footer.columns %}
+      <section class="footer-col">
+        {% if col.title %}<h2>{{ col.title }}</h2>{% endif %}
+        {% if col.text %}<p>{{ col.text }}</p>{% endif %}
+        {% if col.links %}
+          <ul>{% for l in col.links %}<li><a href="{{ l.href }}"{% if l.external %} target="_blank" rel="noopener"{% endif %}>{{ l.label }}</a></li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if footer.note %}<div class="wrap footer-note">{{ footer.note }}</div>{% endif %}
+</footer>
+<script src="/static/site.js?v={{ asset_version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+{%- set mode = lyr.display_mode %}
+{%- set album = songs[0] if songs else none %}
+<p class="small" style="margin: 0"><a href="{{ link(lyrics_prefix) }}">← {{ t('lyrics') }}</a></p>
+
+<header class="lyrics-head">
+  {{ m.cover(cover, 240, lyr.title) }}
+  <div>
+    {% if album %}<div class="small muted">{{ tr(album, 'album_name') }}</div>{% endif %}
+    <h1>{{ lyr.title }}</h1>
+    {% if lyr.title_en %}<div class="en-title">{{ lyr.title_en }}</div>{% endif %}
+    <div class="credits">
+      {% if lyr.artist %}<span class="chip">{{ t('artist') }} {{ lyr.artist }}</span>{% endif %}
+      {% if lyr.lyricist %}<span class="chip">{{ t('lyricist') }} {{ lyr.lyricist }}</span>{% endif %}
+      {% if lyr.composer %}<span class="chip">{{ t('composer') }} {{ lyr.composer }}</span>{% endif %}
+      {% if lyr.release_year %}<span class="chip">{{ lyr.release_year }}</span>{% endif %}
+      {% if played %}<span class="chip blue">{{ t('played_n', n=played) }}</span>{% endif %}
+      {% if last_played %}<span class="chip">{{ t('last_played', date=last_played | replace('-', '/')) }}</span>{% endif %}
+    </div>
+  </div>
+</header>
+
+<div class="lyrics-layout">
+  <div>
+    {% set intro = lyr.intro_html_en if lang == 'en' and lyr.intro_html_en else lyr.intro_html %}
+    {% if intro %}<div class="card" style="margin-bottom: 18px"><div class="prose">{{ intro | safe }}</div></div>{% endif %}
+
+    {% if mode == 'bilingual' %}
+      <div class="toolbar">
+        <div class="seg" data-lyrics-view role="group" aria-label="{{ t('lyrics') }}">
+          <button type="button" data-view="both" aria-pressed="true">{{ t('view_both') }}</button>
+          <button type="button" data-view="left" aria-pressed="false">{{ t('view_left') }}</button>
+          <button type="button" data-view="right" aria-pressed="false">{{ t('view_right') }}</button>
+        </div>
+      </div>
+    {% endif %}
+
+    {% for title, title_en, blocks in parts %}
+      <section class="card lyrics-box">
+        {% if title %}<h2>{{ title_en if lang == 'en' and title_en else title }}</h2>{% endif %}
+        <div class="lyrics-body {{ mode }}">
+          {% if mode in ('bilingual', 'duet') and loop.first %}
+            <div class="ly-cols"><span>{{ lyr.left_label }}</span><span>{{ lyr.right_label }}</span></div>
+          {% endif %}
+          {{ m.lyric_blocks(blocks, tr) }}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <aside class="lyrics-aside">
+    {% if videos %}
+      <section class="card">
+        <div class="card-head"><h2>{{ t('videos') }}</h2></div>
+        <div class="video-list">
+          {% for v in videos %}
+            {%- set vt = v.title_en if lang == 'en' and v.title_en else v.title %}
+            <div>{{ m.youtube(v.url, vt) }}{% if vt %}<div class="cap">{{ vt }}</div>{% endif %}</div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+    {% if songs | length > 1 %}
+      <section class="card">
+        <div class="card-head"><h2>{{ t('versions') }}</h2></div>
+        <ul class="small" style="margin: 0; padding-left: 1.2em">
+          {% for s in songs %}<li>{{ tr(s, 'title') }} <span class="muted">· {{ tr(s, 'album_name') }}</span></li>{% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
