@@ -1,6 +1,7 @@
 #!/bin/sh
 # 在本機啟動 163braces 資訊站：./start_web.sh
-# 開好後瀏覽器打開 http://127.0.0.1:8163 ，後台在 http://127.0.0.1:8163/admin/ ；要關掉就在這個終端機按 Ctrl+C。
+# 開好後瀏覽器打開 http://localhost:8163 ，後台在 http://localhost:8163/admin/ ；要關掉就在這個終端機按 Ctrl+C。
+# 請用 localhost，不要用 127.0.0.1：唱片公司上架的 YouTube 影片（有版權管理）在網址是純 IP 的頁面上會拒絕播放。
 #
 # 用 8163 port，不用 8000：承銷統計網站（TW Underwriting 的 start_web.sh）佔 8000，兩個可以同時開。
 # 改了 app/ 底下的程式會自動重新載入，不用重開。

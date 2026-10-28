@@ -33,6 +33,9 @@
     iframe.src = "https://www.youtube-nocookie.com/embed/" + yt.dataset.yt + "?autoplay=1&rel=0";
     iframe.allow = "autoplay; encrypted-media; picture-in-picture";
     iframe.allowFullscreen = true;
+    // YouTube 要看得到是哪個網站在嵌入（Referer），看不到就顯示「錯誤 153：影片播放器設定錯誤」。
+    // 明確指定，免得網站或主機哪天加了 Referrer-Policy: same-origin（舊站就是這樣）把它擋掉
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
     iframe.title = yt.getAttribute("aria-label") || "YouTube";
     yt.appendChild(iframe);
     yt.classList.add("playing");
