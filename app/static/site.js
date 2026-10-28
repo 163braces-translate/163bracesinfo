@@ -146,6 +146,24 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !drawer.hidden) close(); });
   }
 
+  // ---- 歌詞索引：全部展開／全部收起（按鈕文字跟著目前狀態）
+  var menu = $("[data-lyrics-menu]");
+  if (menu) {
+    var toggleAll = $("[data-toggle-all]", menu);
+    var items = $$("details", menu);
+    var sync = function () {
+      var allOpen = items.every(function (d) { return d.open; });
+      toggleAll.textContent = allOpen ? toggleAll.dataset.collapse : toggleAll.dataset.expand;
+    };
+    toggleAll.addEventListener("click", function () {
+      var open = !items.every(function (d) { return d.open; });
+      items.forEach(function (d) { d.open = open; });
+      sync();
+    });
+    items.forEach(function (d) { d.addEventListener("toggle", sync); });
+    sync();
+  }
+
   // ---- 歌詞頁：中英對照／只看中文／只看英文
   $$("[data-lyrics-view]").forEach(function (group) {
     var bodies = $$(".lyrics-body.bilingual");

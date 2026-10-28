@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block title %}歌詞索引排序{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>歌詞索引排序</h1>
+  <a class="btn small" href="{{ prefix }}" target="_blank" rel="noopener">看前台 ↗</a>
+</div>
+<p class="muted">拖 <b>⋮⋮</b> 調整專輯的先後、專輯裡曲目的順序；歌曲也可以拖到另一張專輯。「其他歌詞」（沒對應到任何歌曲的歌詞）也可以拖到專輯之間任何位置。右邊是前台歌詞頁的即時預覽。
+  灰色的歌是還沒有歌詞（或歌詞沒發佈）的，前台會顯示但點不進去；沒有任何歌曲的專輯前台不會出現。</p>
+
+<form class="form" method="post" data-order-form>
+  <div class="order-layout">
+    <div class="order-albums" data-order-albums></div>
+    <div class="order-preview card">
+      <div class="card-head"><h2>預覽</h2><span class="small muted">前台縮小顯示，預覽裡全部展開</span></div>
+      <div class="order-preview-viewport" data-preview-viewport>
+        <div class="order-preview-page" data-preview-page>
+          <div class="lyrics-menu" data-preview></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <input type="hidden" name="order_json">
+  <script type="application/json" data-order-initial>{{ data | tojson }}</script>
+  <div class="form-actions sticky"><button class="btn primary" type="submit">儲存順序</button></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="/static/admin-order.js"></script>{% endblock %}

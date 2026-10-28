@@ -97,11 +97,13 @@
         preview.appendChild(el("img", { src: img.thumb, alt: "" }));
         clear.hidden = false;
         var form = field.closest("form"); if (form && form.markDirty) form.markDirty();
+        input.dispatchEvent(new Event("change", { bubbles: true }));     // 讓頁面上的預覽（例如首頁大標題）跟著換
       });
     });
     clear.addEventListener("click", function () {
       input.value = ""; preview.innerHTML = ""; clear.hidden = true;
       var form = field.closest("form"); if (form && form.markDirty) form.markDirty();
+      input.dispatchEvent(new Event("change", { bubbles: true }));
     });
   });
 

@@ -29,6 +29,9 @@ SETTINGS = {
     "home_hero_image_id": "",           # 首頁大標題方框的背景圖
     "home_hero_mode": "cover",          # cover 滿版背景／side 放在右半邊往左淡出
     "home_hero_overlay": "70",          # 白色遮罩濃度 0–100，越高圖越淡、字越清楚
+    "home_hero_pos_x": "50",            # 背景圖對齊位置（0–100%），在後台「首頁大標題」用拖的設定
+    "home_hero_pos_y": "50",
+    "home_hero_zoom": "100",            # 背景圖放大比例（100–300%）
     "home_upcoming_count": "5",         # 首頁「即將演出」顯示幾場
     "home_top_songs_count": "5",        # 首頁「最近常唱」顯示幾首
     "home_top_songs_window": "20",      # 「最近常唱」看最近幾場有歌單的演出
@@ -41,6 +44,7 @@ SETTINGS = {
     "setlist_intro_html": "",
     "replay_intro_html": "",
     "home_facts_json": "[]",
+    "lyrics_other_position": "",        # 歌詞索引「其他歌詞」排在第幾張專輯後面；空白＝最後
 }
 
 

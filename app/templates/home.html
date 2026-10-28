@@ -14,8 +14,9 @@
   </li>
 {% endmacro %}
 {% block content %}
+<div class="hero-frame">
 <section class="hero {{ 'hero-' ~ hero_mode if hero_image }}"
-  {%- if hero_image %} style="--hero-image: url('{{ image_url(hero_image, 1600) }}'); --hero-overlay: {{ hero_overlay }}"{% endif %}>
+  {%- if hero_image %} style="--hero-image: url('{{ image_url(hero_image, 1600) }}'); --hero-overlay: {{ hero_overlay }}; --hero-x: {{ hero_x }}%; --hero-y: {{ hero_y }}%; --hero-zoom: {{ hero_zoom }}"{% endif %}>
   {% if not hero_image %}<div class="hero-art"></div>{% endif %}
   <h1>{{ tr(page, 'title') }}</h1>
   {% if tr(page, 'summary') %}<p>{{ tr(page, 'summary') }}</p>{% endif %}
@@ -28,6 +29,7 @@
     {% if kinds.performances %}<a class="btn" href="{{ link(page_url(kinds.performances)) }}stats/">{{ t('tab_charts') }}</a>{% endif %}
   </div>
 </section>
+</div>
 
 <div class="home-grid">
   <section class="card span-7" aria-labelledby="h-upcoming">

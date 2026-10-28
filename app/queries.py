@@ -272,14 +272,31 @@ def main_part(blocks):
 
 
 def albums_with_songs(con):
-    """歌詞索引：每張專輯一個方框，列出曲目與對應的歌詞。"""
+    """每張專輯（照排序，含沒有歌的）與它的曲目。"""
     albums = [dict(a) for a in con.execute("SELECT * FROM albums ORDER BY sort_order, id")]
     by_album = defaultdict(list)
     for s in con.execute(SONG_SELECT + " ORDER BY g.sort_order, g.id"):
         by_album[s["album_id"]].append(s)
     for a in albums:
         a["songs"] = by_album.get(a["id"], [])
-    return [a for a in albums if a["songs"]]
+    return albums
+
+
+def other_lyrics_position(con, album_count):
+    """「其他歌詞」方框排在第幾張專輯後面（0＝最前面）；沒設定過就放最後。"""
+    value = db.get_setting(con, "lyrics_other_position")
+    return min(int(value), album_count) if str(value).isdigit() else album_count
+
+
+def lyrics_boxes(con):
+    """歌詞索引的方框，照後台「歌詞索引排序」排好：每張有歌的專輯一個，
+    「其他歌詞」（沒對應到歌曲的歌詞）插在設定的位置。"""
+    albums = albums_with_songs(con)
+    boxes = [{"kind": "album", "album": a} for a in albums]
+    orphans = orphan_lyrics(con)
+    if orphans:
+        boxes.insert(other_lyrics_position(con, len(albums)), {"kind": "other", "lyrics": orphans})
+    return [b for b in boxes if b["kind"] == "other" or b["album"]["songs"]]
 
 
 def orphan_lyrics(con):

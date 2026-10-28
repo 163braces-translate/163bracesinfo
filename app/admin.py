@@ -555,6 +555,59 @@ def add_redirects(con, old, new):
         con.execute("DELETE FROM redirects WHERE old_path = ?", (prefix + new,))
 
 
+# ==================================================================== 歌詞索引的順序
+@router.get("/lyrics-order")
+def lyrics_order(request: Request, con=Depends(user_required)):
+    albums = []
+    for a in con.execute("SELECT * FROM albums ORDER BY sort_order, id"):
+        songs = con.execute("""
+            SELECT g.id, g.title, g.title_en, g.cover_image_id, l.slug AS lyrics_slug, l.published AS lyrics_published
+            FROM songs g LEFT JOIN lyrics l ON l.id = g.lyrics_id
+            WHERE g.album_id = ? ORDER BY g.sort_order, g.id""", (a["id"],)).fetchall()
+        cover = a["cover_image_id"] or next((s["cover_image_id"] for s in songs if s["cover_image_id"]), None)
+        albums.append({"id": a["id"], "name": a["name"], "release_date": a["release_date"],
+                       "cover": Q.image_url(cover, 240) if cover else "",
+                       "songs": [{"id": s["id"], "title": s["title"], "title_en": s["title_en"],
+                                  "has_lyrics": bool(s["lyrics_slug"] and s["lyrics_published"])} for s in songs]})
+    orphans = [{"id": r["id"], "title": r["title"], "title_en": r["title_en"], "published": r["published"]}
+               for r in con.execute("SELECT * FROM lyrics WHERE id NOT IN (SELECT lyrics_id FROM songs "
+                                    "WHERE lyrics_id IS NOT NULL) ORDER BY sort_order, id")]
+    return page(request, "lyrics_order.html", {
+        "nav": "lyrics-order", "prefix": Q.lyrics_prefix(con),
+        "data": {"albums": albums, "orphans": orphans,
+                 "other_position": Q.other_lyrics_position(con, len(albums))}})
+
+
+@router.post("/lyrics-order")
+async def lyrics_order_save(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    if not form.get("order_json"):
+        return done("/admin/lyrics-order", "排序編輯器沒有正常載入，這次沒有存檔。請重新整理頁面再試。")
+    try:
+        data = json.loads(form["order_json"])
+        album_ids = [int(a["id"]) for a in data["albums"]]
+        orphan_ids = [int(i) for i in data["orphans"]]
+        other_position = min(max(0, int(data["other_position"])), len(album_ids))
+    except (ValueError, KeyError, TypeError):
+        return done("/admin/lyrics-order", "資料讀不懂，請重新整理後再試")
+    known = {r[0] for r in con.execute("SELECT id FROM albums")}
+    if set(album_ids) != known:
+        return done("/admin/lyrics-order", "專輯清單跟資料庫對不上（可能有人同時在改），請重新整理後再試")
+    # 專輯照拖好的順序編號；歌曲的排序是全站連號（第一張專輯的歌最小），
+    # 這樣其他照歌曲排序的地方（例如年度回顧的選歌）也會跟專輯順序一致
+    n = 0
+    for i, album in enumerate(data["albums"]):
+        con.execute("UPDATE albums SET sort_order = ? WHERE id = ?", (i + 1, int(album["id"])))
+        for song_id in album["songs"]:
+            n += 1
+            con.execute("UPDATE songs SET sort_order = ?, album_id = ? WHERE id = ?", (n, int(album["id"]), int(song_id)))
+    for i, lyrics_id in enumerate(orphan_ids):
+        con.execute("UPDATE lyrics SET sort_order = ? WHERE id = ?", (i + 1, lyrics_id))
+    db.set_setting(con, "lyrics_other_position", other_position)     # 「其他歌詞」排在第幾張專輯後面
+    con.commit()
+    return done("/admin/lyrics-order")
+
+
 # ==================================================================== 頁面
 KIND_LABELS = {"home": "首頁", "performances": "演出（列表、統計、歌單、年度回顧）", "lyrics": "歌詞索引",
                "articles": "文章列表", "article": "文章", "page": "一般頁面"}
@@ -728,10 +781,6 @@ SETTING_FIELDS = [
     ("網站", [("site_name", "網站名稱", "text"), ("site_name_en", "網站名稱（英文）", "text"),
               ("site_logo_id", "Logo（頁首左上角、瀏覽器分頁圖示）", "image",
                "建議用正方形、背景不透明的圖；會自動裁成正方形。空白就用內建的「163」圖示。")]),
-    ("首頁大標題方框", [("home_hero_image_id", "背景圖", "image", "空白就是白底加一點淡色裝飾。"),
-                        ("home_hero_mode", "顯示方式", ("cover", "滿版背景"), ("side", "放在右半邊，往左淡出")),
-                        ("home_hero_overlay", "白色遮罩濃度（0–100）", "int",
-                         "越高圖越淡、標題越清楚。0＝原圖，100＝看不到圖。舊站的設定換算是 70。")]),
     ("首頁", [("home_upcoming_count", "「即將演出」顯示幾場", "int"),
               ("home_top_songs_count", "「最近常唱」顯示幾首", "int"),
               ("home_top_songs_window", "「最近常唱」統計最近幾場有歌單的演出", "int"),
@@ -777,6 +826,44 @@ async def settings_save(request: Request, con=Depends(user_required)):
             db.set_setting(con, key, value)
     con.commit()
     return done("/admin/settings")
+
+
+# ==================================================================== 首頁大標題方框
+HERO_KEYS = ("home_hero_image_id", "home_hero_mode", "home_hero_overlay", "home_hero_pos_x", "home_hero_pos_y",
+             "home_hero_zoom")
+
+
+@router.get("/hero")
+def hero_page(request: Request, con=Depends(user_required)):
+    home = con.execute("SELECT * FROM pages WHERE kind = 'home'").fetchone()
+    links = [r for r in con.execute("SELECT * FROM pages WHERE kind IN ('performances', 'lyrics') AND published = 1 "
+                                    "ORDER BY kind = 'lyrics'")]
+    image_id = as_int(db.get_setting(con, "home_hero_image_id"))
+    image = con.execute("SELECT * FROM images WHERE id = ?", (image_id,)).fetchone() if image_id else None
+    return page(request, "hero.html", {
+        "nav": "hero", "home": home, "links": links,
+        "values": {k: db.get_setting(con, k) for k in HERO_KEYS},
+        "image": image_json(image) if image else None,
+    })
+
+
+@router.post("/hero")
+async def hero_save(request: Request, con=Depends(user_required)):
+    form = await request.form()
+
+    def clamp(key, lo, hi, default):
+        try:
+            return "%g" % round(min(hi, max(lo, float(form.get(key)))), 1)      # 70.0 存成 "70"
+        except (TypeError, ValueError):
+            return default
+    db.set_setting(con, "home_hero_image_id", as_int(form.get("home_hero_image_id")) or "")
+    db.set_setting(con, "home_hero_mode", form.get("home_hero_mode") if form.get("home_hero_mode") in ("cover", "side") else "cover")
+    db.set_setting(con, "home_hero_overlay", clamp("home_hero_overlay", 0, 100, "70"))
+    db.set_setting(con, "home_hero_pos_x", clamp("home_hero_pos_x", 0, 100, "50"))
+    db.set_setting(con, "home_hero_pos_y", clamp("home_hero_pos_y", 0, 100, "50"))
+    db.set_setting(con, "home_hero_zoom", clamp("home_hero_zoom", 100, 300, "100"))
+    con.commit()
+    return done("/admin/hero")
 
 
 # ==================================================================== 頁首與頁尾

@@ -7,44 +7,50 @@
   {% if body %}<div class="intro">{{ body | safe }}</div>{% endif %}
 </div>
 
-<div class="album-grid">
-  {% for a in albums %}
-    <section class="card album" aria-labelledby="album-{{ a.id }}">
-      <div class="album-head">
-        {{ m.cover(a.cover_image_id or (a.songs | map(attribute='cover_image_id') | select | first), 240, tr(a, 'name')) }}
-        <div>
-          <h2 id="album-{{ a.id }}">{{ tr(a, 'name') }}</h2>
-          <div class="sub">{% if a.release_date %}{{ a.release_date[:4] }} · {% endif %}{{ t('songs_n', n=a.songs | length) }}</div>
-        </div>
-      </div>
-      <ol class="tracks">
-        {% for s in a.songs %}
-          <li>
-            {% if s.lyrics_slug and s.lyrics_published %}
-              <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">
-                <span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}</span>
-              </a>
-            {% else %}
-              <span class="no-lyrics">{{ tr(s, 'title') }}</span>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ol>
-    </section>
+{# 可收放的清單：每張專輯一列，點名稱展開曲目。預設只展開第一個。順序在後台「歌詞索引排序」設定 #}
+<div class="lyrics-menu" data-lyrics-menu>
+  <div class="lyrics-menu-tools">
+    <button type="button" class="btn small" data-toggle-all data-expand="{{ t('expand_all') }}" data-collapse="{{ t('collapse_all') }}">{{ t('expand_all') }}</button>
+  </div>
+  {% for box in boxes %}
+    <details class="card album-menu" {{ 'open' if loop.first }}>
+      {% if box.kind == 'album' %}
+        {%- set a = box.album %}
+        <summary>
+          {{ m.cover(a.cover_image_id or (a.songs | map(attribute='cover_image_id') | select | first), 120, tr(a, 'name')) }}
+          <span class="album-menu-title">
+            <span class="name">{{ tr(a, 'name') }}</span>
+            <span class="sub">{% if a.release_date %}{{ a.release_date[:4] }} · {% endif %}{{ t('songs_n', n=a.songs | length) }}</span>
+          </span>
+          <span class="chevron" aria-hidden="true"></span>
+        </summary>
+        <ol class="tracks">
+          {% for s in a.songs %}
+            <li>
+              {% if s.lyrics_slug and s.lyrics_published %}
+                <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}"><span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}</span></a>
+              {% else %}
+                <span class="no-lyrics">{{ tr(s, 'title') }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <summary>
+          <span class="cover-ph" aria-hidden="true"></span>
+          <span class="album-menu-title">
+            <span class="name">{{ t('other_lyrics') }}</span>
+            <span class="sub">{{ t('songs_n', n=box.lyrics | length) }}</span>
+          </span>
+          <span class="chevron" aria-hidden="true"></span>
+        </summary>
+        <ol class="tracks">
+          {% for l in box.lyrics %}
+            <li><a href="{{ link(lyrics_prefix ~ l.slug ~ '/') }}"><span>{{ l.title }}{% if l.title_en %} <span class="en">{{ l.title_en }}</span>{% endif %}</span></a></li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+    </details>
   {% endfor %}
-
-  {% if orphans %}
-    <section class="card album" aria-labelledby="album-other">
-      <div class="album-head">
-        <span class="cover-ph" aria-hidden="true"></span>
-        <div><h2 id="album-other">{{ t('other_lyrics') }}</h2><div class="sub">{{ t('songs_n', n=orphans | length) }}</div></div>
-      </div>
-      <ol class="tracks">
-        {% for l in orphans %}
-          <li><a href="{{ link(lyrics_prefix ~ l.slug ~ '/') }}"><span>{{ l.title }}{% if l.title_en %} <span class="en">{{ l.title_en }}</span>{% endif %}</span></a></li>
-        {% endfor %}
-      </ol>
-    </section>
-  {% endif %}
 </div>
 {% endblock %}

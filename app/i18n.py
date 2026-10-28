@@ -86,6 +86,8 @@ T = {
     "ties": ("另有 {n} 場並列", "{n} more tied"),
     "lyrics": ("歌詞", "Lyrics"),
     "other_lyrics": ("其他歌詞", "Other lyrics"),
+    "expand_all": ("全部展開", "Expand all"),
+    "collapse_all": ("全部收起", "Collapse all"),
     "view_both": ("中英對照", "Both"),
     "view_left": ("只看中文", "Chinese only"),
     "view_right": ("只看英文", "English only"),

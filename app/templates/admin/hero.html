@@ -1,0 +1,64 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}首頁大標題{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>首頁大標題方框</h1>
+  <a class="btn small" href="/" target="_blank" rel="noopener">看前台 ↗</a>
+</div>
+<p class="muted">直接在下面的預覽裡<b>拖動圖片</b>，決定方框要露出圖的哪一塊；預覽跟前台用同一套樣式，看到的就是前台的樣子。
+  標題和說明文字在「<a href="/admin/pages/{{ home.id }}">頁面與文章 → 首頁</a>」改。</p>
+
+<form class="form" method="post" data-hero-form>
+  <div class="card">
+    <div class="admin-head">
+      <div class="seg" role="group" aria-label="預覽尺寸" data-hero-device>
+        <button type="button" data-device="desktop" aria-pressed="true">電腦</button>
+        <button type="button" data-device="mobile" aria-pressed="false">手機</button>
+      </div>
+      <span class="small muted" data-hero-hint></span>
+    </div>
+    <div class="hero-stage" data-hero-stage>
+      <div class="hero-frame">
+        <section class="hero" data-hero-preview>
+          <div class="hero-art" data-hero-art></div>
+          <h1>{{ home.title }}</h1>
+          {% if home.summary %}<p>{{ home.summary }}</p>{% endif %}
+          <div class="hero-links">
+            {% for p in links %}<span class="btn {{ 'primary' if loop.first }}">{{ p.title }}</span>{% endfor %}
+            {% if links %}<span class="btn">演出統計</span>{% endif %}
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hero-controls">
+    {{ fx.image_field('home_hero_image_id', values.home_hero_image_id | int if values.home_hero_image_id else none, '背景圖', '空白就是白底加一點淡色裝飾。') }}
+    <div class="form-row">
+      <span class="field">顯示方式</span>
+      <label class="check"><input type="radio" name="home_hero_mode" value="cover" {{ 'checked' if values.home_hero_mode != 'side' }}> 滿版背景</label>
+      <label class="check" style="margin-left: 16px"><input type="radio" name="home_hero_mode" value="side" {{ 'checked' if values.home_hero_mode == 'side' }}> 放在右半邊，往左淡出</label>
+    </div>
+    <div class="form-row range-row">
+      <label class="field" for="hero-zoom">放大</label>
+      <input type="range" id="hero-zoom" name="home_hero_zoom" min="100" max="300" step="1" value="{{ values.home_hero_zoom or 100 }}">
+      <output data-for="hero-zoom"></output>
+    </div>
+    <div class="form-row range-row">
+      <label class="field" for="hero-overlay">白色遮罩</label>
+      <input type="range" id="hero-overlay" name="home_hero_overlay" min="0" max="100" step="1" value="{{ values.home_hero_overlay or 70 }}">
+      <output data-for="hero-overlay"></output>
+    </div>
+    <p class="help">遮罩越高圖越淡、標題越清楚。舊站的設定換算是 70%。</p>
+    <input type="hidden" name="home_hero_pos_x" value="{{ values.home_hero_pos_x or 50 }}">
+    <input type="hidden" name="home_hero_pos_y" value="{{ values.home_hero_pos_y or 50 }}">
+    <div class="form-actions">
+      <button class="btn primary" type="submit">儲存</button>
+      <button class="btn" type="button" data-hero-reset>圖片位置回到正中間、不放大</button>
+    </div>
+  </div>
+  <script type="application/json" data-hero-image>{{ image | tojson }}</script>
+</form>
+{% endblock %}
+{% block scripts %}<script src="/static/admin-hero.js"></script>{% endblock %}

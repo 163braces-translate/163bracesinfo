@@ -158,27 +158,35 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .prose .ql-align-right { text-align: right; }
 
 /* ---------------------------------------------------------------- 首頁 */
+/* .hero-frame 只是「量寬度的容器」：方框窄的時候（手機，或後台的手機預覽）套下面的 @container 規則 */
+.hero-frame { container-type: inline-size; margin-bottom: 22px; }
 .hero {
-  position: relative; overflow: hidden;
-  border-radius: 22px; padding: 36px 28px; margin-bottom: 22px;
+  position: relative; overflow: hidden; isolation: isolate;
+  border-radius: 22px; padding: 36px 28px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
-.hero > * { position: relative; }
-/* 後台設定的背景圖。--hero-overlay 是白色遮罩濃度（0–1），越高圖越淡 */
-.hero.hero-cover {
-  background: linear-gradient(rgba(255, 255, 255, var(--hero-overlay)), rgba(255, 255, 255, var(--hero-overlay))),
-              var(--hero-image) center / cover no-repeat, var(--surface);
+.hero > * { position: relative; z-index: 1; }
+/* 後台設定的背景圖放在 ::before，白色遮罩放在 ::after。
+   --hero-x／--hero-y 是圖的哪個位置對齊方框（0–100%，在後台用拖的設定），--hero-zoom 是放大倍數，
+   --hero-overlay 是白色遮罩濃度（0–1），越高圖越淡 */
+.hero.hero-cover::before, .hero.hero-side::before {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0;
+  background: var(--hero-image) var(--hero-x, 50%) var(--hero-y, 50%) / cover no-repeat;
+  transform: scale(var(--hero-zoom, 1)); transform-origin: var(--hero-x, 50%) var(--hero-y, 50%);
+}
+.hero.hero-cover::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0;
+  background: rgba(255, 255, 255, var(--hero-overlay));
 }
 .hero.hero-side::before {
-  content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 58%;
-  background: var(--hero-image) center / cover no-repeat;
+  left: auto; width: 58%;
   opacity: calc(1 - var(--hero-overlay));
   -webkit-mask-image: linear-gradient(to right, transparent, #000 55%);
   mask-image: linear-gradient(to right, transparent, #000 55%);
 }
 /* 手機上圖會鋪滿整個方框、壓在標題後面，再淡一點字才看得清楚 */
-@media (max-width: 640px) { .hero.hero-side::before { width: 100%; opacity: calc((1 - var(--hero-overlay)) * .35); } }
+@container (max-width: 640px) { .hero.hero-side::before { width: 100%; opacity: calc((1 - var(--hero-overlay)) * .35); } }
 .hero h1 { font-size: 2rem; margin-bottom: 8px; }
 .hero p { color: var(--muted); margin: 0; max-width: 620px; }
 .hero-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
@@ -420,12 +428,23 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .stack { display: grid; gap: 18px; }
 
 /* ---------------------------------------------------------------- 歌詞索引與歌詞頁 */
-.album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; align-items: start; }
-.album { padding: 0; overflow: hidden; }
-.album-head { display: flex; gap: 14px; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); }
-.album-head img, .album-head .cover-ph { width: 76px; height: 76px; border-radius: 12px; object-fit: cover; flex: none; box-shadow: var(--shadow); }
-.album-head h2 { font-size: 1.05rem; margin: 0; }
-.album-head .sub { font-size: .85rem; color: var(--muted); }
+/* 歌詞索引：可收放的清單，每張專輯一列，點名稱展開曲目 */
+.lyrics-menu { max-width: 820px; display: grid; gap: 12px; }
+.lyrics-menu-tools { display: flex; justify-content: flex-end; }
+.admin-main .album-menu, .album-menu { padding: 0; margin: 0; overflow: hidden; }
+.album-menu summary {
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; list-style: none;
+}
+.album-menu summary::-webkit-details-marker { display: none; }
+.album-menu summary:hover { background: var(--primary-softer); }
+.album-menu summary img, .album-menu summary .cover-ph { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; }
+.album-menu-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.album-menu-title .name { font-weight: 700; font-size: 1.05rem; }
+.album-menu-title .sub { font-size: .85rem; color: var(--muted); }
+.album-menu .chevron { width: 10px; height: 10px; border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+  transform: rotate(45deg); transition: transform .2s; margin: 0 6px 4px 0; flex: none; }
+.album-menu[open] .chevron { transform: rotate(-135deg); margin-bottom: -4px; }
+.album-menu[open] summary { border-bottom: 1px solid var(--border); }
 .tracks { list-style: none; margin: 0; padding: 8px; counter-reset: track; }
 .tracks li { counter-increment: track; }
 .tracks a, .tracks .no-lyrics { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 10px; color: var(--text); }

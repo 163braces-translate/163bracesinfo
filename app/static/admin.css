@@ -197,3 +197,47 @@ body.admin { background: var(--bg); }
 /* 頁尾欄比較窄，連結一律排兩欄（要連 :has 那條一起蓋過，它的權重比較高） */
 .footer-col-edit .link-row, .footer-col-edit .link-row:has(input[hidden]) { grid-template-columns: 1fr 1fr; }
 .footer-col-edit .link-row .row-tools { grid-column: 1 / -1; justify-content: flex-end; }
+
+/* ---- 首頁大標題方框編輯 */
+.hero-stage { background: var(--surface-2); border-radius: 16px; padding: 18px; user-select: none; }
+/* 預覽用前台真正的寬度排版（電腦 1148px、手機 390px 扣掉左右 16px＝358px），再整個縮小到放得下，
+   裁切位置才會跟前台一模一樣。寬度與縮放由 admin-hero.js 設定 */
+.hero-stage { overflow: hidden; }
+.hero-stage .hero-frame { transform-origin: 0 0; }
+.hero-stage.draggable .hero { cursor: grab; touch-action: none; }
+.hero-stage.dragging .hero { cursor: grabbing; }
+.hero-stage .hero .btn { pointer-events: none; }
+.range-row { display: grid; grid-template-columns: 90px 1fr 56px; gap: 12px; align-items: center; }
+.range-row .field { margin: 0; }
+.range-row input[type=range] { width: 100%; accent-color: var(--primary); }
+.range-row output { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+
+/* ---- 歌詞索引排序 */
+.order-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .order-layout { grid-template-columns: 1fr; } }
+/* 欄寬固定（minmax(0, 1fr)），很長的曲名才不會把方框撐出左欄、蓋到右邊的預覽 */
+.order-albums { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.admin-main .order-album, .admin-main .order-other { margin: 0; padding: 12px; }
+.order-album.dragging { opacity: .45; }
+.order-album-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.order-album-head img, .order-album-head .cover-ph { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
+.order-album-head .count { margin-right: auto; }
+.order-album-head b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.handle { cursor: grab; color: var(--faint); user-select: none; padding: 0 2px; }
+.order-songs { list-style: none; margin: 0; padding: 4px; min-height: 44px; border-radius: 10px; background: var(--surface-2); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; counter-reset: os; }
+.order-songs:empty::before { content: "把歌曲拖到這裡"; display: block; padding: 10px; color: var(--faint); font-size: .85rem; text-align: center; }
+.order-song { counter-increment: os; display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+.order-song::before { content: counter(os); order: -1; width: 1.4em; text-align: right; color: var(--faint); font-size: .8rem; }
+.order-song .handle { order: -2; }
+.order-song.dragging { opacity: .45; }
+.order-song.muted-row .order-title { color: var(--faint); }
+.order-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-title .en { color: var(--muted); font-size: .85rem; }
+.order-title .chip { margin-left: 6px; }
+.order-song .row-tools button, .order-album-head .row-tools button { width: 26px; height: 26px; }
+.order-preview { position: sticky; top: 16px; }
+.order-preview-viewport { overflow: hidden; border-radius: 12px; background: var(--bg); }
+.order-preview-page { transform-origin: 0 0; padding: 16px; pointer-events: none; }
+.order-album.order-other { border-style: dashed; background: var(--surface-2); }
+.order-other .help { margin: -2px 0 8px; }
+.order-preview-page .lyrics-menu-tools { display: none; }

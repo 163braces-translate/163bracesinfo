@@ -201,7 +201,10 @@ def home(request, con, page):
     return render(request, con, "home.html", {
         "hero_image": hero_image,
         "hero_mode": db.get_setting(con, "home_hero_mode") if hero_image else "",
-        "hero_overlay": int(db.get_setting(con, "home_hero_overlay") or 0) / 100,
+        "hero_overlay": float(db.get_setting(con, "home_hero_overlay") or 0) / 100,
+        "hero_x": float(db.get_setting(con, "home_hero_pos_x") or 50),
+        "hero_y": float(db.get_setting(con, "home_hero_pos_y") or 50),
+        "hero_zoom": float(db.get_setting(con, "home_hero_zoom") or 100) / 100,
         "upcoming": upcoming,
         "recent": [] if upcoming else Q.recent(con, 3),
         "top_songs": top,
@@ -286,10 +289,7 @@ def stats_context(request, con, tab):
 
 
 def lyrics_index(request, con, page):
-    return render(request, con, "lyrics_index.html", {
-        "albums": Q.albums_with_songs(con),
-        "orphans": Q.orphan_lyrics(con),
-    }, page=page)
+    return render(request, con, "lyrics_index.html", {"boxes": Q.lyrics_boxes(con)}, page=page)
 
 
 def lyrics_page(request, con, row):
