@@ -1,7 +1,7 @@
 {% import "_macros.html" as m %}
 {% if song %}
 <div class="listen" data-song="{{ song.id }}">
-  <div>{{ m.youtube(song.listen_url, tr(song, 'title')) }}</div>
+  <div class="listen-video">{{ m.youtube(song.listen_url, tr(song, 'title')) }}</div>
   <div class="listen-side">
     <div class="listen-title">
       {{ m.cover(song_cover_id(song), 120) }}

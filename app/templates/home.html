@@ -31,11 +31,12 @@
 </section>
 </div>
 
+{% if show.marquee %}
 {# 粉絲留言跑馬燈：送出就顯示，後台可以隱藏。內容複製兩份接在一起，捲到一半時剛好接回開頭，看起來不會斷 #}
 <section class="marquee-box" aria-label="{{ t('marquee') }}">
   {% if marquee %}
     <div class="marquee" tabindex="0">
-      <div class="marquee-track">
+      <div class="marquee-track" data-speed="{{ marquee_speed }}">
         {% for copy in (1, 2) %}
           <ul class="marquee-list" {{ 'aria-hidden=true' if copy == 2 }}>
             {% for m in marquee %}<li><b>{{ m.name }}</b>{{ m.text }}</li>{% endfor %}
@@ -71,9 +72,12 @@
     {% endif %}
   </details>
 </section>
+{% endif %}
 
 <div class="home-grid">
-  <section class="card span-7" aria-labelledby="h-upcoming">
+  {#- 每一區要不要顯示在後台「設定 → 首頁要顯示的區塊」；即將演出、最近常唱只剩一個時佔滿整行 #}
+  {% if show.upcoming %}
+  <section class="card {{ 'span-7' if show.top_songs else 'span-12' }}" aria-labelledby="h-upcoming">
     <div class="card-head">
       <h2 id="h-upcoming">{{ t('upcoming') }}</h2>
       {% if kinds.performances %}<a class="more" href="{{ link(page_url(kinds.performances)) }}">{{ t('all_performances') }} →</a>{% endif %}
@@ -90,8 +94,10 @@
       {% endif %}
     {% endif %}
   </section>
+  {% endif %}
 
-  <section class="card span-5" aria-labelledby="h-top">
+  {% if show.top_songs %}
+  <section class="card {{ 'span-5' if show.upcoming else 'span-12' }}" aria-labelledby="h-top">
     <div class="card-head"><h2 id="h-top">{{ t('top_songs') }}</h2></div>
     {% if top_songs %}
       {%- set top_max = top_songs[0].count %}
@@ -114,13 +120,16 @@
       <p class="empty">—</p>
     {% endif %}
   </section>
+  {% endif %}
 
+  {% if show.listen %}
   <section class="card span-12" aria-labelledby="h-listen">
     <div class="card-head"><h2 id="h-listen">{{ t('random_listen') }}</h2></div>
     <div id="listen-slot">{% include "_listen.html" %}</div>
   </section>
+  {% endif %}
 
-  {% if facts %}
+  {% if show.facts and facts %}
   <section class="span-12 facts" aria-label="Facts">
     {% for f in facts %}
       <div class="fact"><b>{{ f.value_en if lang == 'en' and f.value_en else f.value }}</b><span>{{ f.label_en if lang == 'en' and f.label_en else f.label }}</span></div>
@@ -128,7 +137,7 @@
   </section>
   {% endif %}
 
-  {% if articles %}
+  {% if show.articles and articles %}
   <section class="span-12" aria-labelledby="h-articles">
     <div class="card-head">
       <h2 id="h-articles">{{ t('latest_articles') }}</h2>

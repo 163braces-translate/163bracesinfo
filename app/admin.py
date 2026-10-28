@@ -888,7 +888,14 @@ SETTING_FIELDS = [
     ("網站", [("site_name", "網站名稱", "text"), ("site_name_en", "網站名稱（英文）", "text"),
               ("site_logo_id", "Logo（頁首左上角、瀏覽器分頁圖示）", "image",
                "建議用正方形、背景不透明的圖；會自動裁成正方形。空白就用內建的「163」圖示。")]),
-    ("首頁", [("home_upcoming_count", "「即將演出」顯示幾場", "int"),
+    ("首頁要顯示的區塊", [("home_show_marquee", "粉絲留言跑馬燈", "bool"),
+                   ("home_show_upcoming", "即將演出", "bool"),
+                   ("home_show_top_songs", "最近常唱", "bool"),
+                   ("home_show_listen", "隨機聆聽", "bool"),
+                   ("home_show_facts", "數字卡片（例如 YouTube 訂閱數）", "bool"),
+                   ("home_show_articles", "最新文章", "bool")]),
+    ("首頁", [("home_marquee_speed", "跑馬燈速度（每秒捲動幾像素，最少 10）", "int", "數字越大越快，預設 70。"),
+              ("home_upcoming_count", "「即將演出」顯示幾場", "int"),
               ("home_recent_count", "沒有即將演出時，改列幾場「最近的演出」", "int", "填 0 就只顯示「目前沒有已公布的演出」。"),
               ("home_top_songs_count", "「最近常唱」顯示幾首", "int"),
               ("home_top_songs_window", "「最近常唱」統計最近幾場有歌單的演出", "int"),
@@ -926,6 +933,8 @@ def save_setting_groups(con, form, groups):
                 value = "1" if value else "0"
             elif kind == "int":
                 value = str(as_int(value, as_int(db.SETTINGS.get(key), 0)))
+                if key == "home_marquee_speed":
+                    value = str(max(10, int(value)))
             db.set_setting(con, key, value)
 
 

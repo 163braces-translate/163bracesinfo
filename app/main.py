@@ -151,17 +151,24 @@ def api_random_song(request: Request, exclude: int = 0, con=Depends(get_con)):
 
 
 # ==================================================================== 頁面
+HOME_SECTIONS = ("marquee", "upcoming", "top_songs", "listen", "facts", "articles")
+
+
 def home(request, con, page):
     n_up = int(db.get_setting(con, "home_upcoming_count") or 5)
     n_top = int(db.get_setting(con, "home_top_songs_count") or 5)
     window = int(db.get_setting(con, "home_top_songs_window") or 20)
     lang = lang_of(request)
-    top, window_used = Q.top_songs(con, lang, n_top, window)
-    upcoming = Q.upcoming(con, n_up)
+    # 後台可以關掉的區塊：關掉的就不查資料
+    show = {key: db.get_setting(con, "home_show_" + key) == "1" for key in HOME_SECTIONS}
+    top, window_used = Q.top_songs(con, lang, n_top, window) if show["top_songs"] else ([], 0)
+    upcoming = Q.upcoming(con, n_up) if show["upcoming"] else []
     hero_image = as_id(db.get_setting(con, "home_hero_image_id"))
     return render(request, con, "home.html", {
-        "marquee": community.marquee_items(con, lang),
+        "show": show,
+        "marquee": community.marquee_items(con, lang) if show["marquee"] else [],
         "marquee_max": community.V.MARQUEE_MAX_UNITS,
+        "marquee_speed": db.get_setting(con, "home_marquee_speed") or "70",
         "hero_image": hero_image,
         "hero_mode": db.get_setting(con, "home_hero_mode") if hero_image else "",
         "hero_overlay": float(db.get_setting(con, "home_hero_overlay") or 0) / 100,
@@ -169,12 +176,12 @@ def home(request, con, page):
         "hero_y": float(db.get_setting(con, "home_hero_pos_y") or 50),
         "hero_zoom": float(db.get_setting(con, "home_hero_zoom") or 100) / 100,
         "upcoming": upcoming,
-        "recent": [] if upcoming else Q.recent(con, max(0, int(db.get_setting(con, "home_recent_count") or 0))),
+        "recent": [] if upcoming or not show["upcoming"] else Q.recent(con, max(0, int(db.get_setting(con, "home_recent_count") or 0))),
         "top_songs": top,
         "top_window": window_used,
-        "song": Q.random_song(con),
+        "song": Q.random_song(con) if show["listen"] else None,
         "facts": json.loads(db.get_setting(con, "home_facts_json") or "[]"),
-        "articles": Q.latest_articles(con, 3),
+        "articles": Q.latest_articles(con, 3) if show["articles"] else [],
     }, page=page)
 
 

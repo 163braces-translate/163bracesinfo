@@ -390,9 +390,10 @@
       }).catch(function (err) { if (err.message !== "login") status.textContent = err.message; });
     });
   }
-  // 捲動速度固定（每秒約 70px），內容多就跑久一點
+  // 捲動速度固定（每秒幾 px，在後台「設定 → 首頁」調整），內容多就跑久一點
   $$(".marquee-track").forEach(function (track) {
-    track.style.animationDuration = Math.max(20, track.scrollWidth / 2 / 70) + "s";
+    var speed = Number(track.dataset.speed) || 70;
+    track.style.animationDuration = Math.max(20 * 70 / speed, track.scrollWidth / 2 / speed) + "s";
   });
 
   // ---- 歌詞頁：中英對照／只看中文／只看英文

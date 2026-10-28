@@ -49,6 +49,14 @@ SETTINGS = {
     "tab_status_setlist": "live",
     "tab_status_replay": "live",
     "home_facts_json": "[]",
+    # 首頁各區塊要不要顯示（後台「設定 → 首頁要顯示的區塊」）
+    "home_show_marquee": "1",
+    "home_marquee_speed": "70",         # 跑馬燈每秒捲動幾像素（最少 10）；數字越大越快
+    "home_show_upcoming": "1",
+    "home_show_top_songs": "1",
+    "home_show_listen": "1",
+    "home_show_facts": "0",
+    "home_show_articles": "0",
     "lyrics_other_position": "",        # 歌詞索引「其他歌詞」排在第幾張專輯後面；空白＝最後
 }
 
