@@ -14,8 +14,8 @@
   --primary-softer: #f6f7f9;
   --warn-soft: #fff5d6;
   --warn-text: #7a5a00;
-  --up-text: #137a52;                 /* 名次上升／下降 */
-  --down-text: #b3361b;
+  --up-text: #c0321f;                 /* 名次上升紅、下降綠（台灣的習慣，跟股市一樣） */
+  --down-text: #137a52;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 4px 14px rgba(17, 24, 39, .04);
