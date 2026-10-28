@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<article class="card narrow-card wide sheet-page">
+  {% if song.lyrics_slug and song.lyrics_published %}<p class="small" style="margin: 0"><a href="{{ link(lyrics_prefix ~ song.lyrics_slug ~ '/') }}">← {{ tr(song, 'title') }}</a></p>{% endif %}
+  <h1>{{ sheet.title }}</h1>
+  <div class="small muted">{{ tr(song, 'title') }} · {{ t('sheet_by', name=sheet.author) }} · {{ sheet.created_at[:10] | replace('-', '/') }}</div>
+  {% if login_available or sheet.likes %}
+    <button type="button" class="like-btn {{ 'on' if liked }}" data-like="{{ sheet.id }}" data-like-url="/api/me/sheet-likes/{{ sheet.id }}"
+            aria-pressed="{{ 'true' if liked else 'false' }}" aria-label="{{ t('sheet_like') }}"><span class="heart" aria-hidden="true">♥</span> <span data-like-count>{{ sheet.likes }}</span></button>
+  {% endif %}
+  {% if sheet.video_url %}<h2 class="small muted" style="margin: 18px 0 6px">{{ t('sheet_video_label') }}</h2><div class="sheet-video">{{ m.youtube(sheet.video_url, sheet.title) }}</div>{% endif %}
+  {% for f in sheet.files %}<a href="/media/{{ f.file }}" target="_blank" rel="noopener"><img class="sheet-img" src="/media/{{ f.file }}" alt="{{ sheet.title }} {{ loop.index }}" loading="lazy" width="{{ f.width }}" height="{{ f.height }}"></a>{% endfor %}
+  {% if sheet.text_body %}<pre class="sheet-text">{{ sheet.text_body }}</pre>{% endif %}
+  <p class="small muted" style="margin: 16px 0 0">{{ t('sheets_notice', email=contact_email) }}</p>
+</article>
+{% endblock %}

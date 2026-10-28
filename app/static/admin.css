@@ -299,3 +299,18 @@ a.ttitle:hover { color: var(--primary); }
 .tab-links li:first-child { border-top: 0; }
 .tab-links .chip { margin-left: auto; }
 .publish-actions .btn.primary { order: -1; }
+.warn-card { border-color: #f1d48a; background: #fffbeb; }
+/* 投稿審核：待審核／已審核兩大塊可以收起，裡面每種投稿各一小塊 */
+.review-group { margin-bottom: 18px; }
+.review-group > summary, .review-kind > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.review-group > summary::-webkit-details-marker, .review-kind > summary::-webkit-details-marker { display: none; }
+.review-group > summary::before, .review-kind > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+.review-group[open] > summary::before, .review-kind[open] > summary::before { transform: rotate(90deg); }
+.review-group > summary h2 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+.review-group > summary { padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.review-kind { margin: 0 0 12px 14px; }
+.review-kind > summary { padding: 6px 0; }
+.review-kind > summary h3 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+.review-kind > .table-card, .review-kind > p { margin-top: 6px; }
+.count { font-size: .78rem; font-weight: 500; min-width: 1.6em; padding: 1px 7px; border-radius: 999px; background: var(--surface-2, #f3f4f6); color: var(--muted); text-align: center; }
+.count.warn { background: #fff5d6; color: #7a5a00; }

@@ -46,7 +46,7 @@
   {% else %}
     <p class="marquee-empty muted">{{ t('marquee') }}</p>
   {% endif %}
-  <details class="marquee-compose">
+  <details class="marquee-compose" id="marquee">
     <summary class="btn small">✎ {{ t('marquee_post') }}</summary>
     {% if visitor %}
       <form class="marquee-form" data-marquee-form data-max="{{ marquee_max }}" data-sent="{{ t('marquee_sent') }}">

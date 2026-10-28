@@ -7,6 +7,7 @@
   {% if body %}<div class="intro">{{ body | safe }}</div>{% endif %}
 </div>
 
+{%- macro sheet_mark(s) %}{% if sheet_counts.get(s.id) %} <span class="sheet-mark" title="{{ t('sheets') }} {{ sheet_counts[s.id] }}">🎼 {{ t('sheets') }}{% if sheet_counts[s.id] > 1 %} {{ sheet_counts[s.id] }}{% endif %}</span>{% endif %}{% endmacro %}
 {# 可收放的清單：每張專輯一列，點名稱展開曲目。預設只展開第一個。順序在後台「歌詞索引排序」設定 #}
 <div class="lyrics-menu" data-lyrics-menu>
   <div class="lyrics-menu-tools">
@@ -28,9 +29,14 @@
           {% for s in a.songs %}
             <li>
               {% if s.lyrics_slug and s.lyrics_published %}
-                <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}"><span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}</span></a>
+                <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}"><span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}{{ sheet_mark(s) }}</span></a>
               {% else %}
-                <span class="no-lyrics">{{ tr(s, 'title') }}</span>
+                <span class="no-lyrics">{{ tr(s, 'title') }}{{ sheet_mark(s) }}</span>
+              {% endif %}
+              {%- set n = like_counts.get(s.id, 0) %}
+              {% if login_available or n %}
+                <button type="button" class="like-btn mini {{ 'on' if s.id in liked }}" data-like="{{ s.id }}" aria-pressed="{{ 'true' if s.id in liked else 'false' }}"
+                        aria-label="{{ t('like') }} {{ tr(s, 'title') }}"><span class="heart" aria-hidden="true">♥</span><span data-like-count data-hide-zero>{{ n or '' }}</span></button>
               {% endif %}
             </li>
           {% endfor %}

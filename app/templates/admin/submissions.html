@@ -2,42 +2,89 @@
 {% block title %}投稿審核{% endblock %}
 {% block content %}
 <h1>投稿審核</h1>
-<div class="admin-head">
-  <div class="seg" role="group">
-    <a class="btn small {{ 'primary' if tab == 'contributions' }}" href="?tab=contributions&status={{ status }}">演出補充{% if pending.contributions %}（{{ pending.contributions }}）{% endif %}</a>
-    <a class="btn small {{ 'primary' if tab == 'sheets' }}" href="?tab=sheets&status={{ status }}">樂譜{% if pending.sheets %}（{{ pending.sheets }}）{% endif %}</a>
-  </div>
-  <form method="get" class="filterbar" style="margin: 0">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    <select name="status" onchange="this.form.submit()">
-      {% for v, l in [('pending', '待審'), ('approved', '已採用／已公開'), ('rejected', '已退回')] + ([('removed', '已下架')] if tab == 'sheets' else []) %}
-        <option value="{{ v }}" {{ 'selected' if v == status }}>{{ l }}</option>
-      {% endfor %}
-    </select>
-  </form>
-</div>
-<div class="table-card">
-<table class="admin-table">
-  <thead><tr><th>送出時間</th><th>{{ '演出' if tab == 'contributions' else '歌曲 · 樂譜' }}</th><th>投稿者</th><th></th></tr></thead>
-  <tbody>
+<p class="muted small">上面是等你處理的，下面是處理過的（每種最近 50 筆）。樂譜的「要求刪除」也算待審核；跑馬燈送出就會顯示，在這裡看過一遍、按「沒問題」或「隱藏」。</p>
+
+{#- 一種投稿的表格。pending：待審核（跑馬燈直接在這裡處理）；否則是已審核 #}
+{% macro table(kind, rows, pending) %}
+  {% if not rows %}<p class="muted small" style="margin: 0">{{ '沒有待審核的' if pending else '還沒有處理過的' }}</p>
+  {% else %}
+  <div class="table-card">
+  <table class="admin-table">
+    <thead><tr><th>送出時間</th><th>內容</th><th>投稿者</th><th></th></tr></thead>
+    <tbody>
     {% for r in rows %}
       <tr>
         <td class="nowrap small">{{ r.created_at | replace('T', ' ') }}</td>
-        {% if tab == 'contributions' %}
+        {% if kind == 'contributions' %}
           <td>{{ r.event_date | replace('-', '/') }} {{ r.event_name }}
-            <div class="small muted">改了：{{ (r.payload_json | fromjson).keys() | reject('in', ['source', 'message']) | map('replace', 'event_name_en', '英文名稱') | map('replace', 'event_name', '名稱') | map('replace', 'venue_en', '英文地點') | map('replace', 'venue', '地點') | map('replace', 'setlist', '歌單') | join('、') }}</div></td>
+            {%- set n = ((r.payload_json | fromjson).setlist or []) | length %}{% if n %} <span class="small muted">· {{ n }} 首</span>{% endif %}
+            {% if not pending %} {{ status_chip(r.status) }}{% endif %}</td>
           <td class="small">{{ label(r) }}</td>
           <td><a class="btn small" href="/admin/submissions/contribution/{{ r.id }}">查看</a></td>
-        {% else %}
-          <td>{{ r.song_title }} · {{ r.title }}</td>
+        {% elif kind == 'shows' %}
+          <td>{{ r.event_date | replace('-', '/') }} {{ r.event_name }}{% if r.venue %} <span class="small muted">· {{ r.venue }}</span>{% endif %}
+            {% if r.setlist %} <span class="small muted">· 附歌單 {{ r.setlist | length }} 首</span>{% endif %}
+            {% if not pending %} {{ status_chip(r.status) }}{% endif %}</td>
+          <td class="small">{{ label(r) }}</td>
+          <td><a class="btn small" href="/admin/submissions/show/{{ r.id }}">查看</a></td>
+        {% elif kind == 'sheets' %}
+          <td>{{ r.song_title }} · {{ r.title }}
+            {% if r.replaces_id %} <span class="chip">修改版</span>{% endif %}
+            {% if r.delete_requested_at %} <span class="chip warn">要求刪除</span>{% endif %}
+            {% if not pending %} {{ status_chip(r.status) }}{% endif %}</td>
           <td class="small">{{ label(r) }}</td>
           <td><a class="btn small" href="/admin/submissions/sheet/{{ r.id }}">查看</a></td>
+        {% else %}
+          <td>{{ r.text }}{% if r.hidden %} <span class="chip">已隱藏</span>{% endif %}</td>
+          <td class="small">{{ label(r) }} · {{ {'google': 'Google 名', 'nickname': '暱稱', 'anonymous': '匿名'}[r.name_mode] }}</td>
+          <td class="nowrap">
+            <form method="post" action="/admin/marquee" style="display: inline">
+              <input type="hidden" name="id" value="{{ r.id }}"><input type="hidden" name="back" value="/admin/submissions">
+              {% if pending %}<button class="btn small primary" name="action" value="ok">沒問題</button>{% endif %}
+              {% if r.hidden %}<button class="btn small" name="action" value="show">顯示</button>{% else %}<button class="btn small" name="action" value="hide">隱藏</button>{% endif %}
+              <button class="btn small danger" name="action" value="delete" data-confirm="刪除這則留言？">刪除</button>
+            </form>
+          </td>
         {% endif %}
       </tr>
-    {% else %}
-      <tr><td colspan="4" class="muted">沒有{{ '待審的' if status == 'pending' }}投稿</td></tr>
     {% endfor %}
-  </tbody>
-</table>
-</div>
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro status_chip(s) -%}
+  <span class="chip {{ 'status-live' if s == 'approved' else '' }}">{{ {'approved': '已採用', 'rejected': '已退回', 'removed': '已下架'}.get(s, s) }}</span>
+{%- endmacro %}
+
+{%- set n_pending = pending.values() | map('length') | sum %}
+<details class="review-group" open>
+  <summary><h2>待審核 <span class="count {{ 'warn' if n_pending }}">{{ n_pending }}</span></h2></summary>
+  {% for kind, name in kinds %}
+    <details class="review-kind" id="pending-{{ kind }}" {{ 'open' if pending[kind] }}>
+      <summary><h3>{{ name }} <span class="count {{ 'warn' if pending[kind] }}">{{ pending[kind] | length }}</span></h3></summary>
+      {{ table(kind, pending[kind], true) }}
+    </details>
+  {% endfor %}
+</details>
+
+<details class="review-group">
+  <summary><h2>已審核</h2></summary>
+  {% for kind, name in kinds %}
+    <details class="review-kind" id="reviewed-{{ kind }}">
+      <summary><h3>{{ name }} <span class="count">{{ reviewed[kind] | length }}</span></h3></summary>
+      {{ table(kind, reviewed[kind], false) }}
+    </details>
+  {% endfor %}
+</details>
+{% endblock %}
+{% block scripts %}
+<script>
+  // 從總覽點進來（網址帶 #pending-sheets 之類）：打開那一區並捲過去
+  (function () {
+    var target = location.hash && document.querySelector(location.hash);
+    if (target && target.tagName === "DETAILS") { target.open = true; target.scrollIntoView(); }
+  })();
+</script>
 {% endblock %}

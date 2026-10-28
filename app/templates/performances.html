@@ -92,7 +92,22 @@
       <div class="perf-extra">
         {% if login_available %}{{ attend_button(p) }}{% endif %}
         <span class="muted small" data-attend-count="{{ p.id }}" data-label="{{ t('fans_attended', n='{n}') }}">{% if attend_counts.get(p.id) %}{{ t('fans_attended', n=attend_counts[p.id]) }}{% endif %}</span>
-        <a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('suggest_edit') }}</a>
+        {% if p.event_date < today %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>{% endif %}
+      </div>
+    {% endmacro %}
+    {% macro setlist_block(p) %}
+      <div class="setlist-content">
+        {% if p.setlist_order_uncertain %}<p class="uncertain">⚠️ {{ t('order_uncertain') }}</p>{% endif %}
+        <ol class="setlist">
+          {% for it in p.setlist %}
+            <li>
+              {%- set title = it.custom_title if it.song_id is none else tr(it, 'title') %}
+              {% if it.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ it.lyrics_slug ~ '/') }}">{{ title }}</a>{% else %}{{ title }}{% endif %}
+              {% if it.song_id and it.artist %}<span class="artist"> · {{ tr(it, 'artist') }}</span>{% endif %}
+              {% if it.note %}<span class="chip note">{{ it.note }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
       </div>
     {% endmacro %}
     <table class="perf-table">
@@ -122,19 +137,7 @@
           {% if p.setlist %}
           <tr class="setlist-row" id="sl{{ p.id }}" hidden>
             <td colspan="{{ cols }}">
-              <div class="setlist-content">
-                {% if p.setlist_order_uncertain %}<p class="uncertain">⚠️ {{ t('order_uncertain') }}</p>{% endif %}
-                <ol class="setlist">
-                  {% for it in p.setlist %}
-                    <li>
-                      {%- set title = it.custom_title if it.song_id is none else tr(it, 'title') %}
-                      {% if it.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ it.lyrics_slug ~ '/') }}">{{ title }}</a>{% else %}{{ title }}{% endif %}
-                      {% if it.song_id and it.artist %}<span class="artist"> · {{ tr(it, 'artist') }}</span>{% endif %}
-                      {% if it.note %}<span class="chip note">{{ it.note }}</span>{% endif %}
-                    </li>
-                  {% endfor %}
-                </ol>
-              </div>
+              {{ setlist_block(p) }}
               {{ perf_extra(p) }}
             </td>
           </tr>
@@ -150,20 +153,22 @@
         <div class="card-grid">
           {% for p in rows %}
             {%- set soon = p.event_date >= today %}
-            <button type="button" class="perf-card {{ 'soon' if soon }}" data-id="{{ p.id }}"
-                    data-date="{{ p.event_date | replace('-', '/') }} ({{ weekday(p.event_date) }})"
-                    data-name="{{ tr(p, 'event_name') }}" data-type="{{ tr(p, 'type_name') }}"
-                    data-venue="{{ tr(p, 'venue') }}" data-cityname="{{ tr(p, 'city_name') }}">
-              <span class="d">{{ p.event_date[5:] | replace('-', '/') }} ({{ weekday(p.event_date) }})</span>
-              <span class="n">{{ tr(p, 'event_name') }}</span>
-              <span class="m">
-                {{ tr(p, 'city_name') }}
-                {% if p.setlist %}<span class="chip {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span>{% endif %}
+            <article class="perf-card {{ 'soon' if soon }}" id="m{{ p.id }}">
+              <div class="perf-card-top">
+                <span class="d">{{ p.event_date[5:] | replace('-', '/') }} ({{ weekday(p.event_date) }})</span>
+                <span class="chip">{{ tr(p, 'type_name') }}</span>
                 {% if soon %}<span class="chip blue">{{ t('soon') }}</span>{% endif %}
-                {% if p.id in attended %}<span class="chip blue" data-attend-badge="{{ p.id }}">✓</span>{% endif %}
-              </span>
-            </button>
-            <template id="extra{{ p.id }}">{{ perf_extra(p) }}</template>
+              </div>
+              <div class="n">{{ tr(p, 'event_name') }}</div>
+              <div class="m">{{ tr(p, 'city_name') }}{% if tr(p, 'venue') %} · {{ tr(p, 'venue') }}{% endif %}</div>
+              {{ perf_extra(p) }}
+              {% if p.setlist %}
+                <details class="perf-card-setlist">
+                  <summary><span class="chip {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span> {{ t('setlist') }}</summary>
+                  {{ setlist_block(p) }}
+                </details>
+              {% endif %}
+            </article>
           {% endfor %}
         </div>
       {% endfor %}
@@ -176,25 +181,6 @@
 
 {% include "_stats_panels.html" %}
 
-<div class="drawer-backdrop" hidden></div>
-<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
-  <div class="drawer-head">
-    <h2 id="drawer-title"></h2>
-    <button type="button" class="icon-btn" data-close aria-label="{{ t('close') }}">×</button>
-  </div>
-  <div class="drawer-body">
-    <dl>
-      <dt>{{ t('date') }}</dt><dd data-f="date"></dd>
-      <dt>{{ t('type') }}</dt><dd data-f="type"></dd>
-      <dt>{{ t('venue') }}</dt><dd data-f="venue"></dd>
-      <dt>{{ t('city') }}</dt><dd data-f="city"></dd>
-    </dl>
-    <div data-f="extra"></div>
-    <h3>{{ t('setlist') }}</h3>
-    <div data-f="setlist"></div>
-    <template id="no-setlist"><p class="muted">{{ t('no_setlist') }}</p></template>
-  </div>
-</aside>
 {% endblock %}
 
 {% block scripts %}

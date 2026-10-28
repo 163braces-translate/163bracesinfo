@@ -20,40 +20,96 @@
   {% include "_footprint.html" %}
 {% elif tab == 'likes' %}
   {% if likes %}
-    <ul class="like-list">
+    <p class="small muted">{{ t('likes_order_help') }}</p>
+    <ol class="like-list" data-like-order>
       {% for s in likes %}
-        <li class="card">
-          {% if s.lyrics_slug and s.lyrics_published %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{% else %}{{ tr(s, 'title') }}{% endif %}
-          <span class="small muted">· {{ tr(s, 'album_name') }}</span>
+        <li class="card" data-song="{{ s.id }}">
+          <span class="drag-handle" data-drag aria-hidden="true" title="{{ t('drag_to_sort') }}">⋮⋮</span>
+          <span class="rank"></span>
+          <span class="like-title">
+            {% if s.lyrics_slug and s.lyrics_published %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{% else %}{{ tr(s, 'title') }}{% endif %}
+            <span class="small muted">· {{ tr(s, 'album_name') }}</span>
+          </span>
+          <span class="move-btns">
+            <button type="button" class="icon-btn small" data-move="up" aria-label="{{ t('move_up') }} {{ tr(s, 'title') }}">↑</button>
+            <button type="button" class="icon-btn small" data-move="down" aria-label="{{ t('move_down') }} {{ tr(s, 'title') }}">↓</button>
+          </span>
           <button type="button" class="like-btn on" data-like="{{ s.id }}" aria-pressed="true" aria-label="{{ t('like') }}"><span class="heart">♥</span></button>
         </li>
       {% endfor %}
-    </ul>
+    </ol>
   {% else %}<p class="empty">{{ t('likes_empty') }}</p>{% endif %}
 {% elif tab == 'submissions' %}
-  {% if not (subs.contributions or subs.sheets or subs.marquee) %}<p class="empty">{{ t('subs_empty') }}</p>{% endif %}
-  {% if subs.contributions %}
-    <section class="card" style="margin-bottom: 16px"><div class="card-head"><h2>{{ t('contribute_title') }}</h2></div>
-      <ul class="plain-list">{% for c in subs.contributions %}
-        <li><span class="chip {{ 'blue' if c.status == 'approved' else ('warn' if c.status == 'pending' else '') }}">{{ t('status_' ~ c.status) }}</span>
-          {{ c.event_date | replace('-', '/') }} {{ c.event_name }} <span class="small muted">· {{ c.created_at[:10] }}</span>
-          {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
-      {% endfor %}</ul></section>
-  {% endif %}
-  {% if subs.sheets %}
-    <section class="card" style="margin-bottom: 16px"><div class="card-head"><h2>{{ t('sheets') }}</h2></div>
-      <ul class="plain-list">{% for s in subs.sheets %}
-        <li><span class="chip {{ 'blue' if s.status == 'approved' else ('warn' if s.status == 'pending' else '') }}">{{ t('status_' ~ s.status) }}</span>
-          {{ s.song_title }} · {{ s.title }} <span class="small muted">· {{ s.created_at[:10] }}</span>
-          {% if s.admin_note %}<div class="small muted">{{ s.admin_note }}</div>{% endif %}</li>
-      {% endfor %}</ul></section>
-  {% endif %}
-  {% if subs.marquee %}
+  {#- 上方：四種投稿的入口；下方：各自的紀錄 #}
+  {%- macro show_option(s) %}<option value="{{ s.id }}">{{ s.event_date | replace('-', '/') }} {{ tr(s, 'event_name') }}</option>{% endmacro %}
+  <div class="contrib-grid">
+    <section class="card contrib-card">
+      <h2>{{ t('marquee') }}</h2>
+      <p class="small muted">{{ t('contrib_marquee_desc') }}</p>
+      <a class="btn small primary" href="{{ link('/') }}#marquee">{{ t('contrib_marquee_go') }}</a>
+    </section>
+    <section class="card contrib-card">
+      <h2>{{ t('sheets') }}</h2>
+      <p class="small muted">{{ t('contrib_sheet_desc') }}</p>
+      <form class="contrib-pick" method="get" action="{{ link('/contribute/sheet/') }}">
+        <select name="song" required aria-label="{{ t('contrib_pick_song') }}">
+          <option value="">{{ t('contrib_pick_song') }}</option>
+          {% for a in choices.albums %}<optgroup label="{{ tr(a, 'name') }}">{% for g in a.songs %}<option value="{{ g.id }}">{{ tr(g, 'title') }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+        <button class="btn small primary" type="submit">{{ t('contrib_next') }}</button>
+      </form>
+    </section>
+    <section class="card contrib-card">
+      <h2>{{ t('contrib_setlist') }}</h2>
+      <p class="small muted">{{ t('contrib_setlist_desc') }}</p>
+      <form class="contrib-pick" method="get" action="{{ link('/contribute/performance/') }}">
+        <select name="id" required aria-label="{{ t('contrib_pick_show') }}">
+          <option value="">{{ t('contrib_pick_show') }}</option>
+          {% if choices.missing %}<optgroup label="{{ t('contrib_missing') }}">{% for s in choices.missing %}{{ show_option(s) }}{% endfor %}</optgroup>{% endif %}
+          {% if choices.with_setlist %}<optgroup label="{{ t('contrib_has_setlist') }}">{% for s in choices.with_setlist %}{{ show_option(s) }}{% endfor %}</optgroup>{% endif %}
+        </select>
+        <button class="btn small primary" type="submit">{{ t('contrib_next') }}</button>
+      </form>
+    </section>
+    <section class="card contrib-card">
+      <h2>{{ t('contrib_show') }}</h2>
+      <p class="small muted">{{ t('contrib_show_desc') }}</p>
+      <a class="btn small primary" href="{{ link('/contribute/show/') }}">{{ t('contrib_show_go') }}</a>
+    </section>
+  </div>
+
+  {%- macro status(value) %}<span class="chip {{ 'blue' if value in ('approved', 'visible') else ('warn' if value == 'pending' else '') }}">{{ t('status_' ~ value) }}</span>{% endmacro %}
+  <h2 class="subs-title">{{ t('subs_records') }}</h2>
+  <div class="subs-grid">
     <section class="card"><div class="card-head"><h2>{{ t('marquee') }}</h2></div>
-      <ul class="plain-list">{% for m in subs.marquee %}
-        <li><span class="chip {{ '' if m.hidden else 'blue' }}">{{ t('status_hidden') if m.hidden else t('status_visible') }}</span> {{ m.text }} <span class="small muted">· {{ m.created_at[:10] }}</span></li>
-      {% endfor %}</ul></section>
-  {% endif %}
+      {% if subs.marquee %}<ul class="plain-list">{% for m in subs.marquee %}
+        <li class="sub-row"><span>{{ status('hidden' if m.hidden else 'visible') }} {{ m.text }} <span class="small muted">· {{ m.created_at[:10] }}</span></span>
+          <form method="post" action="/me/marquee/{{ m.id }}/delete"><button class="btn small" type="submit" data-confirm="{{ t('marquee_delete_confirm') }}">{{ t('delete') }}</button></form></li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
+    <section class="card"><div class="card-head"><h2>{{ t('sheets') }}</h2></div>
+      {% if subs.sheets %}<ul class="plain-list">{% for s in subs.sheets %}
+        <li class="sub-row"><span>{{ status(s.status) }}{% if s.replaces_id %} <span class="chip">{{ t('sheet_revision') }}</span>{% endif %} {{ s.song_title }} · {% if s.status == 'approved' %}<a href="{{ link('/sheets/' ~ s.id ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %} <span class="small muted">· {{ s.created_at[:10] }}</span>
+          {% if s.admin_note %}<span class="small muted" style="display: block">{{ s.admin_note }}</span>{% endif %}</span>
+          {#- 修改版本身不放按鈕：要再改就從原本那份按「編輯」，會打開還在審的修改版 #}
+          {% if s.delete_requested_at %}<span class="chip warn">{{ t('status_delete_requested') }}</span>
+          {% elif not s.replaces_id and s.status != 'removed' %}
+            <span class="sub-actions">
+              <a class="btn small" href="{{ link('/contribute/sheet/edit/' ~ s.id ~ '/') }}">{{ t('edit') }}</a>
+              <form method="post" action="/me/sheets/{{ s.id }}/delete-request"><button class="btn small" type="submit" data-confirm="{{ t('sheet_delete_confirm') }}">{{ t('sheet_delete_request') }}</button></form>
+            </span>
+          {% endif %}</li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
+    <section class="card"><div class="card-head"><h2>{{ t('contrib_setlist') }}</h2></div>
+      {% if subs.setlists %}<ul class="plain-list">{% for c in subs.setlists %}
+        <li>{{ status(c.status) }} {{ c.event_date | replace('-', '/') }} {{ c.event_name }} <span class="small muted">· {{ t('contrib_songs_n', n=c.songs) }} · {{ c.created_at[:10] }}</span>
+          {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
+    <section class="card"><div class="card-head"><h2>{{ t('contrib_show') }}</h2></div>
+      {% if subs.shows %}<ul class="plain-list">{% for c in subs.shows %}
+        <li>{{ status(c.status) }} {{ c.event_date | replace('-', '/') }} {{ c.event_name }} <span class="small muted">{% if c.setlist %}· {{ t('contrib_songs_n', n=c.setlist | length) }} {% endif %}· {{ c.created_at[:10] }}</span>
+          {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
+  </div>
 {% elif tab == 'settings' %}
   <form class="card settings-form" method="post" action="/me/settings">
     <label class="field" for="nickname">{{ t('nickname') }}</label>

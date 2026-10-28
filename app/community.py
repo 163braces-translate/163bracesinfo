@@ -17,7 +17,7 @@ from collections import Counter, defaultdict
 from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from . import db, i18n, queries as Q, taiwan, visitors as V
 from .admin import same_origin
@@ -26,7 +26,7 @@ from .web import current_visitor, get_con, lang_of, render
 router = APIRouter()
 
 SHEET_MAX_FILES = 8
-SHEET_MAX_BYTES = 10 * 1024 * 1024
+SHEET_MAX_BYTES = 5 * 1024 * 1024
 SHEET_MAX_SIDE = 2400
 
 
@@ -229,7 +229,7 @@ def footprint(con, lang, visitor_id):
 
 def liked_songs(con, visitor_id):
     return con.execute(Q.SONG_SELECT + " JOIN song_likes k ON k.song_id = g.id AND k.visitor_id = ? "
-                       "ORDER BY k.created_at DESC", (visitor_id,)).fetchall()
+                       "ORDER BY k.position, k.created_at", (visitor_id,)).fetchall()
 
 
 def my_submissions(con, visitor_id):
@@ -240,7 +240,36 @@ def my_submissions(con, visitor_id):
                          "WHERE s.visitor_id = ? ORDER BY s.created_at DESC", (visitor_id,)).fetchall()
     marquee = con.execute("SELECT * FROM marquee_posts WHERE visitor_id = ? ORDER BY created_at DESC LIMIT 20",
                           (visitor_id,)).fetchall()
-    return {"contributions": contribs, "sheets": sheets, "marquee": marquee}
+    setlists = [dict(c, songs=len(json.loads(c["payload_json"]).get("setlist") or [])) for c in contribs]
+    shows = [dict(r, **json.loads(r["payload_json"])) for r in con.execute(
+        "SELECT * FROM show_submissions WHERE visitor_id = ? ORDER BY created_at DESC", (visitor_id,))]
+    return {"setlists": setlists, "shows": shows, "sheets": sheets, "marquee": marquee}
+
+
+def contribute_choices(con):
+    """「我的投稿」上方的選單：投樂譜選哪首歌、補歌單選哪一場（已經發生的演出）。"""
+    past = con.execute("SELECT p.id, p.event_date, p.event_name, p.event_name_en, "
+                       "EXISTS (SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id) AS has_setlist "
+                       "FROM performances p WHERE p.event_date <= ? ORDER BY p.event_date DESC, p.id DESC",
+                       (Q.today(),)).fetchall()
+    return {
+        "albums": [a for a in Q.albums_with_songs(con) if a["songs"]],
+        "missing": [s for s in past if not s["has_setlist"]],     # 還缺歌單的排前面
+        "with_setlist": [s for s in past if s["has_setlist"]],
+    }
+
+
+@router.get("/contribute/sheet/")
+def contribute_sheet_pick(request: Request, song: int = 0):
+    """「我的投稿」選好歌之後按「下一步」：轉到那首歌的投稿頁。"""
+    prefix = "/en" if lang_of(request) == "en" else ""
+    return RedirectResponse(prefix + ("/contribute/sheet/%d/" % song if song else "/me/?tab=submissions"), status_code=303)
+
+
+@router.get("/contribute/performance/")
+def contribute_performance_pick(request: Request, id: int = 0):
+    prefix = "/en" if lang_of(request) == "en" else ""
+    return RedirectResponse(prefix + ("/contribute/performance/%d/" % id if id else "/me/?tab=submissions"), status_code=303)
 
 
 ME_TABS = ("footprint", "likes", "submissions", "settings")
@@ -256,7 +285,37 @@ def me_page(request: Request, con=Depends(get_con)):
     return render(request, con, "me.html", {
         "tab": tab, "fp": footprint(con, lang, visitor["id"]), "likes": liked_songs(con, visitor["id"]),
         "subs": my_submissions(con, visitor["id"]), "map": taiwan.map_data(), "msg": request.query_params.get("msg"),
+        "choices": contribute_choices(con) if tab == "submissions" else None,
     }, page={"title": "我的", "title_en": "My page"})
+
+
+@router.post("/me/marquee/{post_id:int}/delete")
+def me_delete_marquee(post_id: int, request: Request, con=Depends(get_con)):
+    """刪除自己的跑馬燈留言：馬上從首頁消失。"""
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    con.execute("DELETE FROM marquee_posts WHERE id = ? AND visitor_id = ?", (post_id, visitor["id"]))
+    con.commit()
+    return RedirectResponse(me_url(request, "marquee_deleted"), status_code=303)
+
+
+@router.post("/me/sheets/{sheet_id:int}/delete-request")
+def me_request_sheet_delete(sheet_id: int, request: Request, con=Depends(get_con)):
+    """樂譜要求刪除：記下時間，由管理者確認後刪掉（在那之前照原本的狀態顯示）。"""
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    con.execute("UPDATE sheets SET delete_requested_at = ? WHERE id = ? AND visitor_id = ? AND delete_requested_at IS NULL",
+                (db.now(), sheet_id, visitor["id"]))
+    con.commit()
+    return RedirectResponse(me_url(request, "sheet_delete_requested"), status_code=303)
+
+
+def me_url(request, msg_key):
+    return ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + quote(T(request, msg_key))
 
 
 @router.post("/me/settings")
@@ -337,6 +396,21 @@ def toggle_attendance(performance_id: int, request: Request, con=Depends(get_con
     return {"on": on, "count": n}
 
 
+@router.post("/api/me/likes/order")
+async def order_likes(request: Request, con=Depends(get_con)):
+    """「我的 → 喜歡的歌」拖曳排序後存順序。ids 是排好的歌曲 id，用逗號隔開；不是自己喜歡的歌會被略過。"""
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return need_login_json(request)
+    form = await request.form()
+    ids = [int(x) for x in (form.get("ids") or "").split(",") if x.strip().isdigit()]
+    con.executemany("UPDATE song_likes SET position = ? WHERE visitor_id = ? AND song_id = ?",
+                    [(i, visitor["id"], sid) for i, sid in enumerate(ids)])
+    con.commit()
+    return {"ok": True}
+
+
 @router.post("/api/me/likes/{song_id:int}")
 def toggle_like(song_id: int, request: Request, con=Depends(get_con)):
     check_post(request)
@@ -350,7 +424,10 @@ def toggle_like(song_id: int, request: Request, con=Depends(get_con)):
         con.execute("DELETE FROM song_likes WHERE visitor_id = ? AND song_id = ?", key)
         on = False
     else:
-        con.execute("INSERT INTO song_likes VALUES (?, ?, ?)", key + (db.now(),))
+        # 新按的排在最後面，不會打亂自己排好的順序
+        last = con.execute("SELECT MAX(position) FROM song_likes WHERE visitor_id = ?", (visitor["id"],)).fetchone()[0]
+        con.execute("INSERT INTO song_likes (visitor_id, song_id, created_at, position) VALUES (?, ?, ?, ?)",
+                    key + (db.now(), (last or 0) + 1))
         on = True
     con.commit()
     n = con.execute("SELECT COUNT(*) FROM song_likes WHERE song_id = ?", (song_id,)).fetchone()[0]
@@ -365,6 +442,16 @@ def attended_ids(con, visitor):
 
 def attendance_counts(con):
     return {r[0]: r[1] for r in con.execute("SELECT performance_id, COUNT(*) FROM attendance GROUP BY performance_id")}
+
+
+def liked_ids(con, visitor):
+    if not visitor:
+        return set()
+    return {r[0] for r in con.execute("SELECT song_id FROM song_likes WHERE visitor_id = ?", (visitor["id"],))}
+
+
+def like_counts(con):
+    return {r[0]: r[1] for r in con.execute("SELECT song_id, COUNT(*) FROM song_likes GROUP BY song_id")}
 
 
 def like_state(con, visitor, song_id):
@@ -408,8 +495,7 @@ async def post_marquee(request: Request, con=Depends(get_con)):
     return JSONResponse({"ok": False, "error": error}, status_code=400)
 
 
-# ==================================================================== 補充演出資訊與歌單
-INFO_FIELDS = ("event_name", "event_name_en", "venue", "venue_en")
+# ==================================================================== 補充現有演出的歌單
 
 
 def parse_setlist_text(con, text):
@@ -462,11 +548,8 @@ async def contribute_performance(performance_id: int, request: Request, con=Depe
         return RedirectResponse(back + "?error=" + quote(T(request, key)), status_code=303)
     if visitor["banned"]:
         return fail("banned")
+    # 現有的演出只收歌單；名稱、地點有錯請寫在「給管理者的話」
     payload = {}
-    for f in INFO_FIELDS:
-        value = (form.get(f) or "").strip()[:255]
-        if value != perf[f]:
-            payload[f] = value
     new_setlist = (form.get("setlist") or "").strip()
     if new_setlist != setlist_text(con, performance_id).strip():
         payload["setlist"] = parse_setlist_text(con, new_setlist)
@@ -487,6 +570,60 @@ async def contribute_performance(performance_id: int, request: Request, con=Depe
     return RedirectResponse(me, status_code=303)
 
 
+# ==================================================================== 新演出
+SHOW_TEXT_FIELDS = ("event_name", "venue")
+
+
+@router.get("/contribute/show/")
+def contribute_show_form(request: Request, con=Depends(get_con)):
+    return render(request, con, "contribute_show.html", {
+        "types": Q.event_types(con), "cities": Q.cities(con), "error": request.query_params.get("error"),
+        "need_login": not current_visitor(request, con),
+    }, page={"title": "新增演出資訊", "title_en": "Add a show"})
+
+
+@router.post("/contribute/show/")
+async def contribute_show(request: Request, con=Depends(get_con)):
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    form = await request.form()
+    back = request.url.path
+
+    def fail(key, **kw):
+        return RedirectResponse(back + "?error=" + quote(T(request, key, **kw)), status_code=303)
+    if visitor["banned"]:
+        return fail("banned")
+    date = (form.get("event_date") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        return fail("show_need_date")
+    payload = {"event_date": date}
+    for f in SHOW_TEXT_FIELDS:
+        payload[f] = (form.get(f) or "").strip()[:255]
+    if not payload["event_name"]:
+        return fail("show_need_name")
+    type_id, city_id = form.get("event_type_id"), form.get("city_id")
+    if not con.execute("SELECT 1 FROM event_types WHERE id = ?", (type_id,)).fetchone() \
+            or not con.execute("SELECT 1 FROM cities WHERE id = ?", (city_id,)).fetchone():
+        return fail("show_need_type_city")
+    payload["event_type_id"], payload["city_id"] = int(type_id), int(city_id)
+    setlist = parse_setlist_text(con, form.get("setlist"))        # 選填：已經演出過的話可以一起附上
+    if setlist:
+        payload["setlist"] = setlist
+    payload["source"] = (form.get("source") or "").strip()[:500]
+    if not payload["source"]:
+        return fail("contribute_need_source")
+    payload["message"] = (form.get("message") or "").strip()[:1000]
+    if V.over_daily_limit(con, "show", visitor["id"]):
+        return fail("daily_limit", n=V.DAILY_LIMITS["show"])
+    con.execute("INSERT INTO show_submissions (visitor_id, payload_json, created_at) VALUES (?, ?, ?)",
+                (visitor["id"], json.dumps(payload, ensure_ascii=False), db.now()))
+    con.commit()
+    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + quote(T(request, "show_thanks"))
+    return RedirectResponse(me, status_code=303)
+
+
 def _404():
     raise HTTPException(404)
 
@@ -504,12 +641,68 @@ def sheets_for_songs(con, lang, song_ids, statuses=("approved",)):
     for f in con.execute("SELECT * FROM sheet_files WHERE sheet_id IN (%s) ORDER BY position"
                          % ",".join("?" * len(rows)), [r["id"] for r in rows]) if rows else []:
         files[f["sheet_id"]].append(f)
+    likes = dict(con.execute("SELECT sheet_id, COUNT(*) FROM sheet_likes WHERE sheet_id IN (%s) GROUP BY sheet_id"
+                             % ",".join("?" * len(rows)), [r["id"] for r in rows]).fetchall()) if rows else {}
     anon = i18n.t(lang, "anonymous")
     out = []
     for r in rows:
         name = V.display_name(r, r["name_mode"], anon) if r["google_name"] is not None else anon
-        out.append(dict(r, author=name, files=files.get(r["id"], [])))
+        out.append(dict(r, author=name, files=files.get(r["id"], []), likes=likes.get(r["id"], 0)))
     return out
+
+
+@router.get("/sheets/{sheet_id:int}/")
+def sheet_page(sheet_id: int, request: Request, con=Depends(get_con)):
+    """一份樂譜的頁面：圖、文字譜、演奏影片、讚。只有公開中的看得到。"""
+    lang = lang_of(request)
+    found = sheets_for_songs(con, lang, [r[0] for r in con.execute("SELECT song_id FROM sheets WHERE id = ?", (sheet_id,))])
+    sheet = next((s for s in found if s["id"] == sheet_id), None) or _404()
+    song = con.execute(Q.SONG_SELECT + " WHERE g.id = ?", (sheet["song_id"],)).fetchone()
+    visitor = current_visitor(request, con)
+    liked = bool(visitor and con.execute("SELECT 1 FROM sheet_likes WHERE visitor_id = ? AND sheet_id = ?",
+                                         (visitor["id"], sheet_id)).fetchone())
+    return render(request, con, "sheet.html", {
+        "sheet": sheet, "song": song, "liked": liked, "contact_email": db.get_setting(con, "contact_email"),
+    }, page={"title": "%s · %s" % (sheet["title"], song["title"]),
+             "title_en": "%s · %s" % (sheet["title"], song["title_en"] or song["title"]),
+             "summary": i18n.t("zh", "sheet_by", name=sheet["author"])})
+
+
+@router.get("/sheets/thumb/{file_id:int}.jpg")
+def sheet_thumb(file_id: int, con=Depends(get_con)):
+    """樂譜卡片的縮圖：第一張圖縮成寬 240px，存在 MEDIA_ROOT/cache/。只給公開中的樂譜。"""
+    row = con.execute("SELECT f.file FROM sheet_files f JOIN sheets s ON s.id = f.sheet_id "
+                      "WHERE f.id = ? AND s.status = 'approved'", (file_id,)).fetchone() or _404()
+    src, thumb = os.path.join(db.MEDIA_ROOT, row["file"]), V.sheet_thumb_path(row["file"])
+    if not os.path.isfile(src):
+        _404()
+    if not os.path.isfile(thumb):
+        from PIL import Image
+        os.makedirs(os.path.dirname(thumb), exist_ok=True)
+        with Image.open(src) as im:
+            im.thumbnail((240, 320), Image.LANCZOS)
+            im.convert("RGB").save(thumb + ".tmp", format="JPEG", quality=82)
+        os.replace(thumb + ".tmp", thumb)
+    return FileResponse(thumb, headers={"Cache-Control": "public, max-age=2592000"})
+
+
+@router.post("/api/me/sheet-likes/{sheet_id:int}")
+def toggle_sheet_like(sheet_id: int, request: Request, con=Depends(get_con)):
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return need_login_json(request)
+    if not con.execute("SELECT 1 FROM sheets WHERE id = ? AND status = 'approved'", (sheet_id,)).fetchone():
+        raise HTTPException(404)
+    key = (visitor["id"], sheet_id)
+    if con.execute("SELECT 1 FROM sheet_likes WHERE visitor_id = ? AND sheet_id = ?", key).fetchone():
+        con.execute("DELETE FROM sheet_likes WHERE visitor_id = ? AND sheet_id = ?", key)
+        on = False
+    else:
+        con.execute("INSERT INTO sheet_likes (visitor_id, sheet_id, created_at) VALUES (?, ?, ?)", key + (db.now(),))
+        on = True
+    con.commit()
+    return {"on": on, "count": con.execute("SELECT COUNT(*) FROM sheet_likes WHERE sheet_id = ?", (sheet_id,)).fetchone()[0]}
 
 
 def store_sheet_image(upload):
@@ -558,6 +751,71 @@ async def contribute_sheet(song_id: int, request: Request, con=Depends(get_con))
     if not visitor:
         return RedirectResponse(login_url(request), status_code=303)
     con.execute("SELECT 1 FROM songs WHERE id = ?", (song_id,)).fetchone() or _404()
+    return await save_sheet(request, con, visitor, song_id, None)
+
+
+def arrange_sheet_files(order, kept, stored):
+    """照網頁上排好的順序組出 (檔名, 寬, 高) 的清單；order 沒列到的（不該發生）接在最後。"""
+    by_id = {f["id"]: (f["file"], f["width"], f["height"]) for f in kept}
+    out, used_k, used_n = [], set(), set()
+    for kind, i in order:
+        if not i.isdigit():
+            continue
+        i = int(i)
+        if kind == "k" and i in by_id and i not in used_k:
+            out.append(by_id[i]); used_k.add(i)
+        elif kind == "n" and i < len(stored) and i not in used_n:
+            out.append(stored[i]); used_n.add(i)
+    out += [v for i, v in by_id.items() if i not in used_k]
+    out += [v for i, v in enumerate(stored) if i not in used_n]
+    return out
+
+
+def editable_sheet(con, visitor, sheet_id):
+    """投稿者可以編輯的那一筆 → (原本那筆, 要改的那筆)。公開中的樂譜改的是待審的修改版（還沒有就是 None，存檔時新增）。
+    下架、要求刪除中的不能改。"""
+    sheet = con.execute("SELECT * FROM sheets WHERE id = ? AND visitor_id = ?", (sheet_id, visitor["id"])).fetchone()
+    if not sheet or sheet["status"] == "removed" or sheet["delete_requested_at"]:
+        return None, None
+    if sheet["status"] == "approved":
+        rev = con.execute("SELECT * FROM sheets WHERE replaces_id = ? AND status = 'pending'", (sheet_id,)).fetchone()
+        return sheet, rev
+    return sheet, sheet
+
+
+@router.get("/contribute/sheet/edit/{sheet_id:int}/")
+def edit_sheet_form(sheet_id: int, request: Request, con=Depends(get_con)):
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    original, current = editable_sheet(con, visitor, sheet_id)
+    if not original:
+        _404()
+    shown = current or original                        # 表單裡預先填好的內容
+    return render(request, con, "contribute_sheet.html", {
+        "song": con.execute(Q.SONG_SELECT + " WHERE g.id = ?", (original["song_id"],)).fetchone(),
+        "sheet": shown, "live": original["status"] == "approved",
+        "files": con.execute("SELECT * FROM sheet_files WHERE sheet_id = ? ORDER BY position", (shown["id"],)).fetchall(),
+        "error": request.query_params.get("error"), "need_login": False,
+        "max_files": SHEET_MAX_FILES, "contact_email": db.get_setting(con, "contact_email"),
+    }, page={"title": "編輯樂譜", "title_en": "Edit sheet music"})
+
+
+@router.post("/contribute/sheet/edit/{sheet_id:int}/")
+async def edit_sheet(sheet_id: int, request: Request, con=Depends(get_con)):
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    original, current = editable_sheet(con, visitor, sheet_id)
+    if not original:
+        _404()
+    return await save_sheet(request, con, visitor, original["song_id"], original, current)
+
+
+async def save_sheet(request, con, visitor, song_id, original, current=None):
+    """新投稿（original 是 None）或編輯。編輯一律重新審核：
+    還沒公開的直接改那一筆、狀態回到待審；公開中的另存一筆修改版（replaces_id），通過前照樣顯示原本的。"""
     form = await request.form()
     back = request.url.path
 
@@ -569,17 +827,30 @@ async def contribute_sheet(song_id: int, request: Request, con=Depends(get_con))
     text_body = (form.get("text_body") or "").strip()[:20000]
     video = (form.get("video_url") or "").strip()[:500]
     uploads = [u for u in form.getlist("files") if getattr(u, "filename", "")]
+    # 編輯時勾選留下的舊圖檔（公開中第一次修改，舊圖檔來自原本那份）
+    source = current or original
+    old_files = con.execute("SELECT * FROM sheet_files WHERE sheet_id = ? ORDER BY position",
+                            (source["id"],)).fetchall() if source else []
+    # 圖片順序：網頁上排好的順序放在 order，例如 "k:12,n:0,k:9"（k＝留下的舊圖 id、n＝這次上傳的第幾張）。
+    # 沒有 order（瀏覽器沒跑 JavaScript）就用勾選的舊圖（keep）＋新圖，照原本順序。
+    order = [tuple(tok.split(":", 1)) for tok in (form.get("order") or "").split(",") if ":" in tok]
+    if form.get("order") is not None:
+        keep_ids = {int(i) for kind, i in order if kind == "k" and i.isdigit()}
+    else:
+        keep_ids = {int(x) for x in form.getlist("keep") if str(x).isdigit()}
+    kept = [f for f in old_files if f["id"] in keep_ids]
     if not form.get("own_work"):
         return fail("sheet_need_own")
     if not title:
         return fail("sheet_need_title")
-    if not uploads and not text_body:
+    if not uploads and not kept and not text_body:
         return fail("sheet_need_content")
-    if len(uploads) > SHEET_MAX_FILES:
+    if len(uploads) + len(kept) > SHEET_MAX_FILES:
         return fail("sheet_too_many", n=SHEET_MAX_FILES)
     if video and urlparse(video).scheme not in ("http", "https"):
         return fail("sheet_bad_video")
-    if V.over_daily_limit(con, "sheet", visitor["id"]):
+    new_row = not current                              # 新投稿，或公開中的樂譜第一次修改
+    if new_row and V.over_daily_limit(con, "sheet", visitor["id"]):
         return fail("daily_limit", n=V.DAILY_LIMITS["sheet"])
     stored = []
     try:
@@ -590,11 +861,21 @@ async def contribute_sheet(song_id: int, request: Request, con=Depends(get_con))
             os.remove(os.path.join(db.MEDIA_ROOT, name))
         return fail("sheet_file_too_large" if str(e) == "toolarge" else "sheet_bad_file")
     mode = form.get("name_mode") if form.get("name_mode") in V.NAME_MODES else "nickname"
-    sheet_id = con.execute("INSERT INTO sheets (visitor_id, song_id, title, text_body, video_url, name_mode, created_at) "
-                           "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                           (visitor["id"], song_id, title, text_body, video, mode, db.now())).lastrowid
+    files = arrange_sheet_files(order, kept, stored)
+    dropped = []
+    if new_row:
+        sheet_id = con.execute("INSERT INTO sheets (visitor_id, song_id, title, text_body, video_url, name_mode, created_at, "
+                               "replaces_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               (visitor["id"], song_id, title, text_body, video, mode, db.now(),
+                                original["id"] if original else None)).lastrowid
+    else:
+        sheet_id = current["id"]
+        con.execute("UPDATE sheets SET title = ?, text_body = ?, video_url = ?, name_mode = ?, status = 'pending', "
+                    "admin_note = '', reviewed_at = NULL WHERE id = ?", (title, text_body, video, mode, sheet_id))
+        dropped = [f["file"] for f in old_files if f["id"] not in keep_ids]
+        con.execute("DELETE FROM sheet_files WHERE sheet_id = ?", (sheet_id,))
     con.executemany("INSERT INTO sheet_files (sheet_id, position, file, width, height) VALUES (?, ?, ?, ?, ?)",
-                    [(sheet_id, i, name, w, h) for i, (name, w, h) in enumerate(stored)])
+                    [(sheet_id, i, name, w, h) for i, (name, w, h) in enumerate(files)])
     con.commit()
-    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + quote(T(request, "sheet_thanks"))
-    return RedirectResponse(me, status_code=303)
+    V.remove_unused_media(con, dropped)                 # 修改版還在用原本那份的圖檔時不會刪
+    return RedirectResponse(me_url(request, "sheet_edit_thanks" if original else "sheet_thanks"), status_code=303)

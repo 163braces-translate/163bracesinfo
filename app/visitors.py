@@ -41,7 +41,7 @@ STATE_COOKIE = "oauth_state"
 SESSION_DAYS = 60
 
 # 每個人 24 小時內最多投幾次，避免洗版
-DAILY_LIMITS = {"marquee": 3, "contribution": 10, "sheet": 5}
+DAILY_LIMITS = {"marquee": 3, "contribution": 10, "sheet": 5, "show": 5}
 MARQUEE_MAX_UNITS = 30
 MARQUEE_MAX_CHARS = 120        # 單位怎麼算都不能超過的總字元數（擋掉一堆符號、表情）
 
@@ -150,10 +150,32 @@ def delete_visitor(con, visitor_id):
         "SELECT f.file FROM sheet_files f JOIN sheets s ON s.id = f.sheet_id WHERE s.visitor_id = ?", (visitor_id,))]
     con.execute("DELETE FROM visitors WHERE id = ?", (visitor_id,))      # 其他表都是 ON DELETE CASCADE
     con.commit()
+    remove_media(files)
+
+
+def delete_sheet(con, sheet_id):
+    """整份樂譜連同圖檔刪掉（管理者處理投稿者的刪除要求、修改版取代原本那份）。
+    修改版會沿用原本的圖檔，所以只刪沒有別份樂譜在用的檔案。"""
+    files = [r["file"] for r in con.execute("SELECT file FROM sheet_files WHERE sheet_id = ?", (sheet_id,))]
+    con.execute("DELETE FROM sheets WHERE id = ?", (sheet_id,))          # sheet_files 是 ON DELETE CASCADE
+    con.commit()
+    remove_unused_media(con, files)
+
+
+def remove_unused_media(con, files):
+    remove_media([f for f in files if not con.execute("SELECT 1 FROM sheet_files WHERE file = ?", (f,)).fetchone()])
+
+
+def remove_media(files):
     for f in files:
-        path = os.path.join(db.MEDIA_ROOT, f)
-        if os.path.isfile(path):
-            os.remove(path)
+        for path in (os.path.join(db.MEDIA_ROOT, f), sheet_thumb_path(f)):
+            if os.path.isfile(path):
+                os.remove(path)
+
+
+def sheet_thumb_path(file):
+    """樂譜圖檔的縮圖（歌詞頁的樂譜卡片用），第一次要用時才產生。"""
+    return os.path.join(db.MEDIA_ROOT, "cache", file.replace("/", "-").rsplit(".", 1)[0] + "-thumb.jpg")
 
 
 # ==================================================================== 署名、字數、投稿頻率
@@ -177,7 +199,7 @@ def text_units(text):
 
 
 def over_daily_limit(con, kind, visitor_id):
-    table = {"marquee": "marquee_posts", "contribution": "contributions", "sheet": "sheets"}[kind]
+    table = {"marquee": "marquee_posts", "contribution": "contributions", "sheet": "sheets", "show": "show_submissions"}[kind]
     since = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat(timespec="seconds")
     n = con.execute("SELECT COUNT(*) FROM %s WHERE visitor_id = ? AND created_at >= ?" % table,
                     (visitor_id, since)).fetchone()[0]

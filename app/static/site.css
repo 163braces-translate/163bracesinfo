@@ -361,39 +361,32 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .setlist .artist { color: var(--muted); font-size: .85rem; }
 .uncertain { color: var(--warn-text); font-size: .85rem; margin: 0 0 6px; }
 
-/* 手機版：方塊格＋抽屜 */
+/* 手機版：一場一個方塊，「我去過」直接按，歌單在方塊裡收放 */
 .perf-cards { display: none; }
 @media (max-width: 760px) {
   .perf-table { display: none; }
   .perf-cards { display: block; }
 }
-.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0 18px; }
+.card-grid { display: grid; gap: 10px; margin: 8px 0 18px; }
 .perf-card {
-  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: inherit; cursor: pointer;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; box-shadow: var(--shadow);
-  min-height: 118px;
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow);
 }
 .perf-card.soon { border-color: #c4d5f2; background: #f5f8fe; }
-.perf-card .d { font-size: .8rem; color: var(--primary); font-weight: 700; }
-.perf-card .n { font-weight: 500; line-height: 1.4; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.perf-card .m { margin-top: auto; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; font-size: .78rem; color: var(--muted); }
-
-.drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 30, 55, .35); z-index: 40; opacity: 0; transition: opacity .2s; }
-.drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); z-index: 41; background: var(--surface);
-  border-radius: 20px 0 0 20px; box-shadow: -10px 0 40px rgba(15, 30, 55, .2);
-  transform: translateX(100%); transition: transform .25s ease; display: flex; flex-direction: column;
-}
-.drawer.open { transform: none; }
-.drawer-backdrop.open { opacity: 1; }
-.drawer-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 18px 18px 10px; }
-.drawer-head h2 { font-size: 1.15rem; margin: 0; }
-.drawer-body { padding: 0 18px 24px; overflow-y: auto; }
-.drawer-body dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 0 16px; font-size: .925rem; }
-.drawer-body dt { color: var(--muted); }
-.drawer-body dd { margin: 0; }
-.drawer-body .setlist { columns: 1; }
+.perf-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.perf-card-top .chip { font-size: .72rem; }
+.perf-card .d { font-size: .82rem; color: var(--primary); font-weight: 700; margin-right: 2px; }
+.perf-card .n { font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.perf-card .m { font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
+.perf-card .perf-extra { margin-top: 6px; gap: 10px; }
+.perf-card-setlist { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 8px; }
+.perf-card-setlist summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--muted); }
+.perf-card-setlist summary::-webkit-details-marker { display: none; }
+.perf-card-setlist summary::after { content: ""; width: 7px; height: 7px; margin-left: 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
+.perf-card-setlist[open] summary::after { transform: rotate(-135deg) translateY(-1px); }
+.perf-card-setlist .setlist-content { margin-top: 8px; }
+.perf-card-setlist .setlist { columns: 1; }
 .icon-btn { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
   cursor: pointer; font-size: 18px; line-height: 1; color: var(--muted); }
 
@@ -482,12 +475,15 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .album-menu[open] .chevron { transform: rotate(-135deg); margin-bottom: -4px; }
 .album-menu[open] summary { border-bottom: 1px solid var(--border); }
 .tracks { list-style: none; margin: 0; padding: 8px; counter-reset: track; }
-.tracks li { counter-increment: track; }
+.tracks li { counter-increment: track; display: flex; align-items: center; gap: 4px; }
+.tracks li > a, .tracks li > .no-lyrics { flex: 1; min-width: 0; }
 .tracks a, .tracks .no-lyrics { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 10px; color: var(--text); }
 .tracks a::before, .tracks .no-lyrics::before { content: counter(track); width: 1.4em; text-align: right; color: var(--faint); font-size: .85rem; flex: none; }
 .tracks a:hover { background: var(--primary-softer); text-decoration: none; color: var(--primary-strong); }
 .tracks .no-lyrics { color: var(--faint); }
 .tracks .en { color: var(--muted); font-size: .85rem; }
+.sheet-mark { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong);
+  font-size: .72rem; line-height: 1.7; vertical-align: 1px; white-space: nowrap; }
 
 .lyrics-head { display: flex; gap: 20px; align-items: center; margin: 8px 0 20px; }
 .lyrics-head img, .lyrics-head .cover-ph { width: 120px; height: 120px; border-radius: 16px; object-fit: cover; flex: none; box-shadow: var(--shadow); }
@@ -580,7 +576,6 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .att-btn.compact { padding: 3px 8px; font-size: .75rem; }
 .perf-table .att-col { width: 1%; padding-right: 4px; }
 .perf-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
-.drawer .perf-extra { margin: 0 0 16px; }
 .add-setlist { font-size: .78rem; color: var(--faint); margin-left: 6px; white-space: nowrap; }
 .add-setlist:hover { color: var(--primary); }
 .like-btn { font: inherit; display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; padding: 5px 12px; border-radius: 999px;
@@ -588,6 +583,11 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .like-btn .heart { color: var(--faint); font-size: 1.05rem; line-height: 1; }
 .like-btn.on { border-color: #f3c3d4; background: #fdf0f5; color: #b0345f; }
 .like-btn.on .heart { color: #e0457b; }
+/* 歌詞索引每首歌旁邊的小愛心 */
+.like-btn.mini { flex: none; margin: 0; padding: 4px 9px; min-width: 2.6em; justify-content: center; font-size: .8rem;
+  border-color: transparent; background: none; }
+.like-btn.mini:hover { background: var(--surface-2); }
+.like-btn.mini.on { background: #fdf0f5; }
 
 /* 登入、投稿表單、我的 */
 .narrow-card { max-width: 520px; margin: 24px auto; padding: 28px; }
@@ -610,9 +610,16 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .me-head h1 { margin: 0; }
 .me-head .avatar { width: 56px; height: 56px; border-radius: 50%; }
 .plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.like-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 640px; }
-.like-list li { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
-.like-list .like-btn { margin: 0 0 0 auto; padding: 3px 9px; }
+.like-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 640px; counter-reset: like; }
+.like-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 6px; counter-increment: like; }
+.like-list li.dragging { opacity: .6; box-shadow: 0 6px 20px rgba(17, 24, 39, .12); }
+.like-list .rank::before { content: counter(like); display: inline-block; min-width: 1.4em; text-align: right; color: var(--faint); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.like-list .like-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.like-list .like-btn { margin: 0; padding: 3px 9px; }
+.drag-handle { cursor: grab; touch-action: none; user-select: none; color: var(--faint); padding: 4px 6px; letter-spacing: -2px; font-size: 1rem; }
+.drag-handle:active { cursor: grabbing; }
+.move-btns { display: flex; gap: 4px; }
+.icon-btn.small { width: 28px; height: 28px; font-size: 14px; }
 .settings-form { max-width: 560px; display: grid; gap: 6px; margin-bottom: 18px; }
 .settings-form .btn { justify-self: start; margin-top: 8px; }
 .danger-zone { border-color: #f3c3bd; }
@@ -622,12 +629,55 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 
 /* 樂譜 */
 .sheets { margin-top: 18px; }
-.sheet { padding: 14px 0; border-top: 1px solid var(--border); }
-.sheet:first-of-type { border-top: 0; padding-top: 0; }
-.sheet h3 { margin: 0 0 2px; }
+/* 歌詞頁的樂譜卡片：有圖才有縮圖 */
+.sheet-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.sheet-card { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: var(--surface); }
+.sheet-card:hover { text-decoration: none; border-color: var(--primary); }
+.sheet-card img { flex: none; width: 60px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.sheet-card-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sheet-card-body b { font-weight: 500; overflow-wrap: anywhere; }
+.heart-mini { color: #e0457b; }
+/* 樂譜頁 */
+.sheet-page h1 { margin-bottom: 4px; }
+.sheet-page .like-btn { margin-top: 12px; }
 .sheet-video { max-width: 480px; margin: 10px 0; }
 .sheet-img { display: block; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); margin: 10px 0; }
 .sheet-text { white-space: pre; overflow-x: auto; background: var(--surface-2); border-radius: 10px; padding: 12px 14px; margin: 10px 0 0; }
 
 .preview-bar { background: var(--warn-soft); color: var(--warn-text); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: .9rem; }
 .stack > .preview-bar { margin-bottom: 0; }
+
+/* 我的投稿：上方四種投稿的入口、下方紀錄 */
+.contrib-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.contrib-card { display: flex; flex-direction: column; gap: 4px; }
+.contrib-card h2 { font-size: 1.05rem; margin: 0; }
+.contrib-card p { margin: 0 0 10px; flex: 1; }
+.contrib-card > .btn { align-self: flex-start; }
+.contrib-pick { display: flex; gap: 8px; }
+.contrib-pick select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; font: inherit; font-size: .9rem; background: var(--surface); color: var(--text); }
+.subs-title { font-size: 1.15rem; margin-bottom: 12px; }
+.sub-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.sub-row > span { min-width: 0; overflow-wrap: anywhere; }
+.sub-row form, .sub-row > .chip { flex: none; }
+.sub-actions { display: flex; gap: 6px; flex: none; align-items: center; }
+.keep-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+.keep-files label { position: relative; cursor: pointer; }
+.keep-files img { width: 96px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.keep-files input { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; }
+.keep-files input:not(:checked) + img { opacity: .3; }
+.subs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .subs-grid { grid-template-columns: 1fr; } }
+
+/* 投稿樂譜的縮圖格：預覽、拖曳排序 */
+.gallery-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.g-item { position: relative; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2);
+  cursor: grab; touch-action: none; user-select: none; }
+.g-item.dragging { opacity: .5; }
+.g-item img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; pointer-events: none; }
+.g-num { position: absolute; top: 6px; left: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: rgba(17, 24, 39, .7);
+  color: #fff; font-size: .75rem; line-height: 22px; text-align: center; }
+.g-tools { display: flex; justify-content: space-between; gap: 2px; padding: 4px; background: var(--surface); }
+.g-tools button { flex: 1; font: inherit; font-size: .85rem; padding: 3px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); cursor: pointer; color: var(--muted); }
+.g-tools button:disabled { opacity: .35; cursor: default; }
+.g-tools button[data-g=remove]:hover { color: #b42318; border-color: #f0b4ad; }
+[data-gallery-count].over { color: #b42318; }

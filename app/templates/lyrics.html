@@ -60,15 +60,22 @@
           <h2 id="h-sheets">{{ t('sheets') }}</h2>
           <a class="btn small" href="{{ link('/contribute/sheet/' ~ songs[0].id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
         </div>
-        {% for s in sheets %}
-          <article class="sheet">
-            <h3>{{ s.title }}{% if songs | length > 1 %} <span class="small muted">· {{ s.song_title }}</span>{% endif %}</h3>
-            <div class="small muted">{{ t('sheet_by', name=s.author) }} · {{ s.created_at[:10] | replace('-', '/') }}</div>
-            {% if s.video_url %}<div class="sheet-video">{{ m.youtube(s.video_url, s.title) }}</div>{% endif %}
-            {% for f in s.files %}<a href="/media/{{ f.file }}" target="_blank" rel="noopener"><img class="sheet-img" src="/media/{{ f.file }}" alt="{{ s.title }} {{ loop.index }}" loading="lazy" width="{{ f.width }}" height="{{ f.height }}"></a>{% endfor %}
-            {% if s.text_body %}<pre class="sheet-text">{{ s.text_body }}</pre>{% endif %}
-          </article>
-        {% endfor %}
+        {#- 只列卡片（縮圖、標題、作者、讚數），點進去才看整份 #}
+        {% if sheets %}
+          <div class="sheet-cards">
+            {% for s in sheets %}
+              <a class="sheet-card" href="{{ link('/sheets/' ~ s.id ~ '/') }}">
+                {% if s.files %}<img src="/sheets/thumb/{{ s.files[0].id }}.jpg" alt="" loading="lazy">{% endif %}
+                <span class="sheet-card-body">
+                  <b>{{ s.title }}</b>
+                  {% if songs | length > 1 %}<span class="small muted">{{ s.song_title }}</span>{% endif %}
+                  <span class="small muted">{{ t('sheet_by', name=s.author) }}</span>
+                  <span class="small muted"><span class="heart-mini" aria-hidden="true">♥</span> {{ s.likes }}{% if s.files | length > 1 %} · {{ t('sheet_pages', n=s.files | length) }}{% endif %}{% if s.video_url %} · ▶{% endif %}</span>
+                </span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
         <p class="small muted" style="margin: 12px 0 0">{{ t('sheets_notice', email=contact_email) }}</p>
       </section>
     {% endif %}

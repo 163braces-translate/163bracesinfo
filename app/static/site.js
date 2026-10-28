@@ -118,40 +118,6 @@
     row.hidden = !open;
   });
 
-  // ---- 演出頁（手機版）：點方塊開抽屜
-  var drawer = $(".drawer"), backdrop = $(".drawer-backdrop"), lastCard = null;
-  if (drawer) {
-    var close = function () {
-      drawer.classList.remove("open");
-      backdrop.classList.remove("open");
-      document.body.style.overflow = "";
-      setTimeout(function () { drawer.hidden = true; backdrop.hidden = true; }, 250);
-      if (lastCard) lastCard.focus();
-    };
-    document.addEventListener("click", function (e) {
-      var card = e.target.closest(".perf-card");
-      if (!card) return;
-      lastCard = card;
-      var d = card.dataset;
-      $("#drawer-title").textContent = d.name;
-      var fields = {date: d.date, type: d.type, venue: d.venue, city: d.cityname};
-      Object.keys(fields).forEach(function (k) { $('[data-f="' + k + '"]', drawer).textContent = fields[k] || "—"; });
-      var slot = $('[data-f="setlist"]', drawer), src = document.querySelector("#sl" + d.id + " .setlist-content");
-      slot.innerHTML = "";
-      slot.appendChild(src ? src.cloneNode(true) : $("#no-setlist").content.cloneNode(true));
-      var extra = $('[data-f="extra"]', drawer), tpl = document.getElementById("extra" + d.id);
-      extra.innerHTML = "";
-      if (tpl) extra.appendChild(tpl.content.cloneNode(true));
-      drawer.hidden = false; backdrop.hidden = false;
-      document.body.style.overflow = "hidden";
-      requestAnimationFrame(function () { drawer.classList.add("open"); backdrop.classList.add("open"); });
-      $("[data-close]", drawer).focus();
-    });
-    backdrop.addEventListener("click", close);
-    $("[data-close]", drawer).addEventListener("click", close);
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !drawer.hidden) close(); });
-  }
-
   // ---- 歌詞索引：全部展開／全部收起（按鈕文字跟著目前狀態）
   var menu = $("[data-lyrics-menu]");
   if (menu) {
@@ -170,6 +136,133 @@
     sync();
   }
 
+  // ---- 投稿樂譜的圖檔：縮圖格預覽、拖曳或 ← → 排順序、✕ 移除；選檔按鈕一直往格子裡加。
+  // 選好的圖先在瀏覽器裡縮小（最長邊 2400px、JPEG）：手機照片常常超過 5MB 的上限，
+  // 伺服器收到後本來就會縮成這個大小，所以畫質不會比較差，只是上傳快很多。縮不了就照原檔上傳。
+  // 送出時把新圖照格子的順序放回選檔欄位，順序寫在 order（k:舊圖 id、n:第幾張新圖）。
+  var gallery = $("[data-sheet-gallery]");
+  var sheetInput = $("[data-shrink]");
+  if (gallery && sheetInput && window.DataTransfer) {
+    var SHRINK_SIDE = 2400, SMALL_ENOUGH = 2.5 * 1024 * 1024;
+    var sheetForm = sheetInput.form, glist = $(".gallery-list", gallery), gcount = $("[data-gallery-count]", gallery);
+    var shrinkNote = $("[data-shrink-note]"), sheetSubmit = $("button[type=submit]", sheetForm);
+    var maxImages = Number(gallery.dataset.max), gitems = [];
+    var mb = function (n) { return (n / 1024 / 1024).toFixed(1) + "MB"; };
+    var shrink = function (file) {
+      if (!window.createImageBitmap) return Promise.resolve(file);
+      return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
+        var scale = Math.min(1, SHRINK_SIDE / Math.max(bmp.width, bmp.height));
+        if (scale === 1 && file.size <= SMALL_ENOUGH) return file;
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.round(bmp.width * scale);
+        canvas.height = Math.round(bmp.height * scale);
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";                       // 透明背景的 PNG 轉 JPEG 時墊白底
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        return new Promise(function (resolve) {
+          canvas.toBlob(function (blob) {
+            resolve(blob && blob.size < file.size
+              ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file);
+          }, "image/jpeg", 0.88);
+        });
+      }).catch(function () { return file; });
+    };
+    var renderGallery = function () {
+      var d = gallery.dataset;
+      glist.innerHTML = gitems.map(function (it, i) {
+        return '<li class="g-item" data-i="' + i + '"><img src="' + it.src + '" alt="' + (i + 1) + '" draggable="false">' +
+          '<span class="g-num">' + (i + 1) + '</span><span class="g-tools">' +
+          '<button type="button" data-g="left" aria-label="' + d.left + '"' + (i ? "" : " disabled") + '>←</button>' +
+          '<button type="button" data-g="right" aria-label="' + d.right + '"' + (i < gitems.length - 1 ? "" : " disabled") + '>→</button>' +
+          '<button type="button" data-g="remove" aria-label="' + d.remove + '">✕</button></span></li>';
+      }).join("");
+      var over = gitems.length > maxImages;
+      gcount.textContent = gitems.length ? (over ? d.tooMany : d.count.replace("{n}", gitems.length)) : "";
+      gcount.classList.toggle("over", over);
+      sheetSubmit.disabled = over;
+    };
+    // 舊圖（編輯時）：從沒有 JavaScript 用的勾選框搬進格子，勾選框整塊拿掉
+    $$(".keep-files label").forEach(function (label) {
+      gitems.push({ kind: "k", id: $("input", label).value, src: $("img", label).src });
+    });
+    var keepBlock = $(".keep-files-block");
+    if (keepBlock) keepBlock.remove();
+    gallery.hidden = false;
+    renderGallery();
+
+    sheetInput.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(sheetInput.files);
+      sheetInput.value = "";                          // 清掉，才能再選同一張；要上傳的檔案存在格子裡
+      if (!files.length) return;
+      sheetSubmit.disabled = true;
+      shrinkNote.textContent = sheetInput.dataset.working;
+      Promise.all(files.map(shrink)).then(function (out) {
+        out.forEach(function (f) { gitems.push({ kind: "n", file: f, src: URL.createObjectURL(f) }); });
+        var before = files.reduce(function (n, f) { return n + f.size; }, 0);
+        var after = out.reduce(function (n, f) { return n + f.size; }, 0);
+        shrinkNote.textContent = after < before ? sheetInput.dataset.done.replace("{a}", mb(before)).replace("{b}", mb(after)) : "";
+        renderGallery();
+      });
+    });
+    glist.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-g]");
+      if (!btn) return;
+      var i = Number(btn.closest("li").dataset.i), it = gitems[i];
+      if (btn.dataset.g === "remove") {
+        gitems.splice(i, 1);
+        if (it.kind === "n") URL.revokeObjectURL(it.src);
+      } else {
+        var j = btn.dataset.g === "left" ? i - 1 : i + 1;
+        gitems[i] = gitems[j]; gitems[j] = it;
+      }
+      renderGallery();
+    });
+    // 拖曳：按住縮圖移到別張的左半邊或右半邊（pointer 事件，手機也能拖）
+    var gdrag = null;
+    glist.addEventListener("pointerdown", function (e) {
+      var li = e.target.closest(".g-item");
+      if (!li || e.target.closest("button")) return;
+      gdrag = li;
+      li.classList.add("dragging");
+      li.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    glist.addEventListener("pointermove", function (e) {
+      if (!gdrag) return;
+      var over = document.elementFromPoint(e.clientX, e.clientY);
+      var li = over && over.closest(".g-item");
+      if (!li || li === gdrag || li.parentNode !== glist) return;
+      var r = li.getBoundingClientRect();
+      glist.insertBefore(gdrag, e.clientX < r.left + r.width / 2 ? li : li.nextSibling);
+    });
+    var gdrop = function () {
+      if (!gdrag) return;
+      gdrag = null;
+      gitems = $$(".g-item", glist).map(function (li) { return gitems[Number(li.dataset.i)]; });
+      renderGallery();
+    };
+    glist.addEventListener("pointerup", gdrop);
+    glist.addEventListener("pointercancel", gdrop);
+
+    sheetForm.addEventListener("submit", function () {
+      var dt = new DataTransfer(), order = [];
+      gitems.forEach(function (it) {
+        if (it.kind === "k") order.push("k:" + it.id);
+        else { dt.items.add(it.file); order.push("n:" + (dt.items.length - 1)); }
+      });
+      sheetInput.files = dt.files;
+      var field = $("input[name=order]", sheetForm) || sheetForm.appendChild(Object.assign(document.createElement("input"), { type: "hidden", name: "order" }));
+      field.value = order.join(",");
+    });
+  }
+
+  // 刪除之類的按鈕：先跳確認（按鈕上寫 data-confirm）
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-confirm]");
+    if (btn && !window.confirm(btn.dataset.confirm)) e.preventDefault();
+  });
+
   // ---- 粉絲功能的按鈕：沒登入時伺服器回 401，帶著現在的網址去登入頁
   function postJSON(url, body) {
     return fetch(url, { method: "POST", body: body || null, credentials: "same-origin",
@@ -183,7 +276,7 @@
       });
   }
 
-  // 我去過：同一場在頁面上可能有好幾個按鈕（表格、展開的歌單、手機抽屜），一起更新
+  // 我去過：同一場在頁面上可能有好幾個按鈕（表格、展開的歌單、手機方塊），一起更新
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-attend]");
     if (!btn) return;
@@ -198,30 +291,77 @@
       $$('[data-attend-count="' + id + '"]').forEach(function (c) {
         c.textContent = res.count ? c.dataset.label.replace("{n}", res.count) : "";
       });
-      // 手機方塊上的 ✓
-      var card = document.querySelector('.perf-card[data-id="' + id + '"] .m'), badge = document.querySelector('[data-attend-badge="' + id + '"]');
-      if (res.on && card && !badge) card.appendChild(Object.assign(document.createElement("span"), { className: "chip blue", textContent: "✓" })).dataset.attendBadge = id;
-      if (!res.on && badge) badge.remove();
-      // 抽屜裡的是複製出來的，原本 <template> 裡的也要改，下次打開才會對
-      var tpl = document.getElementById("extra" + id);
-      if (tpl) $$('[data-attend="' + id + '"]', tpl.content).forEach(function (b) {
-        b.classList.toggle("on", res.on); b.textContent = res.on ? b.dataset.on : b.dataset.off;
-      });
     }).catch(function () {}).then(function () { btn.disabled = false; });
   });
+
+  // ---- 我的 → 喜歡的歌：拖曳 ⋮⋮ 或按 ↑↓ 排順序，放開就存（手機也能拖：用 pointer 事件，不用 HTML5 拖放）
+  var likeList = $("[data-like-order]");
+  if (likeList) {
+    var saveOrder = function () {
+      var body = new FormData();
+      body.append("ids", $$("li[data-song]", likeList).map(function (li) { return li.dataset.song; }).join(","));
+      postJSON("/api/me/likes/order", body).catch(function () {});
+    };
+    var dragging = null;
+    likeList.addEventListener("pointerdown", function (e) {
+      var handle = e.target.closest("[data-drag]");
+      if (!handle) return;
+      dragging = handle.closest("li");
+      dragging.classList.add("dragging");
+      handle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    likeList.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var over = document.elementFromPoint(e.clientX, e.clientY);
+      var li = over && over.closest("li[data-song]");
+      if (!li || li === dragging || li.parentNode !== likeList) return;
+      var r = li.getBoundingClientRect();
+      likeList.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? li : li.nextSibling);
+    });
+    var drop = function () {
+      if (!dragging) return;
+      dragging.classList.remove("dragging");
+      dragging = null;
+      saveOrder();
+    };
+    likeList.addEventListener("pointerup", drop);
+    likeList.addEventListener("pointercancel", drop);
+    likeList.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-move]");
+      if (!btn) return;
+      var li = btn.closest("li");
+      if (btn.dataset.move === "up" && li.previousElementSibling) likeList.insertBefore(li, li.previousElementSibling);
+      else if (btn.dataset.move === "down" && li.nextElementSibling) likeList.insertBefore(li.nextElementSibling, li);
+      else return;
+      btn.focus();
+      saveOrder();
+    });
+  }
 
   // ♥ 喜歡
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-like]");
     if (!btn) return;
     btn.disabled = true;
-    postJSON("/api/me/likes/" + btn.dataset.like).then(function (res) {
+    postJSON(btn.dataset.likeUrl || "/api/me/likes/" + btn.dataset.like).then(function (res) {     // 樂譜的讚有自己的網址
       btn.classList.toggle("on", res.on);
       btn.setAttribute("aria-pressed", res.on ? "true" : "false");
       var c = $("[data-like-count]", btn);
-      if (c) c.textContent = res.count;
+      if (c) c.textContent = res.count || ("hideZero" in c.dataset ? "" : 0);     // 歌詞索引的小愛心：0 不顯示數字
     }).catch(function () {}).then(function () { btn.disabled = false; });
   });
+
+  // 從「我的投稿」點「去首頁留言」（網址帶 #marquee）：直接打開留言框
+  var compose = document.getElementById("marquee");
+  var openCompose = function () {
+    if (!compose || location.hash !== "#marquee") return;
+    compose.open = true;
+    var field = compose.querySelector("input[name=text]");
+    if (field) field.focus();
+  };
+  openCompose();
+  window.addEventListener("hashchange", openCompose);       // 已經在首頁時只換 #，頁面不會重新載入
 
   // ---- 首頁跑馬燈
   // 字數：一個中文字算 1、一個英文單字算 1（跟伺服器 visitors.text_units 一樣的規則）

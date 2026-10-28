@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS song_likes (
     visitor_id  INTEGER NOT NULL REFERENCES visitors(id) ON DELETE CASCADE,
     song_id     INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
     created_at  TEXT NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0,     -- 粉絲自己排的順序（「我的 → 喜歡的歌」拖曳排序）
     PRIMARY KEY (visitor_id, song_id)
 );
 CREATE INDEX IF NOT EXISTS song_likes_song ON song_likes(song_id);
@@ -227,7 +228,8 @@ CREATE TABLE IF NOT EXISTS marquee_posts (
     text        TEXT NOT NULL,
     name_mode   TEXT NOT NULL DEFAULT 'nickname' CHECK (name_mode IN ('google', 'nickname', 'anonymous')),
     hidden      INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    reviewed_at TEXT                -- 管理者在「投稿審核」看過（沒問題、隱藏都算）；空白＝還沒看過
 );
 CREATE INDEX IF NOT EXISTS marquee_recent ON marquee_posts(hidden, created_at);
 
@@ -247,6 +249,22 @@ CREATE TABLE IF NOT EXISTS contributions (
 );
 CREATE INDEX IF NOT EXISTS contributions_status ON contributions(status, created_at);
 
+-- 新演出的投稿（網站上還沒有的場次）：先審後上。payload_json 是使用者填的內容：
+--   {"event_date": "2026-11-01", "event_name": "…", "event_type_id": 1, "city_id": 2, "venue": "…",
+--    "setlist": [{"song_id": 3, "custom_title": "", "note": ""}, …]（選填）, "source": "資料來源", "message": "給管理者的話"}
+-- 核准時管理者可以先修改，存成一場演出（有附歌單就一起存）；performance_id 記下建立的是哪一場。
+CREATE TABLE IF NOT EXISTS show_submissions (
+    id              INTEGER PRIMARY KEY,
+    visitor_id      INTEGER REFERENCES visitors(id) ON DELETE CASCADE,
+    payload_json    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    admin_note      TEXT NOT NULL DEFAULT '',
+    performance_id  INTEGER REFERENCES performances(id) ON DELETE SET NULL,
+    created_at      TEXT NOT NULL,
+    reviewed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS show_submissions_status ON show_submissions(status, created_at);
+
 -- 樂譜投稿：先審後上。圖檔一張以上（sheet_files），或文字譜（text_body），或兩者都有。
 -- status：pending 待審、approved 公開、rejected 退回、removed 下架（例如權利人要求）
 CREATE TABLE IF NOT EXISTS sheets (
@@ -260,9 +278,22 @@ CREATE TABLE IF NOT EXISTS sheets (
     status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'removed')),
     admin_note  TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL,
-    reviewed_at TEXT
+    reviewed_at TEXT,
+    delete_requested_at TEXT,                   -- 投稿者在「我的投稿」要求刪除的時間；管理者處理後清空或整筆刪掉
+    -- 公開中的樂譜被投稿者修改：修改的內容另存一筆（status＝pending），這裡指向原本那筆。
+    -- 核准後這筆取代原本那筆；退回的話原本那筆照樣公開。
+    replaces_id INTEGER REFERENCES sheets(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS sheets_song ON sheets(song_id, status);
+
+-- 樂譜的讚（跟歌曲的喜歡分開）
+CREATE TABLE IF NOT EXISTS sheet_likes (
+    visitor_id  INTEGER NOT NULL REFERENCES visitors(id) ON DELETE CASCADE,
+    sheet_id    INTEGER NOT NULL REFERENCES sheets(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (visitor_id, sheet_id)
+);
+CREATE INDEX IF NOT EXISTS sheet_likes_sheet ON sheet_likes(sheet_id);
 
 CREATE TABLE IF NOT EXISTS sheet_files (
     id        INTEGER PRIMARY KEY,

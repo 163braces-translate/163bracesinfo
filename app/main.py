@@ -274,7 +274,14 @@ def stats_context(request, con, tab):
 
 
 def lyrics_index(request, con, page):
-    return render(request, con, "lyrics_index.html", {"boxes": Q.lyrics_boxes(con)}, page=page)
+    # 每首歌旁邊的 ♥：不用點進歌詞頁就能按喜歡
+    return render(request, con, "lyrics_index.html", {
+        "boxes": Q.lyrics_boxes(con),
+        "liked": community.liked_ids(con, community.current_visitor(request, con)),
+        "like_counts": community.like_counts(con),
+        # 有公開樂譜的歌：曲名後面標「樂譜」
+        "sheet_counts": dict(con.execute("SELECT song_id, COUNT(*) FROM sheets WHERE status = 'approved' GROUP BY song_id").fetchall()),
+    }, page=page)
 
 
 def lyrics_page(request, con, row):

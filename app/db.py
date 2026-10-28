@@ -83,6 +83,23 @@ def init(con):
             # 舊資料只知道有沒有發佈：沒發佈的當成草稿
             con.execute("UPDATE %s SET status = 'draft' WHERE published = 0" % table)
             con.commit()
+    if "reviewed_at" not in [r["name"] for r in con.execute("PRAGMA table_info(marquee_posts)")]:
+        con.execute("ALTER TABLE marquee_posts ADD COLUMN reviewed_at TEXT")
+        con.execute("UPDATE marquee_posts SET reviewed_at = created_at")     # 加這個欄位之前的留言都當作看過了
+        con.commit()
+    sheet_cols = [r["name"] for r in con.execute("PRAGMA table_info(sheets)")]
+    if "delete_requested_at" not in sheet_cols:
+        con.execute("ALTER TABLE sheets ADD COLUMN delete_requested_at TEXT")
+        con.commit()
+    if "replaces_id" not in sheet_cols:
+        con.execute("ALTER TABLE sheets ADD COLUMN replaces_id INTEGER REFERENCES sheets(id) ON DELETE SET NULL")
+        con.commit()
+    if "position" not in [r["name"] for r in con.execute("PRAGMA table_info(song_likes)")]:
+        con.execute("ALTER TABLE song_likes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+        # 以前照按讚時間新到舊列出：照這個順序編號，粉絲看到的順序不變
+        con.execute("UPDATE song_likes SET position = (SELECT COUNT(*) FROM song_likes k "
+                    "WHERE k.visitor_id = song_likes.visitor_id AND k.created_at > song_likes.created_at)")
+        con.commit()
 
 
 STATUSES = {"live": "線上", "unpublished": "取消發佈", "draft": "草稿"}
