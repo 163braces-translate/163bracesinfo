@@ -14,6 +14,8 @@
   --primary-softer: #f6f7f9;
   --warn-soft: #fff5d6;
   --warn-text: #7a5a00;
+  --up-text: #137a52;                 /* 名次上升／下降 */
+  --down-text: #b3361b;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 4px 14px rgba(17, 24, 39, .04);
@@ -334,7 +336,6 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .tw-map .node:focus { outline: none; }
 .tw-map .node:focus-visible .hit { stroke: var(--primary); stroke-width: 1.5; }
 .tw-map .node .count { font-size: 9px; font-weight: 700; fill: #fff; stroke: none; }
-.map-other { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .results-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .month-head { font-size: .9rem; color: var(--muted); font-weight: 700; margin: 0; }
@@ -420,6 +421,37 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .progress { height: 14px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 10px 0 8px; }
 .progress span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
 .callout { background: var(--warn-soft); color: var(--warn-text); border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
+/* 演出統計最下面的地圖：左邊地圖、右邊城市排行 */
+.year-map { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.year-map .tw-map { max-height: 540px; }
+.city-rank { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 24px; }
+.city-rank li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); break-inside: avoid; font-size: .92rem; }
+.city-rank b { font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .year-map { grid-template-columns: 1fr; } }
+
+/* 歌單統計的演出機率對照表 */
+.prob-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.prob-controls input { width: 4.8em; margin-left: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; font: inherit; color: var(--text); background: var(--surface); }
+.prob-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 760px) { .prob-grid { grid-template-columns: 1fr; } }
+.prob-grid h3 { font-size: .95rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+.prob-list { list-style: none; margin: 0; padding: 0; }
+.prob-list li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) 92px; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); font-size: .92rem; }
+.prob-list.vs li { grid-template-columns: 2.4em minmax(0, 1fr) 92px 3.6em; }
+.prob-list .rk { color: var(--faint); font-variant-numeric: tabular-nums; }
+.prob-list .nm { display: flex; align-items: center; min-width: 0; }
+.prob-list .nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prob-list .nm a { color: var(--text); }
+.prob-list .nm a:hover { color: var(--primary); }
+.prob-list .pct { position: relative; height: 22px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.prob-list .pct i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--primary-soft); }
+.prob-list .pct b { position: relative; display: block; text-align: right; padding-right: 7px; line-height: 22px; font-size: .84rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.prob-list .diff { text-align: right; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prob-list .diff.up { color: var(--up-text); }
+.prob-list .diff.down { color: var(--down-text); }
+.prob-list .diff.eq { color: var(--faint); }
+.prob-list .empty-row { display: block; color: var(--muted); }
+
 .seg { display: inline-flex; padding: 3px; background: var(--surface-2); border-radius: 999px; }
 .seg button { font: inherit; font-size: .85rem; border: 0; background: none; padding: 5px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); }
 .seg button[aria-pressed=true] { background: var(--surface); color: var(--primary-strong); box-shadow: var(--shadow); }
@@ -596,3 +628,6 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .sheet-video { max-width: 480px; margin: 10px 0; }
 .sheet-img { display: block; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); margin: 10px 0; }
 .sheet-text { white-space: pre; overflow-x: auto; background: var(--surface-2); border-radius: 10px; padding: 12px 14px; margin: 10px 0 0; }
+
+.preview-bar { background: var(--warn-soft); color: var(--warn-text); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: .9rem; }
+.stack > .preview-bar { margin-bottom: 0; }

@@ -7,10 +7,10 @@
 </div>
 
 <nav class="tabs" role="tablist" aria-label="{{ tr(page, 'title') }}">
-  {% for key, label in [('list', t('tab_list')), ('charts', t('tab_charts')), ('setlist', t('tab_setlist')), ('replay', t('tab_replay'))] %}
-    <a role="tab" id="tab-{{ key }}" href="{{ link(tab_urls[key]) }}" data-tab="{{ key }}"
+  {% for key, label in [('list', t('tab_list')), ('charts', t('tab_charts')), ('setlist', t('tab_setlist')), ('replay', t('tab_replay'))] if tab_shown[key] %}
+    <a role="tab" id="tab-{{ key }}" href="{{ link(tab_urls[key]) }}{{ '?preview=1' if previewing }}" data-tab="{{ key }}"
        data-title="{{ (tr(page, 'title') if key == 'list' else label) }} · {{ site_name }}"
-       aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ label }}</a>
+       aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ label }}{% if key != 'list' and tab_status[key] != 'live' %} <small class="muted">（未上線）</small>{% endif %}</a>
   {% endfor %}
 </nav>
 
@@ -72,12 +72,6 @@
     <section class="card" aria-labelledby="h-map">
       <div class="card-head" style="margin-bottom: 4px"><h2 id="h-map">{{ t('map') }}</h2><span class="small muted">{{ t('map_hint') }}</span></div>
       {{ mp.tw_map(map, map_cities, f.city) }}
-      {% set others = map_cities | rejectattr('map_key') | selectattr('n') | list %}
-      {% if others %}
-        <div class="map-other">
-          {% for c in others %}<button type="button" class="chip {{ 'blue' if c.id in f.city }}" data-city="{{ c.id }}">{{ tr(c, 'name') }} {{ c.n }}</button>{% endfor %}
-        </div>
-      {% endif %}
     </section>
   </aside>
 
@@ -205,5 +199,5 @@
 
 {% block scripts %}
 <script src="/static/stats.js?v={{ asset_version }}"></script>
-<script src="/static/replay.js?v={{ asset_version }}"></script>
+{% if tab_shown.replay %}<script src="/static/replay.js?v={{ asset_version }}"></script>{% endif %}
 {% endblock %}

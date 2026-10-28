@@ -218,6 +218,42 @@
     });
   }
 
+  // ---- 頁面列表：依狀態篩選。符合的頁面在收合的區塊裡時，自動展開它的上層
+  var sfilter = $("[data-status-filter]");
+  if (sfilter) {
+    sfilter.addEventListener("click", function (e) {
+      var btn = e.target.closest("button[data-status]");
+      if (!btn) return;
+      $$("button", sfilter).forEach(function (b) { b.setAttribute("aria-pressed", b === btn ? "true" : "false"); });
+      var want = btn.dataset.status;
+      var nodes = $$(".page-tree-list .tnode");
+      var virtual = $$(".page-tree-list .tchildren > .trow.virtual");     // 演出頁的分頁
+      nodes.concat(virtual).forEach(function (n) { n.classList.remove("filtered-out"); });
+      if (!want) return;
+      virtual.forEach(function (r) { r.classList.toggle("filtered-out", r.dataset.status !== want); });
+      // 從最裡面往外算：自己符合、或底下有符合的，就留著；留著的上層展開
+      nodes.slice().reverse().forEach(function (n) {
+        var self = n.querySelector(":scope > summary .trow, :scope > .trow");
+        var keep = (self && self.dataset.status === want) ||
+                   $$(":scope > .tchildren > .tnode, :scope > .tchildren > .trow.virtual", n).some(function (c) { return !c.classList.contains("filtered-out"); });
+        n.classList.toggle("filtered-out", !keep);
+        if (keep && n.tagName === "DETAILS" && !(self && self.dataset.status === want)) n.open = true;
+      });
+    });
+  }
+
+  // ---- 頁面編輯：換上層頁面時，網址前面那一段跟著變
+  var parentSelect = $("[data-parent-select]");
+  if (parentSelect) {
+    var prefix = $("[data-slug-prefix]");
+    var syncPrefix = function () {
+      var slug = parentSelect.selectedOptions[0].dataset.slug;
+      prefix.textContent = "/" + (slug ? slug + "/" : "");
+    };
+    parentSelect.addEventListener("change", syncPrefix);
+    syncPrefix();
+  }
+
   // ---- 頁面編輯：中文／英文內文切換
   $$("[data-lang-tabs]").forEach(function (tabs) {
     tabs.addEventListener("click", function (e) {

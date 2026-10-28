@@ -1,4 +1,5 @@
 {% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
 {% block title %}歌詞{% endblock %}
 {% block content %}
 <div class="admin-head">
@@ -17,10 +18,10 @@
     <tr class="{{ 'warn-row' if review }}">
       <td><a href="/admin/lyrics/{{ l.id }}">{{ l.title }}</a>{% if l.title_en %} <span class="muted small">{{ l.title_en }}</span>{% endif %}
         {% if review %}<div class="small warn-text">⚠️ {{ review | length }} 處待確認</div>{% endif %}</td>
-      <td class="small"><a href="{{ prefix }}{{ l.slug }}/" target="_blank" rel="noopener">{{ prefix }}{{ l.slug }}/</a></td>
+      <td class="small"><a href="{{ prefix }}{{ l.slug }}/{{ '?preview=1' if l.status != 'live' }}" target="_blank" rel="noopener">{{ prefix }}{{ l.slug }}/</a></td>
       <td class="small">{{ l.song_titles or '' }}{% if not l.song_titles %}<span class="muted">—</span>{% endif %}</td>
       <td class="small">{{ {'bilingual': '中英對照', 'duet': '對唱', 'single': '單欄'}[l.display_mode] }}</td>
-      <td>{% if l.published %}<span class="chip blue">已發佈</span>{% else %}<span class="chip">草稿</span>{% endif %}</td>
+      <td>{{ fx.status_chip(l.status) }}</td>
     </tr>
   {% endfor %}
   </tbody>

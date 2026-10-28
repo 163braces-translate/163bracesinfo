@@ -27,7 +27,7 @@
 
   <input type="hidden" name="header_json">
   <input type="hidden" name="footer_json">
-  <script type="application/json" data-nav-initial>{{ {"pages": pages, "header": header, "footer": footer} | tojson }}</script>
+  <script type="application/json" data-nav-initial>{{ {"pages": pages, "targets": targets, "header": header, "footer": footer} | tojson }}</script>
   <div class="form-actions sticky"><button class="btn primary" type="submit">儲存</button> <a class="btn" href="/" target="_blank" rel="noopener">看前台 ↗</a></div>
 </form>
 {% endblock %}

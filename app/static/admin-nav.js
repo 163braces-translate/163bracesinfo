@@ -8,6 +8,7 @@
   if (!form) return;
   var initial = JSON.parse($("[data-nav-initial]").textContent);
   var pages = initial.pages;
+  var targets = initial.targets || [];     // 演出頁的分頁（不是 pages 表裡的頁面），選了就當成自訂網址存
 
   function input(placeholder, value, tag) {
     var i = el(tag || "input", tag ? { placeholder: placeholder, "aria-label": placeholder, rows: "2" }
@@ -38,18 +39,24 @@
     pages.forEach(function (p) {
       target.appendChild(el("option", { value: String(p.id), text: p.title + "　" + p.url + (p.published ? "" : "（未發佈）") }));
     });
-    target.value = link.page_id ? String(link.page_id) : "";
+    targets.forEach(function (t) {
+      target.appendChild(el("option", { value: "url:" + t.url, text: t.label + "（演出頁分頁）　" + t.url }));
+    });
+    var preset = !link.page_id && targets.some(function (t) { return t.url === link.url; });
+    target.value = link.page_id ? String(link.page_id) : (preset ? "url:" + link.url : "");
     var url = input("網址，例：/performances/stats/ 或 https://…", link.url);
+    var isPage = function () { return target.value && target.value.indexOf("url:") !== 0; };
     var sync = function () {
+      if (target.value.indexOf("url:") === 0) url.value = target.value.slice(4);
       url.hidden = !!target.value;
-      label.placeholder = target.value ? "名稱（留空＝頁面標題）" : "名稱";
+      label.placeholder = isPage() ? "名稱（留空＝頁面標題）" : "名稱";
     };
     target.addEventListener("change", sync);
     sync();
     [label, labelEn, target, url].forEach(function (n) { row.appendChild(n); });
     row.read = function () {
       return { label: label.value.trim(), label_en: labelEn.value.trim(),
-               page_id: target.value ? Number(target.value) : null, url: target.value ? "" : url.value.trim() };
+               page_id: isPage() ? Number(target.value) : null, url: isPage() ? "" : url.value.trim() };
     };
     return row;
   }

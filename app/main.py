@@ -107,7 +107,8 @@ def robots(request: Request):
 def sitemap(request: Request, con=Depends(get_con)):
     base = str(request.base_url).rstrip("/")
     urls = [Q.page_url(p) for p in con.execute("SELECT slug FROM pages WHERE published = 1")]
-    urls += [url for tab, url in Q.tab_urls(con).items() if tab != "list"]
+    hidden = Q.hidden_tab_urls(con)
+    urls += [url for tab, url in Q.tab_urls(con).items() if tab != "list" and url not in hidden]
     prefix = Q.lyrics_prefix(con)
     urls += [prefix + r["slug"] + "/" for r in con.execute("SELECT slug FROM lyrics WHERE published = 1")]
     body = "".join("<url><loc>%s%s</loc></url><url><loc>%s/en%s</loc></url>" % (base, u, base, u) for u in urls)
@@ -168,7 +169,7 @@ def home(request, con, page):
         "hero_y": float(db.get_setting(con, "home_hero_pos_y") or 50),
         "hero_zoom": float(db.get_setting(con, "home_hero_zoom") or 100) / 100,
         "upcoming": upcoming,
-        "recent": [] if upcoming else Q.recent(con, 3),
+        "recent": [] if upcoming else Q.recent(con, max(0, int(db.get_setting(con, "home_recent_count") or 0))),
         "top_songs": top,
         "top_window": window_used,
         "song": Q.random_song(con),
@@ -187,17 +188,30 @@ def month_groups(rows):
     return groups
 
 
+def map_points(cities, counts):
+    """地圖上每個城市的圓點：面積跟場次成正比；沒有演出的縣市畫成小灰點。"""
+    top = max(counts.values() or [1])
+    return [dict(c, n=counts.get(c["id"], 0),
+                 r=round(4 + 9 * math.sqrt(counts[c["id"]] / top), 1) if counts.get(c["id"]) else 3)
+            for c in cities]
+
+
+def previewing(request, con):
+    """從後台按「預覽」打開的（網址帶 ?preview=1，而且有登入後台）：沒上線的頁面也顯示。
+    其他時候就算登入了後台，前台也跟訪客看到的一模一樣，方便確認上線後的樣子。"""
+    return request.query_params.get("preview") == "1" and bool(auth.current_user(con, request.cookies.get(auth.COOKIE)))
+
+
 def performances_page(request, con, page, tab="list"):
+    # 沒上線的分頁：訪客看不到（分頁標籤也不列），從後台預覽才看得到
+    preview = previewing(request, con)
+    status = Q.tab_statuses(con)
+    shown = {k: s == "live" or preview for k, s in status.items()}
+    shown["list"] = True
     f = Q.parse_filters(request.query_params)
     rows = Q.performances(con, f)
-    counts = Q.city_counts(con, f)
     cities = Q.cities(con)
-    top = max(counts.values() or [1])
-    map_cities = []
-    for c in cities:
-        n = counts.get(c["id"], 0)
-        # 圓點面積跟場次成正比；沒有演出的縣市畫成小灰點
-        map_cities.append(dict(c, n=n, r=round(4 + 9 * math.sqrt(n / top), 1) if n else 3))
+    map_cities = map_points(cities, Q.city_counts(con, f))
     return render(request, con, "performances.html", dict(stats_context(request, con, tab), **{
         "f": f,
         "groups": month_groups(rows),
@@ -209,6 +223,7 @@ def performances_page(request, con, page, tab="list"):
         "filtered": any([f["q"], f["city"], f["event_type"], f["date_from"], f["date_to"]]),
         "attended": community.attended_ids(con, community.current_visitor(request, con)),
         "attend_counts": community.attendance_counts(con),
+        "tab_shown": shown, "tab_status": status, "previewing": preview,
     }), page=page)
 
 
@@ -228,6 +243,9 @@ def stats_context(request, con, tab):
     ryear = asked if tab == "replay" and asked in years else fallback
     top_n = int(db.get_setting(con, "setlist_top_songs_count") or 10)
     song_all, song_top = Q.song_cumulative(con, lang, top_n)
+    charts = Q.stats_charts(con, lang, year)
+    prob = Q.song_probability(con, lang)
+    prob["songs"] = [dict(s, url=i18n.link(lang, s["url"]) if s["url"] else "") for s in prob["songs"]]
     return {
         "tab": tab,
         "tab_urls": Q.tab_urls(con),
@@ -235,7 +253,10 @@ def stats_context(request, con, tab):
         "years": years,
         "year": year,
         "ryear": ryear,
-        "charts": Q.stats_charts(con, lang, year),
+        "charts": charts,
+        "year_map_cities": map_points(Q.cities(con), charts["city_counts"]),
+        "prob": prob,
+        "prob_n": max(1, min(len(prob["shows"]) or 1, int(db.get_setting(con, "setlist_prob_window") or 10))),
         "progress": Q.setlist_progress(con),
         "show_donation": db.get_setting(con, "show_donation_call") == "1",
         "donation_amount": db.get_setting(con, "donation_amount"),
@@ -273,17 +294,20 @@ def lyrics_page(request, con, row):
         "played": played,
         "last_played": last,
     }, page={"title": row["title"], "title_en": row["title_en"], "summary": "", "summary_en": "",
-             "thumbnail_id": cover, "slug": ""})
+             "thumbnail_id": cover, "slug": "", "status": row["status"]})
 
 
 def articles_page(request, con, page):
-    rows = con.execute("SELECT * FROM pages WHERE kind = 'article' AND published = 1 "
-                       "ORDER BY published_at DESC, id DESC").fetchall()
-    return render(request, con, "articles.html", {"articles": rows}, page=page)
+    return render(request, con, "articles.html", {"articles": Q.articles_under(con, page["slug"])}, page=page)
 
 
 def content_page(request, con, page):
-    return render(request, con, "page.html", {}, page=page)
+    parent = con.execute("SELECT * FROM pages WHERE id = ?", (page["parent_id"],)).fetchone()
+    return render(request, con, "page.html", {
+        "parent": parent if parent and parent["kind"] != "home" else None,     # 頁面上方的「← 上一層」
+        "children": Q.child_pages(con, page["id"]),
+        "child_articles": Q.articles_under(con, page["slug"]) if page["kind"] == "page" else [],
+    }, page=page)
 
 
 HANDLERS = {"home": home, "performances": performances_page, "lyrics": lyrics_index,
@@ -296,8 +320,8 @@ def resolve(path: str, request: Request, con=Depends(get_con)):
         url = request.url.path + "/" + ("?" + request.url.query if request.url.query else "")
         return RedirectResponse(i18n.link(lang_of(request), url), status_code=301)
     slug = path.strip("/")
-    # 未發佈的頁面只有登入後台的人看得到（預覽用）
-    preview = bool(auth.current_user(con, request.cookies.get(auth.COOKIE)))
+    # 未發佈的頁面：只有從後台按「預覽」（?preview=1）才看得到
+    preview = previewing(request, con)
     page = con.execute("SELECT * FROM pages WHERE slug = ?", (slug,)).fetchone()
     if page and (page["published"] or preview):
         return HANDLERS[page["kind"]](request, con, page)
@@ -305,7 +329,7 @@ def resolve(path: str, request: Request, con=Depends(get_con)):
     for tab, url in Q.tab_urls(con).items():
         if tab != "list" and url == "/" + slug + "/":
             perf = Q.pages_by_kind(con).get("performances")
-            if perf and (perf["published"] or preview):
+            if perf and ((perf["published"] and Q.tab_statuses(con)[tab] == "live") or preview):
                 return performances_page(request, con, perf, tab)
     prefix = Q.lyrics_prefix(con).strip("/")
     if slug.startswith(prefix + "/") and "/" not in slug[len(prefix) + 1:]:

@@ -6,7 +6,7 @@
 <p class="crumb"><a href="/admin/pages/">← 頁面與文章</a></p>
 <div class="admin-head">
   <h1>{{ row.title if row else '新增' ~ kind_label }} <span class="chip">{{ kind_label }}</span></h1>
-  {% if row %}<a class="btn small" href="{{ page_url(row) }}" target="_blank" rel="noopener">看前台 ↗</a>{% endif %}
+  {% if row %}<a class="btn small" href="{{ page_url(row) }}{{ '?preview=1' if row.status != 'live' }}" target="_blank" rel="noopener">{{ '看前台' if row.status == 'live' else '預覽' }} ↗</a>{% endif %}
 </div>
 <form class="form" method="post" action="/admin/pages/{{ row.id if row else 'new' }}">
   <input type="hidden" name="kind" value="{{ kind }}">
@@ -26,16 +26,24 @@
     <aside class="card side">
       <h2>網址與發佈</h2>
       {% if kind == 'home' %}
-        <p class="help">首頁的網址固定是 /。</p>
-        <input type="hidden" name="slug" value="">
+        <p class="help">首頁的網址固定是 /，它是所有頁面的最上層。</p>
       {% else %}
         <div class="form-row">
-          <label class="field" for="f-slug">網址 <span class="req">*</span></label>
-          <div class="slug-input"><span>/</span><input type="text" id="f-slug" name="slug" value="{{ row.slug if row else slug_prefix }}" required><span>/</span></div>
-          <p class="help">英文小寫、數字、-；層級用 /。改了之後，舊網址會自動轉到新網址。</p>
+          <label class="field" for="f-parent">上層頁面 <span class="req">*</span></label>
+          <select id="f-parent" name="parent_id" data-parent-select>
+            {% for p, depth in parents %}
+              <option value="{{ p.id }}" data-slug="{{ p.slug }}" {{ 'selected' if parent and p.id == parent.id }}>{{ '　' * depth }}{{ p.title }}</option>
+            {% endfor %}
+          </select>
+          <p class="help">這一頁放在哪一頁底下。換了上層就是搬家{% if children %}，底下的子頁面會一起搬{% endif %}，舊網址自動轉到新網址。</p>
+        </div>
+        <div class="form-row">
+          <label class="field" for="f-segment">網址 <span class="req">*</span></label>
+          <div class="slug-input"><span data-slug-prefix>/{{ parent.slug ~ '/' if parent and parent.slug }}</span><input type="text" id="f-segment" name="segment" value="{{ segment }}" required pattern="[a-z0-9][a-z0-9_\-]*"><span>/</span></div>
+          <p class="help">只填這一頁自己那一段：英文小寫、數字、- 和 _。</p>
         </div>
       {% endif %}
-      {% if kind != 'home' %}{{ fx.check('published', row.published if row else true, '發佈') }}{% endif %}
+      {{ fx.status_row(row, always_live=(kind == 'home')) }}
       <p class="help">要放進頁首選單或頁尾，到「<a href="/admin/navigation">頁首與頁尾</a>」設定。</p>
       {% if kind == 'article' %}{{ fx.text('published_at', row.published_at if row else '', '發佈日期', type='date') }}{% endif %}
       <hr>
@@ -52,7 +60,19 @@
       </div>
     </aside>
   </div>
-  {{ fx.actions(row, can_delete=not fixed) }}
+  {% if tabs %}
+    <div class="card">
+      <h2>底下的分頁</h2>
+      <p class="help">這一頁本身就是「演出列表」分頁。另外三個分頁各有自己的說明文字、參數和狀態，點進去改；網址跟著演出頁走。
+        演出頁取消發佈的話，底下的分頁也會一起看不到。</p>
+      <ul class="tab-links">
+        {% for key, name, url, edit_url in tabs if key != 'list' %}
+          <li><a href="{{ edit_url }}">{{ name }}</a> <span class="muted small">{{ url }}</span> {{ fx.status_chip(tab_status[key]) }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {{ fx.publish_actions(row, can_delete=not fixed, always_live=(kind == 'home')) }}
 </form>
 {% endblock %}
 {% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}

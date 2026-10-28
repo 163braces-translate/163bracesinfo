@@ -58,6 +58,10 @@
   </div>
 </header>
 <main class="wrap">
+{#- 從後台按「預覽」（?preview=1）才看得到沒上線的頁面，提醒一下別人看不到 #}
+{% if page and page.status and page.status != 'live' %}
+  <div class="preview-bar" role="status">預覽：這一頁目前是「{{ {'unpublished': '取消發佈', 'draft': '草稿'}[page.status] }}」，訪客看不到。你看得到是因為從後台按了「預覽」。</div>
+{% endif %}
 {% block content %}{% endblock %}
 </main>
 <footer class="site-footer">

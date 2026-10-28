@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-{% if page.kind == 'article' and kinds.articles %}
-  <p class="small" style="margin: 0 0 8px"><a href="{{ link(page_url(kinds.articles)) }}">← {{ tr(kinds.articles, 'title') }}</a></p>
+{% if parent %}
+  <p class="small" style="margin: 0 0 8px"><a href="{{ link(page_url(parent)) }}">← {{ tr(parent, 'title') }}</a></p>
 {% endif %}
 <article class="card" style="max-width: 820px; margin: 0 auto; padding: 28px">
   <header class="page-head" style="margin-top: 0">
@@ -11,4 +11,16 @@
   </header>
   <div class="prose">{{ tr(page, 'body_html') | safe }}</div>
 </article>
+
+{# 掛在這一頁底下的頁面與文章（跟舊站的索引頁一樣，在後台「頁面與文章」的樹狀結構裡設定） #}
+{% if children or child_articles %}
+  <section style="max-width: 820px; margin: 22px auto 0">
+    {% if children %}
+      <div class="article-grid">{% for a in children %}{% include "_article_card.html" %}{% endfor %}</div>
+    {% endif %}
+    {% if child_articles %}
+      <div class="article-grid" style="margin-top: 16px">{% for a in child_articles %}{% include "_article_card.html" %}{% endfor %}</div>
+    {% endif %}
+  </section>
+{% endif %}
 {% endblock %}

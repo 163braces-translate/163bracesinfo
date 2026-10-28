@@ -491,6 +491,19 @@ def convert(old_path, new_path, force=False):
 
     convert_lyrics(conv, old, new, report, lyrics_pages, pages, stamp)
 
+    # 狀態：線上的是 live；沒上線的看舊站有沒有發佈過，有就是「取消發佈」，沒有就是「草稿」
+    new.execute("UPDATE pages SET status = CASE published WHEN 1 THEN 'live' ELSE 'draft' END")
+    new.execute("UPDATE lyrics SET status = CASE published WHEN 1 THEN 'live' ELSE 'draft' END")
+    for p in pages:
+        if p["lang"] == "zh-hant" and not p["live"] and p["first_published_at"]:
+            new.execute("UPDATE pages SET status = 'unpublished' WHERE slug = ? AND published = 0", (p["rel"],))
+            if p["rel"].startswith("lyrics/"):
+                new.execute("UPDATE lyrics SET status = 'unpublished' WHERE slug = ? AND published = 0", (p["slug"],))
+
+    # 頁面樹：依網址推出上下層（articles/fanpages 掛在 articles 底下），跟舊站的結構一樣
+    from app import pagetree
+    pagetree.rebuild_parents(new)
+
     # 頁首選單與頁尾：依轉過來的頁面產生預設的一份，之後在後台「頁首與頁尾」改
     from app import navigation
     db.set_setting(new, navigation.HEADER_KEY, json.dumps(navigation.default_header(new), ensure_ascii=False))

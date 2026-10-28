@@ -93,6 +93,8 @@ CREATE INDEX IF NOT EXISTS songs_lyrics ON songs(lyrics_id);
 --       分隔：之後的區塊放進另一個有標題的方框（舊版本、創作理念這類非主要歌詞）
 -- display_mode：bilingual 中英對照、duet 對唱（左右兩個聲部）、single 單欄。
 -- videos_json：[{"title": "…", "title_en": "…", "url": "https://youtu.be/…"}, …]
+-- status：live 線上、unpublished 取消發佈（上線過、現在下架）、draft 草稿（還沒上線過）。
+--   published 跟著 status 走（只有 live 是 1），前台一律看 published。
 -- review_json：需要人確認的地方（例如轉檔時中英文版歌詞不一致），後台會提醒；確認後清空。
 --   [{"message": "…"}, …]
 -- 哪些歌曲用這份歌詞記在 songs.lyrics_id。
@@ -114,6 +116,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
     videos_json     TEXT NOT NULL DEFAULT '[]',
     review_json     TEXT NOT NULL DEFAULT '[]',
     published       INTEGER NOT NULL DEFAULT 1,
+    status          TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'unpublished', 'draft')),
     sort_order      INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL
 );
@@ -123,10 +126,14 @@ CREATE TABLE IF NOT EXISTS lyrics (
 --   articles 文章列表、article 文章、page 一般內容頁
 -- 固定頁面（home、performances、lyrics、articles）各只有一頁，可以改網址但不能刪。
 -- slug 是完整路徑、不含前後斜線，例：articles/fanpages；首頁是空字串。
+-- status 與 published：同歌詞（live 線上、unpublished 取消發佈、draft 草稿；published 只有 live 是 1）。
+-- parent_id 是上層頁面（跟舊站 Wagtail 一樣是一棵樹，首頁是根）。網址＝上層網址＋自己那一段，
+-- 由 app/pagetree.py 維護：搬移或改網址時，底下的頁面跟著改，舊網址留下轉址。
 -- 歌詞頁的網址＝歌詞索引頁的 slug＋歌詞的 slug；文章同理。
 CREATE TABLE IF NOT EXISTS pages (
     id              INTEGER PRIMARY KEY,
     kind            TEXT NOT NULL CHECK (kind IN ('home', 'performances', 'lyrics', 'articles', 'article', 'page')),
+    parent_id       INTEGER REFERENCES pages(id),
     slug            TEXT NOT NULL UNIQUE,
     title           TEXT NOT NULL,
     title_en        TEXT NOT NULL DEFAULT '',
@@ -136,6 +143,7 @@ CREATE TABLE IF NOT EXISTS pages (
     body_html       TEXT NOT NULL DEFAULT '',
     body_html_en    TEXT NOT NULL DEFAULT '',
     published       INTEGER NOT NULL DEFAULT 1,
+    status          TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'unpublished', 'draft')),
     published_at    TEXT,                       -- 文章的發佈日期
     sort_order      INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL

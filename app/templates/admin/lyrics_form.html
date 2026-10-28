@@ -6,7 +6,7 @@
 <p class="crumb"><a href="/admin/lyrics/">← 歌詞</a></p>
 <div class="admin-head">
   <h1>{{ row.title if row else '新增歌詞' }}</h1>
-  {% if row %}<a class="btn small" href="{{ prefix }}{{ row.slug }}/" target="_blank" rel="noopener">看前台 ↗</a>{% endif %}
+  {% if row %}<a class="btn small" href="{{ prefix }}{{ row.slug }}/{{ '?preview=1' if row.status != 'live' }}" target="_blank" rel="noopener">{{ '看前台' if row.status == 'live' else '預覽' }} ↗</a>{% endif %}
 </div>
 
 <form class="form" method="post" action="/admin/lyrics/{{ row.id if row else 'new' }}" data-lyrics-form>
@@ -31,7 +31,7 @@
       {{ fx.text('composer', row.composer if row else '', '作曲') }}
       {{ fx.text('sort_order', row.sort_order if row else 0, '排序', type='number', help='「其他歌詞」方框照這個排序；專輯裡的順序看歌曲的排序') }}
     </div>
-    {{ fx.check('published', row.published if row else true, '發佈（取消勾選就只有後台看得到）') }}
+    {{ fx.status_row(row) }}
     <div class="form-row">
       <span class="field">使用這份歌詞的歌曲</span>
       <div class="song-checks">
@@ -84,7 +84,7 @@
     <script type="application/json" data-videos-initial>{{ videos | tojson }}</script>
   </div>
 
-  {{ fx.actions(row) }}
+  {{ fx.publish_actions(row) }}
 </form>
 {% endblock %}
 {% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}

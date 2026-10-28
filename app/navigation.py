@@ -80,7 +80,7 @@ def load_footer(con):
     return json.loads(raw["value"]) if raw else default_footer(con)
 
 
-def _resolve_link(item, pages, lang):
+def _resolve_link(item, pages, lang, hidden=()):
     label = i18n.tr(lang, item, "label")
     if item.get("page_id"):
         page = pages.get(item["page_id"])
@@ -90,6 +90,8 @@ def _resolve_link(item, pages, lang):
         label = label or i18n.tr(lang, page, "title")
     else:
         href = (item.get("url") or "").strip()
+        if href.split("?")[0] in hidden:         # 沒上線的演出頁分頁，跟沒發佈的頁面一樣不出現
+            return None
     internal = href.startswith("/")
     return {"label": label,
             "href": i18n.link(lang, href) if internal else href,
@@ -99,11 +101,11 @@ def _resolve_link(item, pages, lang):
 
 def header(con, lang, current_path):
     """頁首選單（已換成目前語言的文字與網址），並標出目前所在的項目。"""
-    pages = _pages(con)
+    pages, hidden = _pages(con), Q.hidden_tab_urls(con)
     items = []
     for raw in load_header(con):
-        item = _resolve_link(raw, pages, lang)
-        children = [c for c in (_resolve_link(ch, pages, lang) for ch in raw.get("children") or []) if c]
+        item = _resolve_link(raw, pages, lang, hidden)
+        children = [c for c in (_resolve_link(ch, pages, lang, hidden) for ch in raw.get("children") or []) if c]
         if item is None or not (item["href"] or children):
             continue
         item["children"] = children
@@ -118,13 +120,30 @@ def header(con, lang, current_path):
 
 
 def footer(con, lang):
-    pages = _pages(con)
+    pages, hidden = _pages(con), Q.hidden_tab_urls(con)
     data = load_footer(con)
     columns = []
     for col in data.get("columns") or []:
         columns.append({"title": i18n.tr(lang, col, "title"), "text": i18n.tr(lang, col, "text"),
-                        "links": [l for l in (_resolve_link(x, pages, lang) for x in col.get("links") or []) if l]})
+                        "links": [l for l in (_resolve_link(x, pages, lang, hidden) for x in col.get("links") or []) if l]})
     return {"columns": columns, "note": i18n.tr(lang, data, "note")}
+
+
+def menu_refs(con):
+    """頁首選單與頁尾連到哪些頁面（page_id）與站內網址；後台「頁面與文章」用來標「在選單裡」。"""
+    ids, urls = set(), set()
+    links = []
+    for item in load_header(con):
+        links.append(item)
+        links += item.get("children") or []
+    for col in load_footer(con).get("columns") or []:
+        links += col.get("links") or []
+    for link in links:
+        if link.get("page_id"):
+            ids.add(link["page_id"])
+        elif (link.get("url") or "").startswith("/"):
+            urls.add(link["url"].split("?")[0])
+    return ids, urls
 
 
 def rewrite_urls(con, old, new):

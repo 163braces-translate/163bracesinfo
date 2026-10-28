@@ -1,6 +1,11 @@
 {# 演出頁的三個統計分頁：演出統計、歌單統計、年度回顧。由 performances.html 引入。 #}
+{% import "_map.html" as mp with context %}
+{# 沒上線的分頁只有從後台按「預覽」才看得到：提示放在分頁裡面，從其他分頁切過來時也看得到 #}
+{% macro tab_preview(key) %}{% if tab_status[key] != 'live' %}<div class="preview-bar" role="status">預覽：這個分頁目前是「{{ {'unpublished': '取消發佈', 'draft': '草稿'}[tab_status[key]] }}」。訪客看不到它，演出頁上也不會出現這個分頁標籤；你看得到是因為從後台按了「預覽」。</div>{% endif %}{% endmacro %}
 {# ------------------------------------------------------------ 演出統計 #}
+{% if tab_shown.charts %}
 <section class="tab-panel" id="panel-charts" role="tabpanel" aria-labelledby="tab-charts" {{ 'hidden' if tab != 'charts' }}>
+  {{ tab_preview('charts') }}
   {% if charts_intro %}<div class="intro muted prose" style="margin-bottom: 16px">{{ charts_intro | safe }}</div>{% endif %}
   <div class="chart-grid">
     <div class="card wide">
@@ -14,6 +19,7 @@
   </div>
 
   <form class="toolbar" method="get" action="{{ link(tab_urls.charts) }}" style="margin-top: 24px">
+    {% if previewing %}<input type="hidden" name="preview" value="1">{% endif %}
     <label for="year" class="muted">{{ t('year') }}</label>
     <select id="year" name="year" onchange="this.form.submit()">
       <option value="all" {{ 'selected' if year == 'all' }}>{{ t('all_time') }}</option>
@@ -39,11 +45,24 @@
       <div class="card-head"><h2>{{ t('chart_weekday') }}</h2></div>
       <div class="chart-box"><canvas data-chart="weekday" data-type="bar" data-stacked="1"></canvas></div>
     </div>
+    <div class="card wide">
+      <div class="card-head"><h2>{{ t('chart_map') }}</h2><span class="small muted">{{ t('all_time') if year == 'all' else year }}</span></div>
+      <div class="year-map">
+        {{ mp.tw_map(map, year_map_cities, interactive=false) }}
+        {%- set ranked = year_map_cities | selectattr('n') | sort(attribute='n', reverse=true) | list %}
+        <ol class="city-rank">
+          {% for c in ranked %}<li><span>{{ tr(c, 'name') }}</span><b>{{ c.n }}</b></li>{% endfor %}
+        </ol>
+      </div>
+    </div>
   </div>
 </section>
+{% endif %}
 
 {# ------------------------------------------------------------ 歌單統計 #}
+{% if tab_shown.setlist %}
 <section class="tab-panel stack" id="panel-setlist" role="tabpanel" aria-labelledby="tab-setlist" {{ 'hidden' if tab != 'setlist' }}>
+  {{ tab_preview('setlist') }}
   <div class="card">
     <div class="card-head"><h2>{{ t('setlist_progress') }}</h2><b>{{ progress.percent }}%</b></div>
     {% if setlist_intro %}<div class="prose muted">{{ setlist_intro | safe }}</div>{% endif %}
@@ -51,6 +70,26 @@
     <p class="small muted" style="margin: 0">{{ t('setlist_progress_text', total=progress.total, done=progress.done, missing=progress.missing) }}</p>
     {% if show_donation %}<div class="callout">{{ t('donation_call', amount=donation_amount) }}</div>{% endif %}
   </div>
+
+  {% if prob.shows %}
+  <div class="card" id="song-prob">
+    <div class="card-head">
+      <h2>{{ t('prob_title') }}</h2>
+      <div class="prob-controls">
+        <div class="seg" role="group" aria-label="{{ t('prob_title') }}" data-prob-presets>
+          {% for n in [5, 10, 20] if n <= prob.shows | length %}<button type="button" data-n="{{ n }}" aria-pressed="{{ 'true' if n == prob_n else 'false' }}">{{ t('prob_recent', n=n) }}</button>{% endfor %}
+        </div>
+        <label class="small muted">{{ t('prob_custom') }}
+          <input type="number" min="1" max="{{ prob.shows | length }}" value="{{ prob_n }}" data-prob-n inputmode="numeric"></label>
+      </div>
+    </div>
+    <p class="small muted" style="margin-top: 0">{{ t('prob_hint') }}</p>
+    <div class="prob-grid">
+      <section><h3 data-prob-left-title>{{ t('prob_recent', n=prob_n) }}</h3><ol class="prob-list" data-prob-left></ol></section>
+      <section><h3>{{ t('prob_all', n=prob.shows | length) }}</h3><ol class="prob-list" data-prob-right></ol></section>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card">
     <div class="card-head">
@@ -87,9 +126,12 @@
     <p class="small muted" style="margin: 10px 0 0">{{ t('setlist_length_hint', n=min_songs) }}</p>
   </div>
 </section>
+{% endif %}
 
 {# ------------------------------------------------------------ 年度回顧 #}
+{% if tab_shown.replay %}
 <section class="tab-panel stack replay" id="panel-replay" role="tabpanel" aria-labelledby="tab-replay" {{ 'hidden' if tab != 'replay' }}>
+  {{ tab_preview('replay') }}
   <div class="card">
     {% if replay_intro %}<div class="prose">{{ replay_intro | safe }}</div>{% endif %}
     <div class="toolbar" style="margin: 12px 0 0">
@@ -164,11 +206,14 @@
     </div>
   </div>
 </section>
+{% endif %}
 
 <script id="chart-data" type="application/json">{{ {
   "history": charts.history, "cumulative": charts.cumulative, "monthly": charts.monthly,
   "city_pie": charts.city_pie, "weekday_pie": charts.weekday_pie, "weekday": charts.weekday,
   "song_top": song_top, "song_all": song_all} | tojson }}</script>
-<script id="replay-data" type="application/json">{{ {
+{% if tab_shown.setlist %}<script id="prob-data" type="application/json">{{ dict(prob, n=prob_n, text={
+  "recent": t('prob_recent', n='{n}'), "none": t('prob_none')}) | tojson }}</script>{% endif %}
+{% if tab_shown.replay %}<script id="replay-data" type="application/json">{{ {
   "year": ryear | int, "lang": 'en' if lang == 'en' else 'zh-hant', "eventTypes": replay.event_types,
-  "cities": replay.cities, "logoUrl": replay.logo_url} | tojson }}</script>
+  "cities": replay.cities, "logoUrl": replay.logo_url} | tojson }}</script>{% endif %}

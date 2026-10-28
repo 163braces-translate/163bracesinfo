@@ -47,3 +47,47 @@
     {% endif %}
   </div>
 {% endmacro %}
+
+{# 網頁狀態：線上、取消發佈、草稿 #}
+{% macro status_chip(status) -%}
+  <span class="chip status-{{ status or 'draft' }}">{{ {'live': '線上', 'unpublished': '取消發佈', 'draft': '草稿'}[status or 'draft'] }}</span>
+{%- endmacro %}
+
+{# 有狀態的網頁（頁面、歌詞）用的按鈕：狀態由按哪一顆決定，不用勾選框 #}
+{% macro publish_actions(row, can_delete=true, always_live=false) %}
+  {%- set status = row.status if row else none %}
+  <div class="form-actions publish-actions">
+    {% if always_live %}
+      <button class="btn primary" type="submit" name="action" value="save">儲存</button>
+    {% elif status == 'live' %}
+      <button class="btn primary" type="submit" name="action" value="save">儲存（直接更新線上內容）</button>
+      <button class="btn" type="submit" name="action" value="unpublish" data-confirm="取消發佈後，前台就看不到這一頁了（後台還在，隨時可以再發佈）。">取消發佈</button>
+    {% else %}
+      <button class="btn" type="submit" name="action" value="save">{{ '儲存草稿' if not row else '儲存' }}</button>
+      <button class="btn primary" type="submit" name="action" value="publish">發佈</button>
+    {% endif %}
+    {% if row and can_delete %}
+      <button class="btn danger" type="submit" name="action" value="delete" formnovalidate data-confirm="確定要刪除？刪除後無法復原。如果只是暫時不要給人看，用「取消發佈」就好。">刪除</button>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{# 編輯畫面側邊的「狀態」：顯示現在的狀態，旁邊直接有發佈／取消發佈（跟下面的按鈕一樣，會連同修改一起存） #}
+{% macro status_row(row, always_live=false) %}
+  <div class="form-row status-row">
+    <span class="field">狀態</span>
+    {% if always_live %}{{ status_chip('live') }} <span class="help">首頁一直都在線上。</span>
+    {% else %}
+      {%- set status = row.status if row else 'draft' %}
+      <div class="status-now">{{ status_chip(status) }}
+        {% if status == 'live' %}
+          <button class="btn small" type="submit" name="action" value="unpublish" data-confirm="取消發佈後，前台就看不到這一頁了（後台還在，隨時可以再發佈）。">取消發佈</button>
+        {% else %}
+          <button class="btn small primary" type="submit" name="action" value="publish">發佈</button>
+        {% endif %}
+      </div>
+      <p class="help">{{ {'live': '前台看得到。', 'unpublished': '曾經上線，現在下架了；訪客看不到，要看請按上面的「預覽」。', 'draft': '還沒上線過；訪客看不到，要看請按上面的「預覽」。'}[status] if row else '新的頁面先存成草稿，按「發佈」才會上線。' }}
+        按這裡的按鈕會連同目前的修改一起儲存。</p>
+    {% endif %}
+  </div>
+{% endmacro %}

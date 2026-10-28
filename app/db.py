@@ -33,9 +33,11 @@ SETTINGS = {
     "home_hero_pos_y": "50",
     "home_hero_zoom": "100",            # 背景圖放大比例（100–300%）
     "home_upcoming_count": "5",         # 首頁「即將演出」顯示幾場
+    "home_recent_count": "3",           # 沒有即將演出時，改列幾場「最近的演出」；0＝不列
     "home_top_songs_count": "5",        # 首頁「最近常唱」顯示幾首
     "home_top_songs_window": "20",      # 「最近常唱」看最近幾場有歌單的演出
     "setlist_top_songs_count": "10",    # 歌單分頁的累積圖表預設顯示幾首
+    "setlist_prob_window": "10",        # 歌單分頁「演出機率對照表」左邊預設看最近幾場
     "show_donation_call": "0",
     "donation_amount": "10",
     "replay_logo_id": "",
@@ -43,6 +45,9 @@ SETTINGS = {
     "charts_intro_html_en": "",
     "setlist_intro_html": "",
     "replay_intro_html": "",
+    "tab_status_charts": "live",        # 演出頁三個分頁各自的狀態（live／unpublished／draft），在後台分頁的編輯畫面改
+    "tab_status_setlist": "live",
+    "tab_status_replay": "live",
     "home_facts_json": "[]",
     "lyrics_other_position": "",        # 歌詞索引「其他歌詞」排在第幾張專輯後面；空白＝最後
 }
@@ -68,6 +73,28 @@ def connect(path=None, readonly=False):
 def init(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
+    # 舊版資料庫補欄位（CREATE TABLE IF NOT EXISTS 不會幫已經存在的表加欄位）
+    from . import pagetree
+    pagetree.ensure_schema(con)
+    for table in ("pages", "lyrics"):
+        if "status" not in [r["name"] for r in con.execute("PRAGMA table_info(%s)" % table)]:
+            con.execute("ALTER TABLE %s ADD COLUMN status TEXT NOT NULL DEFAULT 'live' "
+                        "CHECK (status IN ('live', 'unpublished', 'draft'))" % table)
+            # 舊資料只知道有沒有發佈：沒發佈的當成草稿
+            con.execute("UPDATE %s SET status = 'draft' WHERE published = 0" % table)
+            con.commit()
+
+
+STATUSES = {"live": "線上", "unpublished": "取消發佈", "draft": "草稿"}
+
+
+def status_after(action, current, is_new):
+    """後台按鈕 → 新狀態。「儲存」不改狀態（新頁面存成草稿）；「發佈」上線；「取消發佈」只對線上的頁面有效。"""
+    if action == "publish":
+        return "live"
+    if action == "unpublish":
+        return "unpublished" if current == "live" else current
+    return "draft" if is_new else current
 
 
 def get_setting(con, key):

@@ -5,34 +5,7 @@
 {% block content %}
 <h1>設定</h1>
 <form class="form" method="post">
-  {% for title, fields in groups %}
-    <div class="card">
-      <h2>{{ title }}</h2>
-      {% for field in fields %}
-        {%- set key, label, kind = field[0], field[1], field[2] %}
-        {%- set help = field[3] if field | length > 3 and field[3] is string else '' %}
-        {% if kind is not string %}
-          <div class="form-row">
-            <label class="field" for="f-{{ key }}">{{ label }}</label>
-            <select id="f-{{ key }}" name="{{ key }}">
-              {% for value, text in choices_of(field) %}<option value="{{ value }}" {{ 'selected' if values[key] == value }}>{{ text }}</option>{% endfor %}
-            </select>
-          </div>
-        {% elif kind == 'rich' %}{{ fx.rich(key, values[key], label, small=true) }}
-        {% elif kind == 'bool' %}{{ fx.check(key, values[key] == '1', label) }}
-        {% elif kind == 'image' %}{{ fx.image_field(key, values[key] | int if values[key] else none, label, help) }}
-        {% elif kind == 'facts' %}
-          <div class="form-row">
-            <span class="field">{{ label }}</span>
-            <p class="help">首頁的數字卡片，例如 YouTube 訂閱數。數字要手動更新；全部刪掉就不顯示。</p>
-            <div class="facts-editor" data-facts></div>
-            <button type="button" class="btn small" data-add-fact>＋ 卡片</button>
-            <input type="hidden" name="{{ key }}" value="{{ values[key] }}">
-          </div>
-        {% else %}{{ fx.text(key, values[key], label, help, type='number' if kind == 'int' else 'text') }}{% endif %}
-      {% endfor %}
-    </div>
-  {% endfor %}
+  {% include "admin/_setting_groups.html" %}
   <div class="form-actions sticky"><button class="btn primary" type="submit">儲存設定</button></div>
 </form>
 {% endblock %}

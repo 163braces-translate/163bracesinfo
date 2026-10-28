@@ -104,6 +104,65 @@
   var current = document.querySelector("[role=tab][aria-selected=true]");
   show(current ? current.dataset.tab : "list", false);
 
+  // ---- 演出機率對照表：左邊最近 N 場、右邊全部場次（標出近期名次比總排名高或低幾名）
+  var probBox = document.getElementById("song-prob");
+  var probData = document.getElementById("prob-data");
+  if (probBox && probData) {
+    var P = JSON.parse(probData.textContent);
+    var leftList = probBox.querySelector("[data-prob-left]");
+    var rightList = probBox.querySelector("[data-prob-right]");
+    var leftTitle = probBox.querySelector("[data-prob-left-title]");
+    var nInput = probBox.querySelector("[data-prob-n]");
+    var presets = probBox.querySelectorAll("[data-prob-presets] button");
+    rightList.classList.add("vs");
+
+    // 每首歌出現在幾場；場次一樣的名次並列（1、1、3）
+    function ranking(shows) {
+      var counts = P.songs.map(function () { return 0; });
+      shows.forEach(function (s) { s.forEach(function (i) { counts[i]++; }); });
+      var rows = counts.map(function (n, i) { return { i: i, n: n, pct: shows.length ? Math.round(n / shows.length * 100) : 0 }; });
+      rows.sort(function (a, b) { return b.n - a.n || a.i - b.i; });
+      rows.forEach(function (r, k) { r.rank = k && r.n === rows[k - 1].n ? rows[k - 1].rank : k + 1; });
+      return rows;
+    }
+    var overall = ranking(P.shows);
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+    }
+    function item(r, diff) {
+      var song = P.songs[r.i];
+      var title = song.url ? '<a class="t" href="' + esc(song.url) + '">' + esc(song.title) + "</a>" : '<span class="t">' + esc(song.title) + "</span>";
+      return '<li><span class="rk">#' + r.rank + '</span><span class="nm">' + title + "</span>" +
+        '<span class="pct"><i style="width:' + r.pct + '%"></i><b>' + r.pct + "%</b></span>" + (diff === undefined ? "" : diff) + "</li>";
+    }
+    function renderProb(n) {
+      n = Math.max(1, Math.min(P.shows.length, n | 0));
+      var recent = ranking(P.shows.slice(0, n));
+      var byIndex = {};
+      recent.forEach(function (r) { byIndex[r.i] = r; });
+      var sung = recent.filter(function (r) { return r.n; });
+      leftList.innerHTML = sung.length ? sung.map(function (r) { return item(r); }).join("")
+        : '<li class="empty-row">' + esc(P.text.none) + "</li>";
+      rightList.innerHTML = overall.map(function (r) {
+        var rr = byIndex[r.i], diff;
+        if (!rr.n) diff = '<span class="diff"></span>';           // 近期沒唱：不標
+        else if (r.rank > rr.rank) diff = '<span class="diff up">▲ ' + (r.rank - rr.rank) + "</span>";
+        else if (r.rank < rr.rank) diff = '<span class="diff down">▼ ' + (rr.rank - r.rank) + "</span>";
+        else diff = '<span class="diff eq">–</span>';
+        return item(r, diff);
+      }).join("");
+      leftTitle.textContent = P.text.recent.replace("{n}", n);
+      presets.forEach(function (b) { b.setAttribute("aria-pressed", +b.dataset.n === n ? "true" : "false"); });
+      if (+nInput.value !== n && document.activeElement !== nInput) nInput.value = n;
+    }
+    presets.forEach(function (b) {
+      b.addEventListener("click", function () { nInput.value = b.dataset.n; renderProb(+b.dataset.n); });
+    });
+    nInput.addEventListener("input", function () { if (+nInput.value >= 1) renderProb(+nInput.value); });
+    nInput.addEventListener("change", function () { renderProb(+nInput.value || P.n); nInput.value = Math.max(1, Math.min(P.shows.length, +nInput.value || P.n)); });
+    renderProb(P.n);
+  }
+
   // ---- 歌曲累積圖：前 N 名／全部
   var range = document.getElementById("song-range");
   if (range) {

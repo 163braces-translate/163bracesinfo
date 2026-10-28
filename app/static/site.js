@@ -100,7 +100,7 @@
       box.checked = !box.checked;
       if (form.requestSubmit) form.requestSubmit(); else form.submit();
     };
-    $$(".tw-map [data-city], .map-other [data-city]").forEach(function (el) {
+    $$(".tw-map [data-city]").forEach(function (el) {
       el.addEventListener("click", function () { toggleCity(el.dataset.city); });
       el.addEventListener("keydown", function (e) {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCity(el.dataset.city); }

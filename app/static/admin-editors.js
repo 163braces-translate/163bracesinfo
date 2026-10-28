@@ -61,6 +61,12 @@
     });
   });
 
+  // 網址帶 #錨點（例如「頁面與文章」按分頁的「編輯」跳到設定頁的某一區）：編輯器載入後版面會變高，
+  // 原本捲到的位置被往下推，所以在這裡再捲一次
+  if (location.hash && document.getElementById(location.hash.slice(1))) {
+    requestAnimationFrame(function () { document.getElementById(location.hash.slice(1)).scrollIntoView(); });
+  }
+
   // ---- 歌詞段落編輯器
   var host = $("[data-blocks]");
   if (!host) return;

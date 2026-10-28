@@ -1,11 +1,20 @@
-{# 台灣地圖。interactive：演出頁可以點縣市篩選（selected 是已選的城市 id）；false：個人足跡用，只看不點 #}
+{# 台灣地圖。interactive：演出頁可以點縣市篩選（selected 是已選的城市 id）；false：統計、個人足跡用，只看不點 #}
 {% macro tw_map(map, map_cities, selected=(), interactive=true) %}
 <svg class="tw-map {{ '' if interactive else 'static' }}" viewBox="0 0 {{ map.width }} {{ map.height }}" role="{{ 'group' if interactive else 'img' }}" aria-label="{{ t('map') }}">
   <path class="land" d="{{ map.mainland }}"/>
   {% for d in map.islands %}<path class="land" d="{{ d }}"/>{% endfor %}
   {% for c in map_cities if c.map_key in map.nodes %}
-    {%- set node = map.nodes[c.map_key] %}
-    {%- set label = tr(c, 'name') if lang == 'en' else node.name %}
+    {{ city_node(c, map.nodes[c.map_key], tr(c, 'name') if lang == 'en' else map.nodes[c.map_key].name, selected, interactive) }}
+  {% endfor %}
+  {#- 不在地圖上的城市（例如「海外」）：左下角各畫一個框，跟連江、金門一樣。沒有演出的不畫 #}
+  {% for c in map_cities | rejectattr('map_key') if c.n or c.id in selected %}
+    {%- set y = map.height - 62 - (loop.index0 * 60) %}
+    {{ city_node(c, {"x": 40, "y": y + 28, "inset": (12, y, 56, 48)}, tr(c, 'name'), selected, interactive) }}
+  {% endfor %}
+</svg>
+{% endmacro %}
+
+{% macro city_node(c, node, label, selected, interactive) %}
     {% if node.inset %}
       <rect class="inset" x="{{ node.inset[0] }}" y="{{ node.inset[1] }}" width="{{ node.inset[2] }}" height="{{ node.inset[3] }}" rx="8"/>
     {% endif %}
@@ -34,6 +43,4 @@
         <text x="{{ node.x + c.r + 2 }}" y="{{ node.y + 3 }}">{{ label }}</text>
       {% endif %}
     </g>
-  {% endfor %}
-</svg>
 {% endmacro %}

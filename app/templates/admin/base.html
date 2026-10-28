@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>{% block title %}後台{% endblock %} · 163braces</title>
+{#- 瀏覽器分頁標題：「這一頁 · 網站名稱 後台」，例如「頁面與文章 · 163braces 資訊站 後台」 #}
+<title>{% block title %}總覽{% endblock %} · {{ site_name() }} 後台</title>
 {%- set logo_id = site_logo_id() %}
 {# 網址帶著 Logo 的編號：換了 Logo 網址就變，瀏覽器才不會一直用快取裡的舊圖示 #}
 {% if logo_id %}<link rel="icon" href="/site-icon/32.png?v={{ logo_id }}" type="image/png">

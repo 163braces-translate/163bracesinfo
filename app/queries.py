@@ -72,14 +72,44 @@ def tab_urls(con):
     return urls
 
 
+def tab_statuses(con):
+    """演出頁各分頁的狀態。「演出列表」就是演出頁本身；另外三個沒有自己的頁面，狀態存在設定裡。"""
+    perf = con.execute("SELECT status FROM pages WHERE kind = 'performances'").fetchone()
+    out = {"list": perf["status"] if perf else "live"}
+    for tab in TAB_TITLES_KEYS:
+        out[tab] = db.get_setting(con, "tab_status_" + tab) or "live"
+    return out
+
+
+def hidden_tab_urls(con):
+    """訪客看不到的分頁網址：分頁本身沒上線，或演出頁沒上線（分頁都在演出頁底下）。選單、sitemap 用。"""
+    status, urls = tab_statuses(con), tab_urls(con)
+    return {urls[t] for t in TAB_TITLES_KEYS if status[t] != "live" or status["list"] != "live"}
+
+
+TAB_TITLES_KEYS = ("charts", "setlist", "replay")      # 有自己狀態的分頁（演出列表跟著演出頁）
+
+
 def lyrics_prefix(con):
     row = con.execute("SELECT slug FROM pages WHERE kind = 'lyrics'").fetchone()
     return "/%s/" % row["slug"] if row else "/lyrics/"
 
 
+def articles_under(con, slug, limit=-1):
+    """某一頁（通常是「文章」列表頁）底下、所有層的已發佈文章，新到舊。跟舊站一樣，文章列表只列自己底下的文章。"""
+    return con.execute("SELECT * FROM pages WHERE kind = 'article' AND published = 1 AND slug LIKE ? "
+                       "ORDER BY published_at DESC, id DESC LIMIT ?", (slug + "/%", limit)).fetchall()
+
+
 def latest_articles(con, n=3):
-    return con.execute("SELECT * FROM pages WHERE kind = 'article' AND published = 1 "
-                       "ORDER BY published_at DESC, id DESC LIMIT ?", (n,)).fetchall()
+    row = con.execute("SELECT slug FROM pages WHERE kind = 'articles'").fetchone()
+    return articles_under(con, row["slug"], n) if row else []
+
+
+def child_pages(con, page_id):
+    """直接掛在這一頁底下、已發佈的頁面（不含文章：文章由文章列表頁負責列）。"""
+    return con.execute("SELECT * FROM pages WHERE parent_id = ? AND published = 1 AND kind != 'article' "
+                       "ORDER BY sort_order, id", (page_id,)).fetchall()
 
 
 # ==================================================================== 演出
@@ -369,8 +399,11 @@ def stats_charts(con, lang, year):
                                            "backgroundColor": ds["borderColor"], "borderWidth": 2,
                                            "cubicInterpolationMode": "monotone", "pointRadius": 0})
     total = con.execute("SELECT COUNT(*) FROM performances p" + where, args).fetchone()[0]
+    # 最下面的地圖：這一年（或全部）各城市的場次
+    city_counts = {r["city_id"]: r["n"] for r in con.execute(
+        "SELECT p.city_id, COUNT(*) AS n FROM performances p" + where + " GROUP BY p.city_id", args)}
     return {"monthly": monthly, "weekday": weekday, "weekday_pie": weekday_pie, "city_pie": city_pie,
-            "history": history, "cumulative": cumulative, "total": total}
+            "history": history, "cumulative": cumulative, "total": total, "city_counts": city_counts}
 
 
 def available_years(con):
@@ -414,6 +447,28 @@ def song_cumulative(con, lang, top_n):
                              "cubicInterpolationMode": "monotone", "pointRadius": 0})
         return {"labels": months, "datasets": datasets}
     return build(ranked), build(ranked[:top_n])
+
+
+def song_probability(con, lang):
+    """歌單統計的「演出機率對照表」：曲庫裡的歌（不含自訂曲名）在有歌單的已發生演出中出現在幾場。
+    回傳曲庫的歌與每一場（新到舊）唱了哪幾首（歌的索引，同一場唱兩次只算一次）；近 N 場在瀏覽器端算。"""
+    songs = con.execute(SONG_SELECT + " ORDER BY a.sort_order, g.sort_order, g.id").fetchall()
+    index = {s["id"]: i for i, s in enumerate(songs)}
+    prefix = lyrics_prefix(con)
+    perf_ids = [r["id"] for r in con.execute(
+        "SELECT p.id FROM performances p WHERE p.event_date <= ? "
+        "AND EXISTS (SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id) "
+        "ORDER BY p.event_date DESC, p.id DESC", (today(),))]
+    by_perf = defaultdict(set)
+    for r in con.execute("SELECT performance_id, song_id FROM setlist_items WHERE song_id IS NOT NULL"):
+        if r["song_id"] in index:
+            by_perf[r["performance_id"]].add(index[r["song_id"]])
+    return {
+        "songs": [{"title": tr(lang, s, "title"),
+                   "url": prefix + s["lyrics_slug"] + "/" if s["lyrics_slug"] and s["lyrics_published"] else ""}
+                  for s in songs],
+        "shows": [sorted(by_perf[pid]) for pid in perf_ids],
+    }
 
 
 def setlist_length_stats(con):

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, navigation, queries as Q, taiwan
+from . import auth, db, navigation, pagetree, queries as Q, taiwan
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 router = APIRouter(prefix="/admin")
@@ -39,7 +39,17 @@ def site_logo_id():
     return int(value) if str(value).isdigit() else None
 
 
+def site_name():
+    """後台分頁標題的後綴用網站名稱（「設定」→ 網站名稱）。"""
+    con = db.connect()
+    try:
+        return db.get_setting(con, "site_name") or db.SETTINGS["site_name"]
+    finally:
+        con.close()
+
+
 templates.env.globals["site_logo_id"] = site_logo_id
+templates.env.globals["site_name"] = site_name
 
 PER_PAGE = 50
 LINE_BREAK = "⏎"      # 歌詞編輯器裡代表「同一格內換行」的符號
@@ -516,13 +526,15 @@ async def lyrics_save(item_id: str, request: Request, con=Depends(user_required)
         "intro_html": rich_value(form, "intro_html", old_row["intro_html"] if old_row else ""),
         "intro_html_en": rich_value(form, "intro_html_en", old_row["intro_html_en"] if old_row else ""),
         "sections_json": json.dumps(blocks, ensure_ascii=False), "videos_json": json.dumps(videos, ensure_ascii=False),
-        "published": 1 if form.get("published") else 0, "sort_order": as_int(form.get("sort_order"), 0),
+        "sort_order": as_int(form.get("sort_order"), 0),
         "updated_at": db.now(),
     }
     if not data["title"]:
         return done(back, "請填曲名")
     if form.get("review_done"):
         data["review_json"] = "[]"
+    status = db.status_after(form.get("action"), old_row["status"] if old_row else None, not old_row)
+    data["status"], data["published"] = status, 1 if status == "live" else 0
     cols = list(data)
     try:
         if item_id == "new":
@@ -545,7 +557,8 @@ async def lyrics_save(item_id: str, request: Request, con=Depends(user_required)
     for sid in chosen:
         con.execute("UPDATE songs SET lyrics_id = ? WHERE id = ?", (item_id, sid))
     con.commit()
-    return done("/admin/lyrics/%d" % item_id)
+    return done("/admin/lyrics/%d" % item_id, {"publish": "已發佈，前台看得到了", "unpublish": "已取消發佈，前台看不到了"}
+                .get(form.get("action"), "已儲存" + ("（草稿，前台看不到）" if status == "draft" else "")))
 
 
 def add_redirects(con, old, new):
@@ -616,11 +629,34 @@ KIND_LABELS = {"home": "首頁", "performances": "演出（列表、統計、歌
 FIXED_KINDS = ("home", "performances", "lyrics", "articles")
 
 
+def performance_tabs(con):
+    """演出頁的四個分頁：(分頁, 名稱, 網址, 去哪裡編輯)。演出列表就是演出頁；另外三個不是 pages 表裡的頁面，
+    有自己的編輯畫面（說明文字、參數、狀態），網址跟著演出頁走。"""
+    perf = con.execute("SELECT id FROM pages WHERE kind = 'performances'").fetchone()
+    urls = Q.tab_urls(con)
+    return [("list", "演出列表", urls["list"], "/admin/pages/%d" % perf["id"] if perf else "/admin/pages/")] + \
+        [(key, name, urls[key], "/admin/tabs/" + key) for key, name in TAB_NAMES.items()]
+
+
+TAB_NAMES = {"charts": "演出統計", "setlist": "歌單統計", "replay": "年度回顧"}
+
+
 @router.get("/pages/")
 def pages_list(request: Request, con=Depends(user_required)):
-    rows = con.execute("SELECT * FROM pages ORDER BY kind NOT IN ('home', 'performances', 'lyrics', "
-                       "'articles'), kind = 'article', sort_order, published_at DESC, id").fetchall()
-    return page(request, "pages_list.html", {"nav": "pages", "rows": rows, "kinds": KIND_LABELS})
+    ids, urls = navigation.menu_refs(con)
+    counts = {k: n for k, n in con.execute("SELECT status, COUNT(*) FROM pages GROUP BY status")}
+    tab_status = Q.tab_statuses(con)
+    for tab in TAB_NAMES:
+        counts[tab_status[tab]] = counts.get(tab_status[tab], 0) + 1
+    return page(request, "pages_list.html", {
+        "nav": "pages", "nodes": pagetree.nested(con), "kinds": KIND_LABELS, "tabs": performance_tabs(con),
+        "counts": counts, "tab_status": tab_status, "fixed_kinds": FIXED_KINDS,
+        "articles_id": (con.execute("SELECT id FROM pages WHERE kind = 'articles'").fetchone() or [None])[0],
+        "lyrics": con.execute("SELECT id, slug, title, status FROM lyrics ORDER BY sort_order, id").fetchall(),
+        # 頁首或頁尾有沒有連到這一頁（用頁面或用自訂網址連都算）
+        "in_menu": lambda p: p["id"] in ids or Q.page_url(p) in urls,
+        "url_in_menu": lambda u: u in urls,
+    })
 
 
 @router.get("/pages/{item_id}")
@@ -628,11 +664,28 @@ def page_form(item_id: str, request: Request, con=Depends(user_required)):
     row = None
     if item_id != "new":
         row = con.execute("SELECT * FROM pages WHERE id = ?", (as_int(item_id),)).fetchone() or _404()
-    kind = row["kind"] if row else ("article" if request.query_params.get("kind") == "article" else "page")
-    articles = con.execute("SELECT slug FROM pages WHERE kind = 'articles'").fetchone()
+    if row:
+        parent = con.execute("SELECT * FROM pages WHERE id = ?", (row["parent_id"],)).fetchone()
+    else:
+        # 新頁面：從樹狀列表按「＋子頁面」會帶 parent；沒帶就掛在首頁底下
+        parent = con.execute("SELECT * FROM pages WHERE id = ?", (as_int(request.query_params.get("parent")),)).fetchone() \
+            or con.execute("SELECT * FROM pages WHERE kind = 'home'").fetchone()
+    if row:
+        kind = row["kind"]
+    elif request.query_params.get("kind") in ("article", "page"):
+        kind = request.query_params["kind"]
+    else:
+        kind = "article" if parent and parent["kind"] in ("articles", "article") else "page"
+    # 可以選的上層：除了自己和自己底下的頁面以外都可以
+    blocked = {row["id"]} | {d["id"] for d in pagetree.descendants(con, row["id"])} if row else set()
+    parents = [(p, depth) for p, depth in pagetree.tree(con) if p["id"] not in blocked]
     return page(request, "page_form.html", {
         "nav": "pages", "row": row, "kind": kind, "kind_label": KIND_LABELS[kind], "fixed": kind in FIXED_KINDS,
-        "slug_prefix": (articles["slug"] + "/") if kind == "article" and articles and not row else "",
+        "parent": parent, "parents": parents, "segment": pagetree.segment_of(row, parent) if row else "",
+        "children": pagetree.has_children(con, row["id"]) if row else False,
+        # 演出頁：列出底下的分頁（各自有編輯畫面）
+        "tabs": performance_tabs(con) if kind == "performances" else [],
+        "tab_status": Q.tab_statuses(con),
     })
 
 
@@ -645,53 +698,105 @@ async def page_save(item_id: str, request: Request, con=Depends(user_required)):
     if form.get("action") == "delete":
         if kind in FIXED_KINDS:
             return done(back, "固定頁面不能刪除，可以改成不發佈")
+        if pagetree.has_children(con, row["id"]):
+            return done(back, "這一頁底下還有子頁面，請先把它們搬到別的地方或刪除")
         con.execute("DELETE FROM pages WHERE id = ?", (row["id"],))
         con.commit()
         return done("/admin/pages/", "已刪除")
-    try:
-        slug = check_slug(form.get("slug"), allow_empty=(kind == "home"))
-        if kind == "home":
-            slug = ""
-    except ValueError as e:
-        return done(back, str(e))
+    # 網址＝上層頁面的網址＋這一段。首頁固定是 /，沒有上層
+    if kind == "home":
+        parent, segment = None, ""
+    else:
+        parent = con.execute("SELECT * FROM pages WHERE id = ?", (as_int(form.get("parent_id")),)).fetchone()
+        if not parent:
+            return done(back, "請選上層頁面")
+        try:
+            segment = check_slug(form.get("segment"), allow_slash=False)
+        except ValueError as e:
+            return done(back, str(e))
+    slug = pagetree.join(parent["slug"] if parent else "", segment)
     reserved = [u for tab, u in Q.tab_urls(con).items() if tab != "list"]
     if "/%s/" % slug in reserved:
         return done(back, "「/%s/」是演出頁分頁的網址，請換一個" % slug)
     data = {
-        "slug": slug, "title": (form.get("title") or "").strip(), "title_en": (form.get("title_en") or "").strip(),
+        "title": (form.get("title") or "").strip(), "title_en": (form.get("title_en") or "").strip(),
         "summary": (form.get("summary") or "").strip(), "summary_en": (form.get("summary_en") or "").strip(),
         "thumbnail_id": as_int(form.get("thumbnail_id")),
         "body_html": rich_value(form, "body_html", row["body_html"] if row else ""),
-        "body_html_en": rich_value(form, "body_html_en", row["body_html_en"] if row else ""), "published": 1 if form.get("published") else 0,
+        "body_html_en": rich_value(form, "body_html_en", row["body_html_en"] if row else ""),
         "published_at": form.get("published_at") or None,
         "sort_order": as_int(form.get("sort_order"), 0), "updated_at": db.now(),
     }
     if not data["title"]:
         return done(back, "請填標題")
-    if kind in ("home",):
-        data["published"] = 1
+    # 狀態由按下的按鈕決定（儲存／發佈／取消發佈）；首頁一定是線上
+    status = "live" if kind == "home" else db.status_after(form.get("action"), row["status"] if row else None, not row)
+    data["status"], data["published"] = status, 1 if status == "live" else 0
     cols = list(data)
     try:
         if not row:
-            item_id = con.execute("INSERT INTO pages (kind, %s) VALUES (?, %s)" % (", ".join(cols), ", ".join("?" * len(cols))),
-                                  [kind] + [data[c] for c in cols]).lastrowid
+            item_id = con.execute("INSERT INTO pages (kind, slug, parent_id, %s) VALUES (?, ?, ?, %s)"
+                                  % (", ".join(cols), ", ".join("?" * len(cols))),
+                                  [kind, slug, parent["id"] if parent else None] + [data[c] for c in cols]).lastrowid
         else:
             item_id = row["id"]
             con.execute("UPDATE pages SET %s WHERE id = ?" % ", ".join("%s = ?" % c for c in cols),
                         [data[c] for c in cols] + [item_id])
-            if row["slug"] != slug:
-                add_redirects(con, Q.page_url(row), Q.page_url(data))
-                navigation.rewrite_urls(con, Q.page_url(row), Q.page_url(data))
-                if kind == "performances":      # 統計、歌單分頁在演出頁底下，一起轉
-                    for sub in Q.TAB_SUBPATHS.values():
-                        add_redirects(con, "/%s/%s/" % (row["slug"], sub), "/%s/%s/" % (slug, sub))
-                if kind == "lyrics":       # 歌詞頁都在歌詞索引底下，一起轉
-                    for l in con.execute("SELECT slug FROM lyrics"):
-                        add_redirects(con, "/%s/%s/" % (row["slug"], l["slug"]), "/%s/%s/" % (slug, l["slug"]))
+            if kind != "home" and (row["parent_id"] != parent["id"] or row["slug"] != slug):
+                # 搬家或改網址：底下的頁面一起改，舊網址都轉到新網址
+                pagetree.move(con, row, parent, segment, add_redirects)
+    except pagetree.MoveError as e:
+        con.rollback()
+        return done(back, str(e))
     except sqlite3.IntegrityError:
+        con.rollback()
         return done(back, "網址「/%s/」已經有別的頁面在用" % slug)
     con.commit()
-    return done("/admin/pages/%d" % item_id)
+    return done("/admin/pages/%d" % item_id, {"publish": "已發佈，前台看得到了", "unpublish": "已取消發佈，前台看不到了"}
+                .get(form.get("action"), "已儲存" + ("（草稿，前台看不到）" if status == "draft" else "")))
+
+
+@router.post("/pages/{page_id}/status")
+async def page_status(page_id: int, request: Request, con=Depends(user_required)):
+    """列表上的「發佈／取消發佈」快速按鈕：只改狀態，不動內容。"""
+    form = await request.form()
+    row = con.execute("SELECT * FROM pages WHERE id = ?", (page_id,)).fetchone()
+    action = form.get("action")
+    if not row or row["kind"] == "home" or action not in ("publish", "unpublish"):
+        return done("/admin/pages/", "首頁一直都在線上" if row and row["kind"] == "home" else "找不到這一頁")
+    status = db.status_after(action, row["status"], False)
+    con.execute("UPDATE pages SET status = ?, published = ?, updated_at = ? WHERE id = ?",
+                (status, 1 if status == "live" else 0, db.now(), page_id))
+    con.commit()
+    return done("/admin/pages/", "「%s」%s" % (row["title"], "已發佈" if status == "live" else "已取消發佈"))
+
+
+@router.get("/tabs/{tab}")
+def tab_form(tab: str, request: Request, con=Depends(user_required)):
+    """演出頁分頁（演出統計、歌單統計、年度回顧）的編輯畫面：狀態、說明文字與參數。"""
+    if tab not in TAB_NAMES:
+        _404()
+    perf = con.execute("SELECT * FROM pages WHERE kind = 'performances'").fetchone()
+    group = PERF_TAB_SETTINGS[tab]
+    return page(request, "tab_form.html", {
+        "nav": "pages", "tab": tab, "name": TAB_NAMES[tab], "url": Q.tab_urls(con)[tab], "perf": perf,
+        "row": {"status": Q.tab_statuses(con)[tab]},
+        "groups": [group], "values": setting_values(con, [group]), "choices_of": choices_of,
+    })
+
+
+@router.post("/tabs/{tab}")
+async def tab_save(tab: str, request: Request, con=Depends(user_required)):
+    if tab not in TAB_NAMES:
+        _404()
+    form = await request.form()
+    action = form.get("action")
+    status = db.status_after(action, Q.tab_statuses(con)[tab], False)
+    db.set_setting(con, "tab_status_" + tab, status)
+    save_setting_groups(con, form, [PERF_TAB_SETTINGS[tab]])
+    con.commit()
+    return done("/admin/tabs/" + tab, {"publish": "已發佈，前台看得到了", "unpublish": "已取消發佈，前台看不到了"}
+                .get(action, "已儲存"))
 
 
 # ==================================================================== 圖片
@@ -784,34 +889,32 @@ SETTING_FIELDS = [
               ("site_logo_id", "Logo（頁首左上角、瀏覽器分頁圖示）", "image",
                "建議用正方形、背景不透明的圖；會自動裁成正方形。空白就用內建的「163」圖示。")]),
     ("首頁", [("home_upcoming_count", "「即將演出」顯示幾場", "int"),
+              ("home_recent_count", "沒有即將演出時，改列幾場「最近的演出」", "int", "填 0 就只顯示「目前沒有已公布的演出」。"),
               ("home_top_songs_count", "「最近常唱」顯示幾首", "int"),
               ("home_top_songs_window", "「最近常唱」統計最近幾場有歌單的演出", "int"),
               ("home_facts_json", "數字卡片", "facts")]),
-    ("演出頁：演出統計分頁", [("charts_intro_html", "說明文字", "rich"), ("charts_intro_html_en", "說明文字（英文）", "rich")]),
-    ("演出頁：歌單統計分頁", [("setlist_intro_html", "說明文字", "rich"),
-                      ("show_donation_call", "顯示捐款號召", "bool"),
-                      ("donation_amount", "每份歌單捐款金額（新台幣）", "int"),
-                      ("setlist_top_songs_count", "累積圖表預設顯示前幾名", "int")]),
-    ("演出頁：年度回顧分頁", [("replay_intro_html", "說明文字", "rich"), ("replay_logo_id", "回顧卡片左上角的 Logo", "image")]),
 ]
 
+# 演出頁三個分頁各自的設定：在各分頁的編輯畫面（/admin/tabs/<分頁>）改，跟分頁的狀態一起存
+PERF_TAB_SETTINGS = {
+    "charts": ("說明與設定", [("charts_intro_html", "說明文字", "rich"), ("charts_intro_html_en", "說明文字（英文）", "rich")]),
+    "setlist": ("說明與設定", [("setlist_intro_html", "說明文字", "rich"),
+                    ("show_donation_call", "顯示捐款號召", "bool"),
+                    ("donation_amount", "每份歌單捐款金額（新台幣）", "int"),
+                    ("setlist_top_songs_count", "累積圖表預設顯示前幾名", "int"),
+                    ("setlist_prob_window", "演出機率對照表：左邊預設看最近幾場", "int",
+                     "訪客可以自己改場數。只算有歌單、已經發生的演出。")]),
+    "replay": ("說明與設定", [("replay_intro_html", "說明文字", "rich"), ("replay_logo_id", "回顧卡片左上角的 Logo", "image")]),
+}
 
-def choices_of(field):
-    """選單型設定欄位的選項：欄位定義第 3 個值之後、是 (值, 標籤) 的那些。"""
-    return [c for c in field[2:] if isinstance(c, tuple)]
+
+def setting_values(con, groups):
+    return {f[0]: db.get_setting(con, f[0]) for _, fields in groups for f in fields}
 
 
-@router.get("/settings")
-def settings_page(request: Request, con=Depends(user_required)):
-    values = {f[0]: db.get_setting(con, f[0]) for _, fields in SETTING_FIELDS for f in fields}
-    return page(request, "settings.html", {"nav": "settings", "groups": SETTING_FIELDS, "choices_of": choices_of, "values": values,
-                                           "facts": json.loads(values["home_facts_json"] or "[]")})
-
-
-@router.post("/settings")
-async def settings_save(request: Request, con=Depends(user_required)):
-    form = await request.form()
-    for _, fields in SETTING_FIELDS:
+def save_setting_groups(con, form, groups):
+    """把表單裡的這些設定欄位存起來（「設定」頁、演出頁分頁的編輯畫面共用）。"""
+    for _, fields in groups:
         for field in fields:
             key, kind = field[0], field[2]
             value = form.get(key) or ""
@@ -823,9 +926,26 @@ async def settings_save(request: Request, con=Depends(user_required)):
                 value = "1" if value else "0"
             elif kind == "int":
                 value = str(as_int(value, as_int(db.SETTINGS.get(key), 0)))
-                if key == "home_hero_overlay":
-                    value = str(min(100, max(0, int(value))))
             db.set_setting(con, key, value)
+
+
+def choices_of(field):
+    """選單型設定欄位的選項：欄位定義第 3 個值之後、是 (值, 標籤) 的那些。"""
+    return [c for c in field[2:] if isinstance(c, tuple)]
+
+
+@router.get("/settings")
+def settings_page(request: Request, con=Depends(user_required)):
+    values = setting_values(con, SETTING_FIELDS)
+    return page(request, "settings.html", {"nav": "settings", "groups": SETTING_FIELDS, "choices_of": choices_of,
+                                           "values": values,
+                                           "facts": json.loads(values["home_facts_json"] or "[]")})
+
+
+@router.post("/settings")
+async def settings_save(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    save_setting_groups(con, form, SETTING_FIELDS)
     con.commit()
     return done("/admin/settings")
 
@@ -1028,7 +1148,9 @@ def navigation_page(request: Request, con=Depends(user_required)):
     pages = [{"id": r["id"], "title": r["title"], "url": Q.page_url(r), "published": r["published"]}
              for r in con.execute("SELECT * FROM pages ORDER BY kind NOT IN ('home', 'performances', 'lyrics', "
                                   "'articles'), kind = 'article', sort_order, id")]
-    return page(request, "navigation.html", {"nav": "navigation", "pages": pages,
+    # 演出頁的分頁不是 pages 表裡的頁面，另外列出來讓選單可以直接選
+    targets = [{"label": name, "url": url} for key, name, url, _ in performance_tabs(con) if key != "list"]
+    return page(request, "navigation.html", {"nav": "navigation", "pages": pages, "targets": targets,
                                              "header": navigation.load_header(con),
                                              "footer": navigation.load_footer(con)})
 
