@@ -376,5 +376,10 @@ CACHE_CONTROL_STALE_WHILE_REVALIDATE = int(
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# YouTube 內嵌影片要看得到是哪個網站在嵌入（Referer），看不到就顯示「錯誤 153：影片播放器設定錯誤」。
+# Django 預設的 same-origin 不會把網址送給其他網站，所以改成只送網域（不送完整路徑）的 strict-origin-when-cross-origin，
+# 這也是瀏覽器本身的預設值。
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
 # 更新 WAGTAILADMIN_BASE_URL
 WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
