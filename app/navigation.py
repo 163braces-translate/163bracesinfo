@@ -52,7 +52,7 @@ def default_footer(con):
     email = db.get_setting(con, "contact_email")
     site, site_en = db.get_setting(con, "site_name"), db.get_setting(con, "site_name_en")
     contact = [{"label": email, "label_en": "", "page_id": None, "url": "mailto:" + email}] if email else []
-    contact.append({"label": "Instagram @163braces.translate", "label_en": "", "page_id": None,
+    contact.append({"label": "Instagram @163braces_translate", "label_en": "", "page_id": None,
                     "url": "https://www.instagram.com/163braces_translate/"})
     return {
         "columns": [
