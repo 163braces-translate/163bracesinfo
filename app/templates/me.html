@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head me-head">
+  {% if visitor.avatar_url %}<img class="avatar" src="{{ visitor.avatar_url }}" alt="" referrerpolicy="no-referrer">{% endif %}
+  <div>
+    <h1>{{ visitor.nickname or visitor.google_name }}</h1>
+    {% if visitor.profile_public and visitor.handle %}<a class="small" href="{{ link('/fans/' ~ visitor.handle ~ '/') }}">{{ link('/fans/' ~ visitor.handle ~ '/') }}</a>{% endif %}
+  </div>
+  <form method="post" action="/auth/logout" style="margin-left: auto"><button class="btn small" type="submit">{{ t('logout') }}</button></form>
+</div>
+{% if msg %}<p class="flash-front" role="status">{{ msg }}</p>{% endif %}
+
+<nav class="tabs" aria-label="{{ t('my_page') }}">
+  {% for key in ('footprint', 'likes', 'submissions', 'settings') %}
+    <a href="{{ link('/me/') }}?tab={{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ t('tab_' ~ key) }}</a>
+  {% endfor %}
+</nav>
+
+{% if tab == 'footprint' %}
+  {% include "_footprint.html" %}
+{% elif tab == 'likes' %}
+  {% if likes %}
+    <ul class="like-list">
+      {% for s in likes %}
+        <li class="card">
+          {% if s.lyrics_slug and s.lyrics_published %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{% else %}{{ tr(s, 'title') }}{% endif %}
+          <span class="small muted">· {{ tr(s, 'album_name') }}</span>
+          <button type="button" class="like-btn on" data-like="{{ s.id }}" aria-pressed="true" aria-label="{{ t('like') }}"><span class="heart">♥</span></button>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}<p class="empty">{{ t('likes_empty') }}</p>{% endif %}
+{% elif tab == 'submissions' %}
+  {% if not (subs.contributions or subs.sheets or subs.marquee) %}<p class="empty">{{ t('subs_empty') }}</p>{% endif %}
+  {% if subs.contributions %}
+    <section class="card" style="margin-bottom: 16px"><div class="card-head"><h2>{{ t('contribute_title') }}</h2></div>
+      <ul class="plain-list">{% for c in subs.contributions %}
+        <li><span class="chip {{ 'blue' if c.status == 'approved' else ('warn' if c.status == 'pending' else '') }}">{{ t('status_' ~ c.status) }}</span>
+          {{ c.event_date | replace('-', '/') }} {{ c.event_name }} <span class="small muted">· {{ c.created_at[:10] }}</span>
+          {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
+      {% endfor %}</ul></section>
+  {% endif %}
+  {% if subs.sheets %}
+    <section class="card" style="margin-bottom: 16px"><div class="card-head"><h2>{{ t('sheets') }}</h2></div>
+      <ul class="plain-list">{% for s in subs.sheets %}
+        <li><span class="chip {{ 'blue' if s.status == 'approved' else ('warn' if s.status == 'pending' else '') }}">{{ t('status_' ~ s.status) }}</span>
+          {{ s.song_title }} · {{ s.title }} <span class="small muted">· {{ s.created_at[:10] }}</span>
+          {% if s.admin_note %}<div class="small muted">{{ s.admin_note }}</div>{% endif %}</li>
+      {% endfor %}</ul></section>
+  {% endif %}
+  {% if subs.marquee %}
+    <section class="card"><div class="card-head"><h2>{{ t('marquee') }}</h2></div>
+      <ul class="plain-list">{% for m in subs.marquee %}
+        <li><span class="chip {{ '' if m.hidden else 'blue' }}">{{ t('status_hidden') if m.hidden else t('status_visible') }}</span> {{ m.text }} <span class="small muted">· {{ m.created_at[:10] }}</span></li>
+      {% endfor %}</ul></section>
+  {% endif %}
+{% elif tab == 'settings' %}
+  <form class="card settings-form" method="post" action="/me/settings">
+    <label class="field" for="nickname">{{ t('nickname') }}</label>
+    <input type="text" id="nickname" name="nickname" maxlength="30" value="{{ visitor.nickname }}">
+    <p class="small muted">{{ t('nickname_help') }}</p>
+    <label class="field" for="handle">{{ t('handle') }}</label>
+    <div class="slug-row"><span class="muted">/fans/</span><input type="text" id="handle" name="handle" maxlength="30" value="{{ visitor.handle or '' }}"><span class="muted">/</span></div>
+    <label class="check-row"><input type="checkbox" name="profile_public" value="1" {{ 'checked' if visitor.profile_public }}> {{ t('profile_public') }}</label>
+    <button class="btn primary" type="submit">{{ t('save') }}</button>
+  </form>
+  <form class="card settings-form danger-zone" method="post" action="/me/delete">
+    <h2>{{ t('delete_account') }}</h2>
+    <p class="small muted">{{ t('delete_help') }}</p>
+    <input type="text" name="confirm" placeholder="DELETE" aria-label="DELETE">
+    <button class="btn danger" type="submit">{{ t('delete_account') }}</button>
+  </form>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if tab == 'footprint' %}<script src="/static/me.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card narrow-card wide">
+  {% if song.lyrics_slug %}<p class="small" style="margin: 0"><a href="{{ link(lyrics_prefix ~ song.lyrics_slug ~ '/') }}">← {{ tr(song, 'title') }}</a></p>{% endif %}
+  <h1>{{ t('sheet_submit') }}：{{ tr(song, 'title') }}</h1>
+  <p class="muted small">{{ t('sheets_notice', email=contact_email) }}</p>
+  {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
+  {% if need_login %}
+    <p><a class="btn primary" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> <span class="small muted">{{ t('need_login_to') }}</span></p>
+  {% endif %}
+  <form method="post" enctype="multipart/form-data" class="contribute-form" {{ 'inert' if need_login }}>
+    <label class="field" for="s-title">{{ t('sheet_title') }}</label>
+    <input type="text" id="s-title" name="title" maxlength="80" required placeholder="{{ t('sheet_title_help') }}">
+    <label class="field" for="s-files">{{ t('sheet_files', n=max_files) }}</label>
+    <input type="file" id="s-files" name="files" accept="image/jpeg,image/png,image/webp" multiple>
+    <label class="field" for="s-text">{{ t('sheet_text') }}</label>
+    <textarea id="s-text" name="text_body" rows="10" class="mono"></textarea>
+    <label class="field" for="s-video">{{ t('sheet_video') }}</label>
+    <input type="url" id="s-video" name="video_url" placeholder="https://youtu.be/…">
+    <p class="small muted">{{ t('sheet_video_help') }}</p>
+    <label class="field">{{ t('sign_as') }}</label>
+    <div class="radio-row">
+      {% if visitor and visitor.nickname %}<label><input type="radio" name="name_mode" value="nickname" checked> {{ t('name_nickname') }}（{{ visitor.nickname }}）</label>{% endif %}
+      <label><input type="radio" name="name_mode" value="google" {{ 'checked' if not (visitor and visitor.nickname) }}> {{ t('name_google') }}{% if visitor %}（{{ visitor.google_name }}）{% endif %}</label>
+      <label><input type="radio" name="name_mode" value="anonymous"> {{ t('name_anonymous') }}</label>
+    </div>
+    <label class="check-row"><input type="checkbox" name="own_work" value="1" required> {{ t('sheet_own') }}</label>
+    <button class="btn primary" type="submit" style="margin-top: 12px">{{ t('send') }}</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head me-head">
+  <div><h1>{{ t('public_profile', name=fan_name) }}</h1></div>
+</div>
+{% include "_footprint.html" %}
+{% if likes %}
+  <section class="card" style="margin-top: 18px">
+    <div class="card-head"><h2>{{ t('tab_likes') }}</h2></div>
+    <p>{% for s in likes %}{% if s.lyrics_slug and s.lyrics_published %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{% else %}{{ tr(s, 'title') }}{% endif %}{{ '、' if not loop.last }}{% endfor %}</p>
+  </section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/me.js?v={{ asset_version }}"></script>{% endblock %}

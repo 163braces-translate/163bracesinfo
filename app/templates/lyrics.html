@@ -19,6 +19,10 @@
       {% if played %}<span class="chip blue">{{ t('played_n', n=played) }}</span>{% endif %}
       {% if last_played %}<span class="chip">{{ t('last_played', date=last_played | replace('-', '/')) }}</span>{% endif %}
     </div>
+    {% if like and (login_available or like.count) %}
+      <button type="button" class="like-btn {{ 'on' if like.on }}" data-like="{{ songs[0].id }}" aria-pressed="{{ 'true' if like.on else 'false' }}"
+              aria-label="{{ t('like') }}"><span class="heart" aria-hidden="true">♥</span> <span data-like-count>{{ like.count }}</span></button>
+    {% endif %}
   </div>
 </header>
 
@@ -48,6 +52,25 @@
         </div>
       </section>
     {% endfor %}
+
+    {% if songs %}
+      <section class="card sheets" aria-labelledby="h-sheets">
+        <div class="card-head">
+          <h2 id="h-sheets">{{ t('sheets') }}</h2>
+          <a class="btn small" href="{{ link('/contribute/sheet/' ~ songs[0].id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
+        </div>
+        {% for s in sheets %}
+          <article class="sheet">
+            <h3>{{ s.title }}{% if songs | length > 1 %} <span class="small muted">· {{ s.song_title }}</span>{% endif %}</h3>
+            <div class="small muted">{{ t('sheet_by', name=s.author) }} · {{ s.created_at[:10] | replace('-', '/') }}</div>
+            {% if s.video_url %}<div class="sheet-video">{{ m.youtube(s.video_url, s.title) }}</div>{% endif %}
+            {% for f in s.files %}<a href="/media/{{ f.file }}" target="_blank" rel="noopener"><img class="sheet-img" src="/media/{{ f.file }}" alt="{{ s.title }} {{ loop.index }}" loading="lazy" width="{{ f.width }}" height="{{ f.height }}"></a>{% endfor %}
+            {% if s.text_body %}<pre class="sheet-text">{{ s.text_body }}</pre>{% endif %}
+          </article>
+        {% endfor %}
+        <p class="small muted" style="margin: 12px 0 0">{{ t('sheets_notice', email=contact_email) }}</p>
+      </section>
+    {% endif %}
   </div>
 
   <aside class="lyrics-aside">

@@ -136,6 +136,9 @@
       var slot = $('[data-f="setlist"]', drawer), src = document.querySelector("#sl" + d.id + " .setlist-content");
       slot.innerHTML = "";
       slot.appendChild(src ? src.cloneNode(true) : $("#no-setlist").content.cloneNode(true));
+      var extra = $('[data-f="extra"]', drawer), tpl = document.getElementById("extra" + d.id);
+      extra.innerHTML = "";
+      if (tpl) extra.appendChild(tpl.content.cloneNode(true));
       drawer.hidden = false; backdrop.hidden = false;
       document.body.style.overflow = "hidden";
       requestAnimationFrame(function () { drawer.classList.add("open"); backdrop.classList.add("open"); });
@@ -163,6 +166,91 @@
     items.forEach(function (d) { d.addEventListener("toggle", sync); });
     sync();
   }
+
+  // ---- 粉絲功能的按鈕：沒登入時伺服器回 401，帶著現在的網址去登入頁
+  function postJSON(url, body) {
+    return fetch(url, { method: "POST", body: body || null, credentials: "same-origin",
+                        headers: { "X-Return-To": location.pathname + location.search } })
+      .then(function (r) {
+        return r.json().then(function (data) {
+          if (r.status === 401 && data.login_url) { location.href = data.login_url; throw new Error("login"); }
+          if (!r.ok) throw new Error(data.error || "error");
+          return data;
+        });
+      });
+  }
+
+  // 我去過：同一場在頁面上可能有好幾個按鈕（表格、展開的歌單、手機抽屜），一起更新
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-attend]");
+    if (!btn) return;
+    var id = btn.dataset.attend;
+    btn.disabled = true;
+    postJSON("/api/me/attendance/" + id).then(function (res) {
+      $$('[data-attend="' + id + '"]').forEach(function (b) {
+        b.classList.toggle("on", res.on);
+        b.setAttribute("aria-pressed", res.on ? "true" : "false");
+        b.textContent = res.on ? b.dataset.on : b.dataset.off;
+      });
+      $$('[data-attend-count="' + id + '"]').forEach(function (c) {
+        c.textContent = res.count ? c.dataset.label.replace("{n}", res.count) : "";
+      });
+      // 手機方塊上的 ✓
+      var card = document.querySelector('.perf-card[data-id="' + id + '"] .m'), badge = document.querySelector('[data-attend-badge="' + id + '"]');
+      if (res.on && card && !badge) card.appendChild(Object.assign(document.createElement("span"), { className: "chip blue", textContent: "✓" })).dataset.attendBadge = id;
+      if (!res.on && badge) badge.remove();
+      // 抽屜裡的是複製出來的，原本 <template> 裡的也要改，下次打開才會對
+      var tpl = document.getElementById("extra" + id);
+      if (tpl) $$('[data-attend="' + id + '"]', tpl.content).forEach(function (b) {
+        b.classList.toggle("on", res.on); b.textContent = res.on ? b.dataset.on : b.dataset.off;
+      });
+    }).catch(function () {}).then(function () { btn.disabled = false; });
+  });
+
+  // ♥ 喜歡
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-like]");
+    if (!btn) return;
+    btn.disabled = true;
+    postJSON("/api/me/likes/" + btn.dataset.like).then(function (res) {
+      btn.classList.toggle("on", res.on);
+      btn.setAttribute("aria-pressed", res.on ? "true" : "false");
+      var c = $("[data-like-count]", btn);
+      if (c) c.textContent = res.count;
+    }).catch(function () {}).then(function () { btn.disabled = false; });
+  });
+
+  // ---- 首頁跑馬燈
+  // 字數：一個中文字算 1、一個英文單字算 1（跟伺服器 visitors.text_units 一樣的規則）
+  function textUnits(text) {
+    var cjk = (text.match(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/g) || []).length;
+    var words = (text.match(/[A-Za-z0-9]+(?:['’\-][A-Za-z0-9]+)*/g) || []).length;
+    return cjk + words;
+  }
+  var mform = $("[data-marquee-form]");
+  if (mform) {
+    var input = $("input[name=text]", mform), counter = $("[data-units]", mform), status = $("[data-marquee-status]", mform);
+    var max = Number(mform.dataset.max);
+    var update = function () {
+      var left = max - textUnits(input.value);
+      counter.textContent = (left < 0 ? counter.dataset.over : counter.dataset.label).replace("{n}", Math.abs(left));
+      counter.classList.toggle("over", left < 0);
+    };
+    input.addEventListener("input", update);
+    update();
+    mform.addEventListener("submit", function (e) {
+      e.preventDefault();
+      status.textContent = "";
+      postJSON("/api/marquee", new FormData(mform)).then(function () {
+        status.textContent = mform.dataset.sent;
+        setTimeout(function () { location.reload(); }, 700);
+      }).catch(function (err) { if (err.message !== "login") status.textContent = err.message; });
+    });
+  }
+  // 捲動速度固定（每秒約 70px），內容多就跑久一點
+  $$(".marquee-track").forEach(function (track) {
+    track.style.animationDuration = Math.max(20, track.scrollWidth / 2 / 70) + "s";
+  });
 
   // ---- 歌詞頁：中英對照／只看中文／只看英文
   $$("[data-lyrics-view]").forEach(function (group) {

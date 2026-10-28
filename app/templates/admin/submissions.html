@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+{% block title %}投稿審核{% endblock %}
+{% block content %}
+<h1>投稿審核</h1>
+<div class="admin-head">
+  <div class="seg" role="group">
+    <a class="btn small {{ 'primary' if tab == 'contributions' }}" href="?tab=contributions&status={{ status }}">演出補充{% if pending.contributions %}（{{ pending.contributions }}）{% endif %}</a>
+    <a class="btn small {{ 'primary' if tab == 'sheets' }}" href="?tab=sheets&status={{ status }}">樂譜{% if pending.sheets %}（{{ pending.sheets }}）{% endif %}</a>
+  </div>
+  <form method="get" class="filterbar" style="margin: 0">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <select name="status" onchange="this.form.submit()">
+      {% for v, l in [('pending', '待審'), ('approved', '已採用／已公開'), ('rejected', '已退回')] + ([('removed', '已下架')] if tab == 'sheets' else []) %}
+        <option value="{{ v }}" {{ 'selected' if v == status }}>{{ l }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>送出時間</th><th>{{ '演出' if tab == 'contributions' else '歌曲 · 樂譜' }}</th><th>投稿者</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="nowrap small">{{ r.created_at | replace('T', ' ') }}</td>
+        {% if tab == 'contributions' %}
+          <td>{{ r.event_date | replace('-', '/') }} {{ r.event_name }}
+            <div class="small muted">改了：{{ (r.payload_json | fromjson).keys() | reject('in', ['source', 'message']) | map('replace', 'event_name_en', '英文名稱') | map('replace', 'event_name', '名稱') | map('replace', 'venue_en', '英文地點') | map('replace', 'venue', '地點') | map('replace', 'setlist', '歌單') | join('、') }}</div></td>
+          <td class="small">{{ label(r) }}</td>
+          <td><a class="btn small" href="/admin/submissions/contribution/{{ r.id }}">查看</a></td>
+        {% else %}
+          <td>{{ r.song_title }} · {{ r.title }}</td>
+          <td class="small">{{ label(r) }}</td>
+          <td><a class="btn small" href="/admin/submissions/sheet/{{ r.id }}">查看</a></td>
+        {% endif %}
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">沒有{{ '待審的' if status == 'pending' }}投稿</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

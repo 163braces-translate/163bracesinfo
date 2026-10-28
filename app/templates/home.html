@@ -31,6 +31,47 @@
 </section>
 </div>
 
+{# 粉絲留言跑馬燈：送出就顯示，後台可以隱藏。內容複製兩份接在一起，捲到一半時剛好接回開頭，看起來不會斷 #}
+<section class="marquee-box" aria-label="{{ t('marquee') }}">
+  {% if marquee %}
+    <div class="marquee" tabindex="0">
+      <div class="marquee-track">
+        {% for copy in (1, 2) %}
+          <ul class="marquee-list" {{ 'aria-hidden=true' if copy == 2 }}>
+            {% for m in marquee %}<li><b>{{ m.name }}</b>{{ m.text }}</li>{% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <p class="marquee-empty muted">{{ t('marquee') }}</p>
+  {% endif %}
+  <details class="marquee-compose">
+    <summary class="btn small">✎ {{ t('marquee_post') }}</summary>
+    {% if visitor %}
+      <form class="marquee-form" data-marquee-form data-max="{{ marquee_max }}" data-sent="{{ t('marquee_sent') }}">
+        <input type="text" name="text" maxlength="120" required placeholder="{{ t('marquee_placeholder', n=marquee_max) }}" aria-label="{{ t('marquee_post') }}">
+        <div class="marquee-form-row">
+          <span class="small muted" data-units data-label="{{ t('units_left', n='{n}') }}" data-over="{{ t('units_over', n='{n}') }}"></span>
+          <label class="small">{{ t('sign_as') }}
+            <select name="name_mode">
+              <option value="nickname" {{ 'disabled' if not visitor.nickname }}>{{ t('name_nickname') }}{% if visitor.nickname %}（{{ visitor.nickname }}）{% endif %}</option>
+              <option value="google" {{ 'selected' if not visitor.nickname }}>{{ t('name_google') }}（{{ visitor.google_name }}）</option>
+              <option value="anonymous">{{ t('name_anonymous') }}</option>
+            </select>
+          </label>
+          <button class="btn primary small" type="submit">{{ t('send') }}</button>
+        </div>
+        <p class="small" data-marquee-status role="status"></p>
+      </form>
+    {% elif login_available %}
+      <p class="small"><a href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> · {{ t('need_login_to') }}</p>
+    {% else %}
+      <p class="small muted">{{ t('login_unavailable') }}</p>
+    {% endif %}
+  </details>
+</section>
+
 <div class="home-grid">
   <section class="card span-7" aria-labelledby="h-upcoming">
     <div class="card-head">

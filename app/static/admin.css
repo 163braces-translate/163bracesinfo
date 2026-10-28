@@ -241,3 +241,11 @@ body.admin { background: var(--bg); }
 .order-album.order-other { border-style: dashed; background: var(--surface-2); }
 .order-other .help { margin: -2px 0 8px; }
 .order-preview-page .lyrics-menu-tools { display: none; }
+
+/* ---- 投稿審核 */
+.admin-table.diff th { width: 90px; }
+.admin-table.diff td.old { color: var(--muted); text-decoration: line-through; text-decoration-color: #e5a3a3; }
+.admin-table.diff td.new { color: var(--text); background: #f0f8f1; }
+.diff-list { margin: 0; padding-left: 1.6em; display: grid; gap: 2px; }
+.diff-list.old { color: var(--muted); }
+.diff-list li.changed { background: #f0f8f1; border-radius: 4px; }

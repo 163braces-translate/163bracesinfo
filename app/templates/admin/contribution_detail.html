@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}演出補充{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/submissions">← 投稿審核</a></p>
+<div class="admin-head">
+  <h1>{{ perf.event_date | replace('-', '/') }} {{ perf.event_name }}</h1>
+  <a class="btn small" href="/admin/performances/{{ perf.id }}">開啟這場演出</a>
+</div>
+<div class="card">
+  <p><b>投稿者</b>：{{ label }}{% if c.email %} <span class="muted small">{{ c.email }}</span>{% endif %} · <span class="muted small">{{ c.created_at | replace('T', ' ') }}</span></p>
+  <p><b>資料來源</b>：{{ payload.source }}</p>
+  {% if payload.message %}<p><b>留言</b>：{{ payload.message }}</p>{% endif %}
+  {% if c.status != 'pending' %}<p class="flash">狀態：{{ {'approved': '已套用', 'rejected': '已退回'}[c.status] }}{% if c.admin_note %}（{{ c.admin_note }}）{% endif %}</p>{% endif %}
+</div>
+{% if fields %}
+<div class="card">
+  <h2>演出資訊</h2>
+  <table class="admin-table diff">
+    <thead><tr><th></th><th>目前</th><th>投稿的版本</th></tr></thead>
+    <tbody>{% for f, label, old, new in fields %}<tr><th>{{ label }}</th><td class="old">{{ old or '（空白）' }}</td><td class="new">{{ new or '（空白）' }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+{% if setlist_new is not none %}
+<div class="card">
+  <h2>歌單</h2>
+  <div class="grid-2">
+    <div><h3 class="small muted">目前（{{ setlist_old | length }} 首）</h3><ol class="diff-list old">{% for x in setlist_old %}<li>{{ x }}</li>{% else %}<li class="muted">（沒有歌單）</li>{% endfor %}</ol></div>
+    <div><h3 class="small muted">投稿的版本（{{ setlist_new | length }} 首）</h3><ol class="diff-list new">{% for x in setlist_new %}<li class="{{ 'changed' if setlist_old[loop.index0] != x }}">{{ x }}</li>{% endfor %}</ol></div>
+  </div>
+  <p class="help">標「（自訂）」的是曲庫裡找不到的曲名，會用自訂曲名存。名字打錯的話，可以先套用、再到演出頁改成曲庫的歌。</p>
+</div>
+{% endif %}
+{% if c.status == 'pending' %}
+<form class="card form" method="post">
+  <label class="field" for="note">給投稿者的說明（選填，退回時建議寫原因；投稿者在「我的投稿」看得到）</label>
+  <input type="text" id="note" name="admin_note" maxlength="500">
+  <div class="form-actions">
+    <button class="btn primary" type="submit" name="action" value="approve" data-confirm="把這些內容套用到演出資料？">核准並套用</button>
+    <button class="btn danger" type="submit" name="action" value="reject">退回</button>
+  </div>
+</form>
+{% endif %}
+{% if c.visitor_id %}
+<form method="post" action="/admin/visitors" class="small">
+  <input type="hidden" name="id" value="{{ c.visitor_id }}"><input type="hidden" name="back" value="/admin/submissions/contribution/{{ c.id }}">
+  {% if c.banned %}<button class="btn small" name="action" value="unban">恢復這位粉絲的投稿權</button>
+  {% else %}<button class="btn small danger" name="action" value="ban" data-confirm="停權後這位粉絲不能再投稿，跑馬燈也不再顯示。">停權這位粉絲</button>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

@@ -6,22 +6,18 @@
 頁面的網址存在 pages.slug，後台改了網址就會跟著變（並自動留下舊網址的轉址），
 所以前台用一個萬用路由依 slug 找頁面，再依頁面種類（kind）決定版型。
 """
+import contextlib
 import json
 import math
 import os
-from functools import partial
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import admin, auth, db, i18n, navigation, queries as Q, taiwan
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-ASSET_VERSION = str(int(max(os.path.getmtime(os.path.join(HERE, "static", f))
-                            for f in os.listdir(os.path.join(HERE, "static")))))
+from . import admin, auth, community, db, i18n, navigation, queries as Q, taiwan
+from .web import HERE, as_id, get_con, lang_of, render
 
 
 class LanguagePrefix:
@@ -40,60 +36,24 @@ class LanguagePrefix:
         await self.app(scope, receive, send)
 
 
-app = FastAPI(title="163braces", docs_url=None, redoc_url=None, openapi_url=None)
-app.add_middleware(LanguagePrefix)
-app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
-app.include_router(admin.router)          # 要在下面的萬用路由之前
-app.add_exception_handler(admin.LoginRequired, admin.login_redirect)
-templates = Jinja2Templates(directory=os.path.join(HERE, "templates"))
-templates.env.globals.update(image_url=Q.image_url, page_url=Q.page_url, song_cover_id=Q.song_cover_id,
-                             asset_version=ASSET_VERSION, youtube_id=Q.youtube_id)
-
-
-def get_con():
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    """啟動時補上新版本加的資料表（schema.sql 全是 CREATE … IF NOT EXISTS，重複執行沒關係）與預設頁面。"""
     con = db.connect()
     try:
-        yield con
+        db.init(con)
+        community.ensure_default_pages(con)
     finally:
         con.close()
+    yield
 
 
-def as_id(value):
-    return int(value) if str(value or "").isdigit() else None
-
-
-def lang_of(request):
-    return getattr(request.state, "lang", "zh")
-
-
-def render(request, con, name, ctx=None, status=200, page=None):
-    lang = lang_of(request)
-    path = request.url.path if lang == "zh" else "/en" + request.url.path
-    alt = ("/en" + request.url.path) if lang == "zh" else request.url.path
-    if request.url.query:
-        alt += "?" + request.url.query
-    kinds = Q.pages_by_kind(con)
-    context = {
-        "request": request,
-        "lang": lang,
-        "t": partial(i18n.t, lang),
-        "tr": partial(i18n.tr, lang),
-        "link": partial(i18n.link, lang),
-        "weekday": partial(i18n.weekday, lang),
-        "ym_label": partial(i18n.ym_label, lang),
-        "nav": navigation.header(con, lang, request.url.path),
-        "footer": navigation.footer(con, lang),
-        "kinds": kinds,
-        "lyrics_prefix": Q.lyrics_prefix(con),
-        "site_name": db.get_setting(con, "site_name_en" if lang == "en" else "site_name"),
-        "logo_id": as_id(db.get_setting(con, "site_logo_id")),
-        "current_path": path,
-        "alt_url": alt,
-        "page": page,
-        "today": Q.today(),
-    }
-    context.update(ctx or {})
-    return templates.TemplateResponse(request, name, context, status_code=status)
+app = FastAPI(title="163braces", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+app.add_middleware(LanguagePrefix)
+app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
+app.include_router(admin.router)          # 這兩個都要在下面的萬用路由之前
+app.include_router(community.router)
+app.add_exception_handler(admin.LoginRequired, admin.login_redirect)
 
 
 # ==================================================================== 圖片、雜項
@@ -199,6 +159,8 @@ def home(request, con, page):
     upcoming = Q.upcoming(con, n_up)
     hero_image = as_id(db.get_setting(con, "home_hero_image_id"))
     return render(request, con, "home.html", {
+        "marquee": community.marquee_items(con, lang),
+        "marquee_max": community.V.MARQUEE_MAX_UNITS,
         "hero_image": hero_image,
         "hero_mode": db.get_setting(con, "home_hero_mode") if hero_image else "",
         "hero_overlay": float(db.get_setting(con, "home_hero_overlay") or 0) / 100,
@@ -245,6 +207,8 @@ def performances_page(request, con, page, tab="list"):
         "map": taiwan.map_data(),
         "map_cities": map_cities,
         "filtered": any([f["q"], f["city"], f["event_type"], f["date_from"], f["date_to"]]),
+        "attended": community.attended_ids(con, community.current_visitor(request, con)),
+        "attend_counts": community.attendance_counts(con),
     }), page=page)
 
 
@@ -296,7 +260,11 @@ def lyrics_page(request, con, row):
     songs = con.execute(Q.SONG_SELECT + " WHERE g.lyrics_id = ? ORDER BY g.sort_order, g.id", (row["id"],)).fetchall()
     played, last = Q.song_play_stats(con, [s["id"] for s in songs])
     cover = next((Q.song_cover_id(s) for s in songs if Q.song_cover_id(s)), None)
+    lang = lang_of(request)
     return render(request, con, "lyrics.html", {
+        "like": community.like_state(con, community.current_visitor(request, con), songs[0]["id"]) if songs else None,
+        "sheets": community.sheets_for_songs(con, lang, [s["id"] for s in songs]),
+        "contact_email": db.get_setting(con, "contact_email"),
         "lyr": row,
         "parts": Q.split_parts(json.loads(row["sections_json"])),
         "videos": json.loads(row["videos_json"]),

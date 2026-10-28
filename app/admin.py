@@ -194,6 +194,8 @@ def dashboard(request: Request, con=Depends(user_required)):
         "review": con.execute("SELECT id, title, review_json FROM lyrics WHERE review_json != '[]' "
                               "ORDER BY sort_order").fetchall(),
         "unmapped": con.execute("SELECT COUNT(*) FROM songs WHERE lyrics_id IS NULL").fetchone()[0],
+        "pending_contribs": con.execute("SELECT COUNT(*) FROM contributions WHERE status = 'pending'").fetchone()[0],
+        "pending_sheets": con.execute("SELECT COUNT(*) FROM sheets WHERE status = 'pending'").fetchone()[0],
         "missing_setlists": con.execute(
             "SELECT COUNT(*) FROM performances p WHERE p.event_date <= ? AND NOT EXISTS "
             "(SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id)", (today,)).fetchone()[0],
@@ -826,6 +828,160 @@ async def settings_save(request: Request, con=Depends(user_required)):
             db.set_setting(con, key, value)
     con.commit()
     return done("/admin/settings")
+
+
+# ==================================================================== 粉絲投稿的審核
+def _visitor_label(row):
+    return (row["nickname"] or row["google_name"] or "（已刪除的帳號）") + ("（已停權）" if row["banned"] else "")
+
+
+@router.get("/submissions")
+def submissions(request: Request, con=Depends(user_required)):
+    tab = "sheets" if request.query_params.get("tab") == "sheets" else "contributions"
+    status = request.query_params.get("status") or "pending"
+    if tab == "contributions":
+        rows = con.execute("""
+            SELECT c.*, p.event_date, p.event_name, v.nickname, v.google_name, v.banned
+            FROM contributions c JOIN performances p ON p.id = c.performance_id
+            LEFT JOIN visitors v ON v.id = c.visitor_id
+            WHERE c.status = ? ORDER BY c.created_at DESC LIMIT 200""", (status,)).fetchall()
+    else:
+        rows = con.execute("""
+            SELECT s.*, g.title AS song_title, v.nickname, v.google_name, v.banned
+            FROM sheets s JOIN songs g ON g.id = s.song_id LEFT JOIN visitors v ON v.id = s.visitor_id
+            WHERE s.status = ? ORDER BY s.created_at DESC LIMIT 200""", (status,)).fetchall()
+    return page(request, "submissions.html", {
+        "nav": "submissions", "tab": tab, "status": status, "rows": rows, "label": _visitor_label,
+        "pending": {"contributions": con.execute("SELECT COUNT(*) FROM contributions WHERE status = 'pending'").fetchone()[0],
+                    "sheets": con.execute("SELECT COUNT(*) FROM sheets WHERE status = 'pending'").fetchone()[0]},
+    })
+
+
+def _setlist_lines(con, items):
+    """歌單（setlist_items 的列，或投稿的 payload）→ 顯示用的文字列。"""
+    names = {r["id"]: r["title"] for r in con.execute("SELECT id, title FROM songs")}
+    out = []
+    for it in items:
+        title = names.get(it["song_id"], "?") if it["song_id"] else it["custom_title"] + "（自訂）"
+        out.append(title + ("｜" + it["note"] if it["note"] else ""))
+    return out
+
+
+@router.get("/submissions/contribution/{item_id:int}")
+def contribution_detail(item_id: int, request: Request, con=Depends(user_required)):
+    c = con.execute("SELECT c.*, v.nickname, v.google_name, v.banned, v.email FROM contributions c "
+                    "LEFT JOIN visitors v ON v.id = c.visitor_id WHERE c.id = ?", (item_id,)).fetchone() or _404()
+    perf = con.execute(Q.PERF_SELECT + " WHERE p.id = ?", (c["performance_id"],)).fetchone()
+    payload = json.loads(c["payload_json"])
+    fields = [(f, label, perf[f], payload[f]) for f, label in
+              [("event_name", "活動名稱"), ("event_name_en", "英文名稱"), ("venue", "地點"), ("venue_en", "英文地點")]
+              if f in payload]
+    current = con.execute("SELECT * FROM setlist_items WHERE performance_id = ? ORDER BY position, id",
+                          (perf["id"],)).fetchall()
+    return page(request, "contribution_detail.html", {
+        "nav": "submissions", "c": c, "perf": perf, "payload": payload, "fields": fields, "label": _visitor_label(c),
+        "setlist_old": _setlist_lines(con, current),
+        "setlist_new": _setlist_lines(con, payload["setlist"]) if "setlist" in payload else None,
+    })
+
+
+@router.post("/submissions/contribution/{item_id:int}")
+async def contribution_review(item_id: int, request: Request, con=Depends(user_required)):
+    form = await request.form()
+    c = con.execute("SELECT * FROM contributions WHERE id = ?", (item_id,)).fetchone() or _404()
+    note = (form.get("admin_note") or "").strip()[:500]
+    if c["status"] != "pending":
+        return done("/admin/submissions/contribution/%d" % item_id, "這筆已經處理過了")
+    if form.get("action") == "approve":
+        payload = json.loads(c["payload_json"])
+        cols = [f for f in ("event_name", "event_name_en", "venue", "venue_en") if f in payload]
+        if "event_name" in cols and not payload["event_name"].strip():
+            return done("/admin/submissions/contribution/%d" % item_id, "活動名稱不能是空白，不能直接套用")
+        if cols:
+            con.execute("UPDATE performances SET %s WHERE id = ?" % ", ".join("%s = ?" % f for f in cols),
+                        [payload[f] for f in cols] + [c["performance_id"]])
+        if "setlist" in payload:
+            known = {r[0] for r in con.execute("SELECT id FROM songs")}
+            items = [(it["song_id"] if it["song_id"] in known else None,
+                      "" if it["song_id"] in known else (it["custom_title"] or "?"), it.get("note") or "")
+                     for it in payload["setlist"]]
+            con.execute("DELETE FROM setlist_items WHERE performance_id = ?", (c["performance_id"],))
+            con.executemany("INSERT INTO setlist_items (performance_id, position, song_id, custom_title, note) "
+                            "VALUES (?, ?, ?, ?, ?)", [(c["performance_id"], i) + it for i, it in enumerate(items)])
+        status, msg = "approved", "已套用到演出資料"
+    elif form.get("action") == "reject":
+        status, msg = "rejected", "已退回"
+    else:
+        return done("/admin/submissions/contribution/%d" % item_id, "沒有變更")
+    con.execute("UPDATE contributions SET status = ?, admin_note = ?, reviewed_at = ? WHERE id = ?",
+                (status, note, db.now(), item_id))
+    con.commit()
+    return done("/admin/submissions", msg)
+
+
+@router.get("/submissions/sheet/{item_id:int}")
+def sheet_detail(item_id: int, request: Request, con=Depends(user_required)):
+    s = con.execute("SELECT s.*, g.title AS song_title, v.nickname, v.google_name, v.banned, v.email FROM sheets s "
+                    "JOIN songs g ON g.id = s.song_id LEFT JOIN visitors v ON v.id = s.visitor_id WHERE s.id = ?",
+                    (item_id,)).fetchone() or _404()
+    files = con.execute("SELECT * FROM sheet_files WHERE sheet_id = ? ORDER BY position", (item_id,)).fetchall()
+    return page(request, "sheet_detail.html", {"nav": "submissions", "s": s, "files": files, "label": _visitor_label(s)})
+
+
+@router.post("/submissions/sheet/{item_id:int}")
+async def sheet_review(item_id: int, request: Request, con=Depends(user_required)):
+    form = await request.form()
+    con.execute("SELECT 1 FROM sheets WHERE id = ?", (item_id,)).fetchone() or _404()
+    status = {"approve": "approved", "reject": "rejected", "remove": "removed", "restore": "approved"}.get(form.get("action"))
+    if not status:
+        return done("/admin/submissions/sheet/%d" % item_id, "沒有變更")
+    con.execute("UPDATE sheets SET status = ?, admin_note = ?, reviewed_at = ? WHERE id = ?",
+                (status, (form.get("admin_note") or "").strip()[:500], db.now(), item_id))
+    con.commit()
+    return done("/admin/submissions/sheet/%d" % item_id, {"approved": "已公開", "rejected": "已退回", "removed": "已下架"}[status])
+
+
+# ==================================================================== 跑馬燈與粉絲帳號
+@router.get("/marquee")
+def marquee_admin(request: Request, con=Depends(user_required)):
+    rows = con.execute("SELECT m.*, v.nickname, v.google_name, v.banned FROM marquee_posts m "
+                       "JOIN visitors v ON v.id = m.visitor_id ORDER BY m.created_at DESC LIMIT 300").fetchall()
+    return page(request, "marquee.html", {"nav": "marquee", "rows": rows, "label": _visitor_label})
+
+
+@router.post("/marquee")
+async def marquee_action(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    post_id, action = as_int(form.get("id")), form.get("action")
+    if action in ("hide", "show"):
+        con.execute("UPDATE marquee_posts SET hidden = ? WHERE id = ?", (1 if action == "hide" else 0, post_id))
+    elif action == "delete":
+        con.execute("DELETE FROM marquee_posts WHERE id = ?", (post_id,))
+    con.commit()
+    return done("/admin/marquee")
+
+
+@router.get("/visitors")
+def visitors_admin(request: Request, con=Depends(user_required)):
+    rows = con.execute("""
+        SELECT v.*,
+          (SELECT COUNT(*) FROM attendance a WHERE a.visitor_id = v.id) AS n_attend,
+          (SELECT COUNT(*) FROM marquee_posts m WHERE m.visitor_id = v.id) AS n_marquee,
+          (SELECT COUNT(*) FROM contributions c WHERE c.visitor_id = v.id) AS n_contrib,
+          (SELECT COUNT(*) FROM sheets s WHERE s.visitor_id = v.id) AS n_sheets
+        FROM visitors v ORDER BY v.created_at DESC""").fetchall()
+    return page(request, "visitors.html", {"nav": "visitors", "rows": rows})
+
+
+@router.post("/visitors")
+async def visitors_action(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    vid = as_int(form.get("id"))
+    if form.get("action") in ("ban", "unban"):
+        con.execute("UPDATE visitors SET banned = ? WHERE id = ?", (1 if form.get("action") == "ban" else 0, vid))
+        con.commit()
+    back = form.get("back") if (form.get("back") or "").startswith("/admin/") else "/admin/visitors"
+    return done(back, "已停權（不能再投稿，跑馬燈也不再顯示）" if form.get("action") == "ban" else "已恢復")
 
 
 # ==================================================================== 首頁大標題方框

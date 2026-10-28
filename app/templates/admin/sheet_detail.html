@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block title %}樂譜{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/submissions?tab=sheets">← 投稿審核</a></p>
+<h1>{{ s.song_title }} · {{ s.title }}</h1>
+<div class="card">
+  <p><b>投稿者</b>：{{ label }}{% if s.email %} <span class="muted small">{{ s.email }}</span>{% endif %} · 署名方式：{{ {'google': 'Google 帳號名', 'nickname': '暱稱', 'anonymous': '匿名'}[s.name_mode] }} · <span class="muted small">{{ s.created_at | replace('T', ' ') }}</span></p>
+  <p><b>演奏影片</b>：{% if s.video_url %}<a href="{{ s.video_url }}" target="_blank" rel="noopener">{{ s.video_url }}</a>{% else %}<span class="muted">沒附</span>{% endif %}</p>
+  <p class="muted small">投稿者已勾選「這是我自己採的譜」。</p>
+  <p class="flash">狀態：{{ {'pending': '待審', 'approved': '公開中', 'rejected': '已退回', 'removed': '已下架'}[s.status] }}{% if s.admin_note %}（{{ s.admin_note }}）{% endif %}</p>
+</div>
+<div class="card">
+  {% for f in files %}<a href="/media/{{ f.file }}" target="_blank" rel="noopener"><img src="/media/{{ f.file }}" alt="第 {{ loop.index }} 張" style="max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px"></a>{% endfor %}
+  {% if s.text_body %}<pre style="white-space: pre; overflow-x: auto; background: var(--surface-2); padding: 12px; border-radius: 10px">{{ s.text_body }}</pre>{% endif %}
+</div>
+<form class="card form" method="post">
+  <label class="field" for="note">給投稿者的說明（選填）</label>
+  <input type="text" id="note" name="admin_note" maxlength="500" value="{{ s.admin_note }}">
+  <div class="form-actions">
+    {% if s.status == 'pending' %}
+      <button class="btn primary" name="action" value="approve">核准公開</button>
+      <button class="btn danger" name="action" value="reject">退回</button>
+    {% elif s.status == 'approved' %}
+      <button class="btn danger" name="action" value="remove" data-confirm="下架這份樂譜？（例如權利人要求）">下架</button>
+    {% else %}
+      <button class="btn" name="action" value="restore">重新公開</button>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

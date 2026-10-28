@@ -47,6 +47,12 @@
           {{ nav_link(item, 'on' if item.on else '') }}
         {% endif %}
       {% endfor %}
+      {% if visitor %}
+        <a class="me-link {{ 'on' if request.url.path.startswith('/me/') }}" href="{{ link('/me/') }}">
+          {% if visitor.avatar_url %}<img src="{{ visitor.avatar_url }}" alt="" referrerpolicy="no-referrer">{% endif %}{{ t('my_page') }}</a>
+      {% elif login_available %}
+        <a class="me-link" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a>
+      {% endif %}
       <a class="lang" href="{{ alt_url }}" hreflang="{{ 'zh-Hant' if lang == 'en' else 'en' }}">{{ t('lang_switch') }}</a>
     </nav>
   </div>
@@ -68,7 +74,7 @@
     {% endfor %}
   </div>
   {% endif %}
-  {% if footer.note %}<div class="wrap footer-note">{{ footer.note }}</div>{% endif %}
+  <div class="wrap footer-note">{% if footer.note %}{{ footer.note }} · {% endif %}<a href="{{ link('/privacy/') }}">{{ t('privacy') }}</a></div>
 </footer>
 <script src="/static/site.js?v={{ asset_version }}"></script>
 {% block scripts %}{% endblock %}

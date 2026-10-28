@@ -1,0 +1,44 @@
+{# 個人足跡：「我的」頁與公開個人頁共用。fp 是 community.footprint() 的結果 #}
+{% import "_map.html" as mp with context %}
+{% if not fp.total %}
+  <p class="empty">{{ t('fp_empty') }}</p>
+{% else %}
+  <div class="stat-tiles" style="margin-bottom: 18px">
+    <span class="stat-tile"><b>{{ fp.total }}</b>{{ t('fp_total') }}</span>
+    <span class="stat-tile"><b>{{ fp.distinct_songs }}</b>{{ t('fp_songs') }}</span>
+    {% if fp.first %}<span class="stat-tile"><b>{{ fp.first[:4] }}</b>{{ t('fp_first') }} {{ fp.first[5:] | replace('-', '/') }}</span>{% endif %}
+  </div>
+  <div class="chart-grid">
+    <div class="card"><div class="card-head"><h2>{{ t('fp_by_year') }}</h2></div><div class="chart-box"><canvas data-fp-chart="years" data-type="bar"></canvas></div></div>
+    <div class="card"><div class="card-head"><h2>{{ t('fp_by_type') }}</h2></div><div class="chart-box"><canvas data-fp-chart="types" data-type="doughnut"></canvas></div></div>
+    <div class="card"><div class="card-head"><h2>{{ t('fp_map') }}</h2></div>{{ mp.tw_map(map, fp.map_cities, (), false) }}</div>
+    <div class="card">
+      <div class="card-head"><h2>{{ t('fp_heard') }}</h2></div>
+      {% if fp.heard %}
+        <ol class="rank-list">
+          {% for s in fp.heard[:12] %}
+            <li class="rank-item">
+              <span class="rank-no">{{ loop.index }}</span>
+              <span class="rank-title">{% if s.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}</span>
+              <span class="rank-count">{{ s.count }} {{ t('times') }}</span>
+              <span class="rank-bar"><span style="width: {{ (s.count / fp.heard[0].count * 100) | round(1) }}%"></span></span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}<p class="muted small">—</p>{% endif %}
+      {% if fp.never %}
+        <h3 class="small muted" style="margin: 18px 0 6px">{{ t('fp_never') }}</h3>
+        <p class="small">{% for s in fp.never %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{{ '、' if not loop.last }}{% endfor %}</p>
+      {% endif %}
+    </div>
+  </div>
+  <section class="card" style="margin-top: 18px">
+    <div class="card-head"><h2>{{ t('fp_list') }}</h2></div>
+    <ul class="plain-list">
+      {% for p in fp.performances %}
+        <li><span class="nowrap muted">{{ p.event_date | replace('-', '/') }}</span> {{ tr(p, 'event_name') }} <span class="small muted">· {{ tr(p, 'city_name') }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+  <script type="application/json" id="fp-data">{{ fp.charts | tojson }}</script>
+{% endif %}
