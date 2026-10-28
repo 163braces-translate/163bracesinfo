@@ -34,9 +34,10 @@
     {% if mode == 'bilingual' %}
       <div class="toolbar">
         <div class="seg" data-lyrics-view role="group" aria-label="{{ t('lyrics') }}">
-          <button type="button" data-view="both" aria-pressed="true">{{ t('view_both') }}</button>
-          <button type="button" data-view="left" aria-pressed="false">{{ t('view_left') }}</button>
-          <button type="button" data-view="right" aria-pressed="false">{{ t('view_right') }}</button>
+          {#- 預設只顯示主要語言（左欄）。按鈕文字用這首歌詞設定的欄位標題，例如「中文」「日文」 #}
+          <button type="button" data-view="left" aria-pressed="true">{{ lyr.left_label or t('view_left') }}</button>
+          <button type="button" data-view="both" aria-pressed="false">{{ t('view_both') }}</button>
+          <button type="button" data-view="right" aria-pressed="false">{{ lyr.right_label or t('view_right') }}</button>
         </div>
       </div>
     {% endif %}
@@ -44,7 +45,7 @@
     {% for title, title_en, blocks in parts %}
       <section class="card lyrics-box">
         {% if title %}<h2>{{ title_en if lang == 'en' and title_en else title }}</h2>{% endif %}
-        <div class="lyrics-body {{ mode }}">
+        <div class="lyrics-body {{ mode }}{{ ' only-left' if mode == 'bilingual' }}">
           {% if mode in ('bilingual', 'duet') and loop.first %}
             <div class="ly-cols"><span>{{ lyr.left_label }}</span><span>{{ lyr.right_label }}</span></div>
           {% endif %}

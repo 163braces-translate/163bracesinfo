@@ -272,6 +272,10 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .compact .ly-line { display: block; margin-bottom: 6px; }
 .compact .ly-l, .compact .ly-r { display: block; }
 .compact .ly-r { font-size: .9rem; }
+.compact.only-left .ly-r { display: none; }
+.compact.only-left .ly-line:has(.ly-l:empty) { display: none; }     /* 只有右欄有字的行（例如另一個語言的補充）整行不顯示 */
+.compact.duet .ly-l { color: var(--primary-strong); }
+.compact.duet .ly-r { color: #7a5aa8; font-size: inherit; }
 
 /* ---------------------------------------------------------------- 演出頁 */
 .perf-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }

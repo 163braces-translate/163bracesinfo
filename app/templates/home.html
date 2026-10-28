@@ -103,7 +103,8 @@
               {% if s.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}
               {% if s.artist %}<span class="small muted"> · {{ s.artist }}</span>{% endif %}
             </span>
-            <span class="rank-count">{{ s.count }} {{ t('shows') }}</span>
+            {#- 這幾場裡有唱這首的比例；滑鼠移上去看實際場數 #}
+            <span class="rank-count" title="{{ s.count }} / {{ top_window }} {{ t('shows') }}">{{ (s.count / top_window * 100) | round | int }}%</span>
             <span class="rank-bar"><span style="width: {{ (s.count / top_window * 100) | round(1) }}%"></span></span>
           </li>
         {% endfor %}

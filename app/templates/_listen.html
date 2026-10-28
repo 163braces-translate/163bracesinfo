@@ -10,7 +10,8 @@
         <div class="small muted">{{ tr(song, 'album_name') }}{% if song.artist %} · {{ tr(song, 'artist') }}{% endif %}</div>
       </div>
     </div>
-    <div class="listen-lyrics compact">
+    {#- 只顯示主要語言（左欄）；對唱的左右是兩個聲部，兩邊都要顯示 #}
+    <div class="listen-lyrics compact {{ 'duet' if song.lyrics.display_mode == 'duet' else 'only-left' }}">
       {% if song.blocks %}{{ m.lyric_blocks(song.blocks, tr) }}{% else %}<p class="muted">{{ t('no_lyrics') }}</p>{% endif %}
     </div>
     <div class="listen-actions">

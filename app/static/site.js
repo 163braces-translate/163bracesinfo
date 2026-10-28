@@ -263,10 +263,11 @@
         b.classList.remove("only-left", "only-right");
         if (btn.dataset.view !== "both") b.classList.add("only-" + btn.dataset.view);
       });
-      try { localStorage.setItem("lyricsView", btn.dataset.view); } catch (err) {}
+      try { localStorage.setItem("lyricsViewMode", btn.dataset.view); } catch (err) {}
     });
     try {
-      var saved = localStorage.getItem("lyricsView");
+      // 換過 key：舊版預設是雙語，存過的舊值不能蓋掉新的預設（只看主要語言）
+      var saved = localStorage.getItem("lyricsViewMode");
       var btn = saved && $('button[data-view="' + saved + '"]', group);
       if (btn) btn.click();
     } catch (err) {}
