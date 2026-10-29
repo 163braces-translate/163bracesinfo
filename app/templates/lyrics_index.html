@@ -1,11 +1,33 @@
 {% extends "base.html" %}
+{% block title %}{{ t('sheets') ~ ' · ' if tab == 'sheets' }}{{ tr(page, 'title') }} · {{ site_name }}{% endblock %}
 {% import "_macros.html" as m %}
 {% block content %}
 <div class="page-head">
   <h1>{{ tr(page, 'title') }}</h1>
   {% set body = tr(page, 'body_html') %}
-  {% if body %}<div class="intro">{{ body | safe }}</div>{% endif %}
+  {% if body and tab == 'lyrics' %}<div class="intro">{{ body | safe }}</div>{% endif %}
 </div>
+{#- 分頁：歌詞（專輯、曲目）／樂譜（所有公開的樂譜），各有自己的網址 #}
+<nav class="tabs" aria-label="{{ t('lyrics') }}">
+  <a href="{{ link(lyrics_prefix) }}" aria-selected="{{ 'true' if tab == 'lyrics' else 'false' }}">{{ t('lyrics') }}</a>
+  <a href="{{ link(lyrics_prefix ~ 'sheets/') }}" aria-selected="{{ 'true' if tab == 'sheets' else 'false' }}">{{ t('sheets') }}</a>
+</nav>
+
+{% if tab == 'sheets' %}
+  <p class="muted small">{{ t('sheets_tab_intro', n=total) }}</p>
+  {% for song, sheets in groups %}
+    <section class="card sheet-group">
+      <div class="card-head">
+        <h2>{% if song.lyrics_slug and song.lyrics_published %}<a href="{{ link(lyrics_prefix ~ song.lyrics_slug ~ '/') }}">{{ tr(song, 'title') }}</a>{% else %}{{ tr(song, 'title') }}{% endif %}
+          <span class="small muted">· {{ tr(song, 'album_name') }}</span></h2>
+        <a class="btn small" href="{{ link('/contribute/sheet/' ~ song.id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
+      </div>
+      {% set show_song = false %}{% include "_sheet_cards.html" %}
+    </section>
+  {% else %}
+    <p class="empty">{{ t('sheets_none') }}</p>
+  {% endfor %}
+{% else %}
 
 {%- macro sheet_mark(s) %}{% if sheet_counts.get(s.id) %} <span class="sheet-mark" title="{{ t('sheets') }} {{ sheet_counts[s.id] }}">🎼 {{ t('sheets') }}{% if sheet_counts[s.id] > 1 %} {{ sheet_counts[s.id] }}{% endif %}</span>{% endif %}{% endmacro %}
 {# 可收放的清單：每張專輯一列，點名稱展開曲目。預設只展開第一個。順序在後台「歌詞索引排序」設定 #}
@@ -59,4 +81,5 @@
     </details>
   {% endfor %}
 </div>
+{% endif %}
 {% endblock %}

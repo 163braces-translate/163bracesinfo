@@ -595,6 +595,10 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .att-btn:hover { border-color: var(--primary); color: var(--primary); }
 .att-btn.on { background: var(--primary-soft); border-color: #b9d0f3; color: var(--primary-strong); }
 .att-btn.compact { padding: 3px 8px; font-size: .75rem; }
+.att-btn.unsaved { border-style: dashed; border-color: var(--primary); }      /* 按了還沒儲存 */
+/* 演出列表上方：有沒儲存的參與場次時固定在頁首下面，捲到哪都按得到 */
+.attend-save { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.results-head.dirty { position: sticky; top: 68px; z-index: 20; background: var(--bg); padding: 8px 0; box-shadow: 0 8px 8px -8px rgba(17, 24, 39, .12); }
 .perf-table .att-col { width: 1%; padding-right: 4px; }
 .perf-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .add-setlist { font-size: .78rem; color: var(--faint); margin-left: 6px; white-space: nowrap; }
@@ -708,3 +712,61 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .g-tools button:disabled { opacity: .35; cursor: default; }
 .g-tools button[data-g=remove]:hover { color: #b42318; border-color: #f0b4ad; }
 [data-gallery-count].over { color: #b42318; }
+
+/* 我的 → 回顧：左邊選項，右邊畫布；畫布上蓋一層可以拖曳的框（recap.js） */
+.recap { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 12px; }
+.recap-controls { display: grid; gap: 12px; }
+.recap-controls .card { padding: 16px 18px; }
+.recap-controls h2 { font-size: 1rem; margin-bottom: 10px; }
+.recap-controls select { width: 100%; }
+.recap-kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
+.recap-kinds .check-row { margin: 4px 0; }
+.recap-main { position: sticky; top: 12px; display: grid; justify-items: center; gap: 10px; }
+.recap-stage { position: relative; width: 100%; max-width: 420px; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.recap-stage.square { max-width: 520px; }
+.recap-stage canvas { display: block; width: 100%; height: auto; }
+.recap-guides span { position: absolute; pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgba(100, 106, 115, .13) 0 6px, transparent 6px 12px); }
+.recap-frames { position: absolute; inset: 0; }
+.recap-frame { position: absolute; cursor: move; touch-action: none; user-select: none; border-radius: 6px; outline: 1px dashed rgba(47, 111, 219, .45); }
+.recap-frame:hover, .recap-frame.active { outline: 2px solid var(--primary); z-index: 2; }
+/* × 和縮放點放在框的角落裡面，不然會被旁邊的圖表蓋住 */
+.recap-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 0;
+  background: var(--text); color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; }
+.recap-handle { position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--primary); cursor: nwse-resize; }
+/* 有滑鼠的時候，× 和縮放點只在指到那張圖時出現；手機一直顯示但小一點 */
+@media (hover: hover) {
+  .recap-x, .recap-handle { opacity: 0; transition: opacity .12s; }
+  .recap-frame:hover .recap-x, .recap-frame:hover .recap-handle, .recap-frame.active .recap-handle { opacity: 1; }
+}
+@media (hover: none) {
+  .recap-x { width: 18px; height: 18px; line-height: 18px; font-size: 12px; }
+  .recap-handle { width: 13px; height: 13px; }
+}
+.recap-safe-hint { max-width: 420px; margin: 0; text-align: center; }
+.recap-result { width: 100%; max-width: 420px; text-align: center; }
+.recap-result img { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px; }
+@media (max-width: 760px) {
+  .recap { grid-template-columns: 1fr; }
+  .recap-main { position: static; }
+}
+
+/* 演出地點連到 Google 地圖：跟一般文字同色，虛線底線表示可以點 */
+.venue-link { color: inherit; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
+.venue-link:hover { color: var(--primary); text-decoration-color: currentColor; }
+
+/* 我的足跡的移動路線（me.js 畫的）：顏色跟回顧圖一樣 */
+.fp-route .card-head b { color: var(--primary); }
+.route-map { margin-top: 10px; }
+.route-map .arc { fill: none; stroke: rgba(47, 111, 219, .45); stroke-width: 1.6; }
+.route-map .arc.far { stroke-dasharray: 4 3; }
+.route-map .stop { fill: var(--primary); stroke: #fff; stroke-width: 1.2; }
+.route-map .home { fill: #eb6834; stroke: #fff; stroke-width: 2; }
+.route-map text { paint-order: stroke; stroke: #fff; stroke-width: 2.5px; }
+.route-map .home-label { font-size: 12px; font-weight: 700; fill: #eb6834; }
+.route-map .box-label { font-size: 11px; fill: var(--muted); }
+
+/* 歌詞頁的「樂譜」分頁：每首歌一張卡片 */
+.sheet-group { margin-bottom: 16px; }
+.sheet-group .card-head h2 a { color: inherit; }

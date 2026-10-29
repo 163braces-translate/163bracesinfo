@@ -20,6 +20,10 @@
       {{ fx.text('event_name_en', row.event_name_en if row else '', '英文名稱', help='空白時英文版顯示中文名稱') }}
       {{ fx.text('venue', row.venue if row else '', '地點') }}
       {{ fx.text('venue_en', row.venue_en if row else '', '英文地點') }}
+      {{ fx.text('map_url', row.map_url if row else '', '場地 Google Maps 連結',
+                 help='在 Google 地圖打開場地，按「分享」→「複製連結」貼上（網址裡有 @緯度,經度 的也可以，或直接貼座標）。存檔時自動讀出座標，用來算粉絲回顧裡的移動距離；前台的地點也會連到這裡。空白的話，同一個場地以前填過就自動帶入。') }}
+      {% if row and row.lat is not none %}<p class="help" style="margin-top: -8px">目前座標：<a href="{{ maps_search(row.lat, row.lng) }}" target="_blank" rel="noopener">{{ row.lat }}, {{ row.lng }}</a></p>
+      {% elif row and row.map_url %}<p class="help warn-text" style="margin-top: -8px">這條連結還沒讀到座標。</p>{% endif %}
       <div class="form-row">
         <label class="field" for="f-city">城市 <span class="req">*</span></label>
         <select id="f-city" name="city_id" required>

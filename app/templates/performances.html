@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_map.html" as mp with context %}
+{% import "_macros.html" as m %}
 {% block head %}{% include "_stats_head.html" %}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -76,8 +77,15 @@
   </aside>
 
   <section aria-label="{{ tr(page, 'title') }}">
-    <div class="results-head">
+    <div class="results-head" data-attend-bar>
       <span class="muted">{{ t('results', n=total) }}</span>
+      {% if visitor and total %}
+        <span class="attend-save">
+          <span class="small muted" data-attend-status data-hint="{{ t('attend_hint') }}" data-dirty="{{ t('attend_unsaved', n='{n}') }}"
+                data-done="{{ t('attend_saved') }}" data-failed="{{ t('attend_save_failed') }}" data-leave="{{ t('attend_leave') }}">{{ t('attend_hint') }}</span>
+          <button class="btn small primary" type="button" data-attend-submit disabled>{{ t('attend_save') }}</button>
+        </span>
+      {% endif %}
     </div>
     {% if not total %}
       <p class="empty">{{ t('no_results') }}</p>
@@ -85,7 +93,9 @@
     {#- 登入後多一欄「去過」；欄數跟著變 #}
     {%- set cols = 6 if visitor else 5 %}
     {% macro attend_button(p, cls='att-btn') -%}
+      {#- data-saved：資料庫裡的狀態；按了先只改畫面，按「儲存參與場次」才存（site.js）。沒登入的按了去登入 #}
       <button type="button" class="{{ cls }} {{ 'on' if p.id in attended }}" data-attend="{{ p.id }}" aria-pressed="{{ 'true' if p.id in attended else 'false' }}"
+              data-saved="{{ '1' if p.id in attended else '0' }}" {% if not visitor %}data-login="/auth/login?next={{ current_path | urlencode }}"{% endif %}
               data-on="{{ t('attended_on') }}" data-off="{{ t('attended') }}">{{ t('attended_on') if p.id in attended else t('attended') }}</button>
     {%- endmacro %}
     {% macro perf_extra(p) %}
@@ -131,7 +141,7 @@
               {% if soon %} <span class="chip blue">{{ t('soon') }}</span>{% endif %}
             </td>
             <td><span class="chip">{{ tr(p, 'type_name') }}</span></td>
-            <td>{{ tr(p, 'venue') }}</td>
+            <td>{{ m.venue(p, tr(p, 'venue')) }}</td>
             <td class="nowrap">{{ tr(p, 'city_name') }}</td>
           </tr>
           {% if p.setlist %}
@@ -160,7 +170,7 @@
                 {% if soon %}<span class="chip blue">{{ t('soon') }}</span>{% endif %}
               </div>
               <div class="n">{{ tr(p, 'event_name') }}</div>
-              <div class="m">{{ tr(p, 'city_name') }}{% if tr(p, 'venue') %} · {{ tr(p, 'venue') }}{% endif %}</div>
+              <div class="m">{{ tr(p, 'city_name') }}{% if tr(p, 'venue') %} · {{ m.venue(p, tr(p, 'venue')) }}{% endif %}</div>
               {{ perf_extra(p) }}
               {% if p.setlist %}
                 <details class="perf-card-setlist">

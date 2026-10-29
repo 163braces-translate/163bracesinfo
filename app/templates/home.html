@@ -9,7 +9,7 @@
     </span>
     <div class="info">
       <div class="name">{{ tr(p, 'event_name') }}</div>
-      <div class="meta">{{ tr(p, 'type_name') }} · {{ tr(p, 'city_name') }}{% if p.venue %} · {{ tr(p, 'venue') }}{% endif %}</div>
+      <div class="meta">{{ tr(p, 'type_name') }} · {{ tr(p, 'city_name') }}{% if p.venue %} · {{ m.venue(p, tr(p, 'venue')) }}{% endif %}</div>
     </div>
   </li>
 {% endmacro %}

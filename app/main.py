@@ -148,6 +148,9 @@ def sitemap(request: Request, con=Depends(get_con)):
     urls += [url for tab, url in Q.tab_urls(con).items() if tab != "list" and url not in hidden]
     prefix = Q.lyrics_prefix(con)
     urls += [prefix + r["slug"] + "/" for r in con.execute("SELECT slug FROM lyrics WHERE published = 1")]
+    lyr = Q.pages_by_kind(con).get("lyrics")
+    if lyr and lyr["published"]:
+        urls.append(Q.sheets_url(con))
     body = "".join("<url><loc>%s%s</loc></url><url><loc>%s/en%s</loc></url>" % (base, u, base, u) for u in urls)
     return Response('<?xml version="1.0" encoding="UTF-8"?>'
                     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">%s</urlset>' % body,
@@ -317,9 +320,21 @@ def stats_context(request, con, tab):
     }
 
 
-def lyrics_index(request, con, page):
+def lyrics_index(request, con, page, tab="lyrics"):
+    """歌詞頁：「歌詞」分頁（專輯與曲目）和「樂譜」分頁（所有公開的樂譜），各有自己的網址。"""
+    if tab == "sheets":
+        # 照歌詞索引的歌曲順序（專輯、曲目），同一首歌的樂譜照投稿先後
+        order = [r[0] for r in con.execute("SELECT g.id FROM songs g JOIN albums a ON a.id = g.album_id "
+                                           "WHERE g.id IN (SELECT song_id FROM sheets WHERE status = 'approved') "
+                                           "ORDER BY a.sort_order, g.sort_order, g.id")]
+        sheets = community.sheets_for_songs(con, lang_of(request), order)
+        songs = {s["id"]: s for s in con.execute(Q.SONG_SELECT + " WHERE g.id IN (%s)" % ",".join("?" * len(order)), order)} \
+            if order else {}
+        groups = [(songs[sid], [s for s in sheets if s["song_id"] == sid]) for sid in order]
+        return render(request, con, "lyrics_index.html", {"tab": tab, "groups": groups, "total": len(sheets)}, page=page)
     # 每首歌旁邊的 ♥：不用點進歌詞頁就能按喜歡
     return render(request, con, "lyrics_index.html", {
+        "tab": tab,
         "boxes": Q.lyrics_boxes(con),
         "liked": community.liked_ids(con, community.current_visitor(request, con)),
         "like_counts": community.like_counts(con),
@@ -405,6 +420,10 @@ def resolve(path: str, request: Request, con=Depends(get_con)):
             if perf and ((perf["published"] and Q.tab_statuses(con)[tab] == "live") or preview):
                 return cached_page(request, con, lambda: performances_page(request, con, perf, tab))
     prefix = Q.lyrics_prefix(con).strip("/")
+    if slug == prefix + "/" + Q.SHEETS_SEGMENT:          # 歌詞頁的「樂譜」分頁，跟著歌詞頁上不上線
+        lyr = Q.pages_by_kind(con).get("lyrics")
+        if lyr and (lyr["published"] or preview):
+            return lyrics_index(request, con, lyr, "sheets")
     if slug.startswith(prefix + "/") and "/" not in slug[len(prefix) + 1:]:
         row = con.execute("SELECT * FROM lyrics WHERE slug = ?", (slug[len(prefix) + 1:],)).fetchone()
         if row and (row["published"] or preview):

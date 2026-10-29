@@ -63,6 +63,7 @@ def T(request, key, **kw):
 PRIVACY_ZH = """<h2>我們存了什麼</h2>
 <p>用 Google 帳號登入時，我們只會從 Google 取得：帳號 ID、email、名字、大頭貼。email 只用來辨識帳號，不會公開、不會寄信給你。</p>
 <p>你在網站上記錄的「去過的場次」「喜歡的歌」、投稿的跑馬燈、演出補充與樂譜，會跟你的帳號一起存在本站的資料庫。</p>
+<p>「回顧」與「我的足跡」裡選的住的地方（行政區），預設只記在你的瀏覽器；勾選「記在我的帳號」才會存到本站，取消勾選就會刪除。</p>
 <h2>誰看得到</h2>
 <p>去過的場次與喜歡的歌預設只有你自己看得到；網站只會顯示匿名的加總（例如「12 位粉絲去過這場」）。你可以在「我的 → 設定」開啟公開個人頁。</p>
 <p>跑馬燈與樂譜的署名由你每次投稿時選擇：Google 帳號名、自選暱稱或匿名。</p>
@@ -74,6 +75,7 @@ PRIVACY_ZH = """<h2>我們存了什麼</h2>
 PRIVACY_EN = """<h2>What we store</h2>
 <p>When you sign in with Google we only receive your account ID, email, name and profile picture. Your email is used to identify your account; it is never shown publicly and we never email you.</p>
 <p>The shows you attended, songs you like, and anything you submit (ticker messages, show details, sheet music) are stored with your account.</p>
+<p>The district you pick as where you live (in Recap and My shows) stays in your browser unless you tick "Remember on my account"; untick it to delete it from the site.</p>
 <h2>Who can see it</h2>
 <p>Your shows and liked songs are private by default; the site only shows anonymous totals (e.g. "12 fans were there"). You can turn on a public profile in My page → Settings.</p>
 <p>For ticker messages and sheet music you choose the name each time: your Google name, your nickname, or anonymous.</p>
@@ -238,8 +240,8 @@ def footprint(con, lang, visitor_id, f=None):
     by_year = Counter(p["event_date"][:4] for p in perfs)
     years = sorted(by_year)
     by_type = Counter(p["event_type_id"] for p in perfs)
-    # 甜甜圈從 12 點鐘順時針、多的在前；顏色跟著類型走（i 是類型的順序），換順序顏色也不會跳
-    type_rows = sorted([(i, t) for i, t in enumerate(types) if by_type.get(t["id"])], key=lambda x: -by_type[x[1]["id"]])
+    # 甜甜圈從 12 點鐘順時針、多的在前，一樣多的照後台的排序；顏色跟著類型走（i 是類型的順序），換順序顏色也不會跳
+    type_rows = sorted([(i, t) for i, t in enumerate(types) if by_type.get(t["id"])], key=lambda x: (-by_type[x[1]["id"]], x[0]))
 
     # 地圖：跟演出頁同一張，只是圓點大小換成「我去過幾場」
     city_n = Counter(p["city_id"] for p in perfs)
@@ -274,6 +276,12 @@ def footprint(con, lang, visitor_id, f=None):
         "distinct_songs": len(heard),
         "never": never,
         "map_cities": map_cities,
+        # 移動路線（只在自己的「我的足跡」畫，住的地方在瀏覽器裡選）：已經去過的場次，照日期排
+        "route": {"cities": route_cities(con, lang), "shows": [
+            {"d": p["event_date"], "c": p["city_id"], "ll": [p["lng"], p["lat"]] if p["lat"] is not None else None,
+             "label": "%s · %s · %s" % (p["event_date"].replace("-", "/"), i18n.tr(lang, p, "event_name"),
+                                        i18n.tr(lang, p, "venue") or i18n.tr(lang, p, "city_name"))}
+            for p in sorted(perfs, key=lambda p: (p["event_date"], p["id"])) if p["event_date"] <= Q.today()]},
         "charts": {
             # 每年去了幾場：依演出類型堆疊，顏色跟甜甜圈一樣（跟著類型走）
             "years": {"labels": years, "datasets": [
@@ -284,6 +292,42 @@ def footprint(con, lang, visitor_id, f=None):
                       "datasets": [{"data": [by_type[t["id"]] for _, t in type_rows],
                                     "backgroundColor": [Q.color(i) for i, _ in type_rows]}]},
         },
+    }
+
+
+def route_cities(con, lang):
+    """移動路線用的城市：地圖上的代號、中心點（場地還沒填座標時用；static/home-route.js）。"""
+    return [{"id": c["id"], "name": i18n.tr(lang, c, "name"), "key": c["map_key"], "ll": taiwan.lonlat(c["map_key"])}
+            for c in Q.cities(con)]
+
+
+def recap_data(con, lang, visitor):
+    """「回顧」分頁的資料：去過的（已經發生的）場次、各場歌單、喜歡的歌、地圖。
+    期間、圖表、移動距離都在瀏覽器裡算（static/recap.js），選了什麼不會送回來。"""
+    perfs = con.execute("SELECT p.id, p.event_date, p.event_type_id, p.city_id, p.lat, p.lng FROM performances p "
+                        "JOIN attendance a ON a.performance_id = p.id AND a.visitor_id = ? "
+                        "WHERE p.event_date <= ? ORDER BY p.event_date, p.id", (visitor["id"], Q.today())).fetchall()
+    titles, shows = {}, []
+    lists = Q.setlists(con, [p["id"] for p in perfs])
+    for p in perfs:
+        keys = []
+        for it in lists.get(p["id"], []):
+            key = "s%d" % it["song_id"] if it["song_id"] else "c:" + it["custom_title"]
+            titles[key] = Q.song_title(lang, it)
+            keys.append(key)
+        shows.append({"d": p["event_date"], "t": p["event_type_id"], "c": p["city_id"], "songs": keys,
+                      "ll": [p["lng"], p["lat"]] if p["lat"] is not None else None})     # 場地座標；沒有的話用縣市中心
+    logo = db.get_setting(con, "replay_logo_id")
+    return {
+        "shows": shows, "titles": titles, "today": Q.today(),
+        "types": [{"id": t["id"], "name": i18n.tr(lang, t, "name"), "color": Q.color(i)}
+                  for i, t in enumerate(Q.event_types(con))],
+        "cities": route_cities(con, lang),
+        "likes": [i18n.tr(lang, s, "title") for s in liked_songs(con, visitor["id"])],
+        "names": {"google": "" if V.is_guest(visitor) else visitor["google_name"], "nickname": visitor["nickname"]},
+        "home_saved": visitor["home_district"], "can_save_home": not V.is_guest(visitor),
+        "map": taiwan.map_data(), "colors": Q.CHART_COLORS, "other_color": Q.OTHER_COLOR,
+        "logo": Q.image_url(int(logo), 400) if str(logo).isdigit() else "",
     }
 
 
@@ -332,7 +376,29 @@ def contribute_performance_pick(request: Request, id: int = 0):
     return RedirectResponse(prefix + ("/contribute/performance/%d/" % id if id else "/me/?tab=submissions"), status_code=303)
 
 
-ME_TABS = ("footprint", "likes", "submissions", "settings")
+# 台灣的行政區（static/tw-districts.json）：「記在我的帳號」只收這裡面有的「縣市|行政區」
+with open(os.path.join(os.path.dirname(__file__), "static", "tw-districts.json"), encoding="utf-8") as _f:
+    DISTRICTS = {county + "|" + town[0] for county, _, towns in json.load(_f) for town in towns}
+
+
+@router.post("/api/me/home")
+async def save_home(request: Request, con=Depends(get_con)):
+    """住的地方存到帳號（選填）。home 空白＝從帳號刪掉，瀏覽器裡記的不受影響。"""
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return need_login_json(request)
+    if V.is_guest(visitor):
+        return JSONResponse({"error": T(request, "guest_cannot_submit")}, status_code=403)
+    home = ((await request.form()).get("home") or "").strip()
+    if home and home not in DISTRICTS:
+        return JSONResponse({"error": "bad district"}, status_code=400)
+    con.execute("UPDATE visitors SET home_district = ? WHERE id = ?", (home, visitor["id"]))
+    con.commit()
+    return {"ok": True}
+
+
+ME_TABS = ("footprint", "likes", "recap", "submissions", "settings")
 
 
 @router.get("/me/")
@@ -348,6 +414,7 @@ def me_page(request: Request, con=Depends(get_con)):
         "likes": liked_songs(con, visitor["id"]),
         "subs": my_submissions(con, visitor["id"]), "map": taiwan.map_data(), "msg": request.query_params.get("msg"),
         "choices": contribute_choices(con) if tab == "submissions" else None,
+        "recap": recap_data(con, lang, visitor) if tab == "recap" else None,
         "tabs": tabs, "guest_until": V.guest_expires(visitor).strftime("%Y/%m/%d %H:%M") if V.is_guest(visitor) else None,
     }, page={"title": "我的", "title_en": "My page"})
 
@@ -445,24 +512,58 @@ def need_login_json(request):
                         status_code=401)
 
 
-@router.post("/api/me/attendance/{performance_id:int}")
-def toggle_attendance(performance_id: int, request: Request, con=Depends(get_con)):
+@router.post("/api/me/attendance")
+async def save_attendance(request: Request, con=Depends(get_con)):
+    """演出列表按「儲存參與場次」：on 是要標成去過的演出 id、off 是要取消的，都用逗號隔開。
+    回傳每一場現在幾位粉絲去過（畫面上的人數跟著更新）。"""
     check_post(request)
     visitor = current_visitor(request, con)
     if not visitor:
         return need_login_json(request)
-    if not con.execute("SELECT 1 FROM performances WHERE id = ?", (performance_id,)).fetchone():
-        raise HTTPException(404)
-    key = (visitor["id"], performance_id)
-    if con.execute("SELECT 1 FROM attendance WHERE visitor_id = ? AND performance_id = ?", key).fetchone():
-        con.execute("DELETE FROM attendance WHERE visitor_id = ? AND performance_id = ?", key)
-        on = False
-    else:
-        con.execute("INSERT INTO attendance VALUES (?, ?, ?)", key + (db.now(),))
-        on = True
+    form = await request.form()
+    def ids(name):
+        return {int(x) for x in (form.get(name) or "").split(",") if x.strip().isdigit()}
+    on, off = ids("on"), ids("off")
+    on -= off
+    existing = {r[0] for r in con.execute("SELECT id FROM performances WHERE id IN (%s)" % ",".join("?" * len(on)), list(on))} \
+        if on else set()
+    con.executemany("INSERT OR IGNORE INTO attendance VALUES (?, ?, ?)", [(visitor["id"], pid, db.now()) for pid in existing])
+    con.executemany("DELETE FROM attendance WHERE visitor_id = ? AND performance_id = ?", [(visitor["id"], pid) for pid in off])
     con.commit()
-    n = con.execute("SELECT COUNT(*) FROM attendance WHERE performance_id = ? AND " + COUNTED, (performance_id,)).fetchone()[0]
-    return {"on": on, "count": n}
+    counts = {pid: con.execute("SELECT COUNT(*) FROM attendance WHERE performance_id = ? AND " + COUNTED, (pid,)).fetchone()[0]
+              for pid in existing | off}
+    return {"counts": counts}
+
+
+@router.post("/me/attendance/{performance_id:int}/delete")
+async def me_delete_attendance(performance_id: int, request: Request, con=Depends(get_con)):
+    """「我的足跡」的去過的場次：刪掉一筆，回到原本的頁面（篩選條件不變）。"""
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    con.execute("DELETE FROM attendance WHERE visitor_id = ? AND performance_id = ?", (visitor["id"], performance_id))
+    con.commit()
+    return RedirectResponse(back_to_me((await request.form()).get("back"), request, "attendance_deleted"), status_code=303)
+
+
+@router.post("/me/likes/{song_id:int}/delete")
+async def me_delete_like(song_id: int, request: Request, con=Depends(get_con)):
+    check_post(request)
+    visitor = current_visitor(request, con)
+    if not visitor:
+        return RedirectResponse(login_url(request), status_code=303)
+    con.execute("DELETE FROM song_likes WHERE visitor_id = ? AND song_id = ?", (visitor["id"], song_id))
+    con.commit()
+    return RedirectResponse(back_to_me((await request.form()).get("back"), request, "like_deleted"), status_code=303)
+
+
+def back_to_me(back, request, msg_key):
+    """刪除之後回「我的」的哪裡：只接受 /me/ 或 /en/me/ 開頭的網址，再加上提示訊息。"""
+    prefix = "/en" if lang_of(request) == "en" else ""
+    back = back if back and re.match(r"^(/en)?/me/(\?|$)", back) else prefix + "/me/"
+    back = re.sub(r"([?&])msg=[^&]*&?", r"\1", back).rstrip("?&")
+    return back + ("&" if "?" in back else "?") + "msg=" + quote(T(request, msg_key))
 
 
 @router.post("/api/me/likes/order")
@@ -680,6 +781,7 @@ async def contribute_show(request: Request, con=Depends(get_con)):
     setlist = parse_setlist_text(con, form.get("setlist"))        # 選填：已經演出過的話可以一起附上
     if setlist:
         payload["setlist"] = setlist
+    payload["map_url"] = (form.get("map_url") or "").strip()[:500]
     payload["source"] = (form.get("source") or "").strip()[:500]
     if not payload["source"]:
         return fail("contribute_need_source")
@@ -710,8 +812,9 @@ def sheets_for_songs(con, lang, song_ids, statuses=("approved",)):
     for f in con.execute("SELECT * FROM sheet_files WHERE sheet_id IN (%s) ORDER BY position"
                          % ",".join("?" * len(rows)), [r["id"] for r in rows]) if rows else []:
         files[f["sheet_id"]].append(f)
-    likes = dict(con.execute("SELECT sheet_id, COUNT(*) FROM sheet_likes WHERE sheet_id IN (%s) AND " + COUNTED + " GROUP BY sheet_id"
-                             % ",".join("?" * len(rows)), [r["id"] for r in rows]).fetchall()) if rows else {}
+    # COUNTED 裡有 LIKE 'guest:%'，要等 IN (…) 填好之後才接上，不然 % 會被當成格式符號
+    likes = dict(con.execute("SELECT sheet_id, COUNT(*) FROM sheet_likes WHERE sheet_id IN (%s) AND " % ",".join("?" * len(rows))
+                             + COUNTED + " GROUP BY sheet_id", [r["id"] for r in rows]).fetchall()) if rows else {}
     anon = i18n.t(lang, "anonymous")
     out = []
     for r in rows:

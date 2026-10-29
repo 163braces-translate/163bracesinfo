@@ -35,11 +35,84 @@
             <button type="button" class="icon-btn small" data-move="up" aria-label="{{ t('move_up') }} {{ tr(s, 'title') }}">↑</button>
             <button type="button" class="icon-btn small" data-move="down" aria-label="{{ t('move_down') }} {{ tr(s, 'title') }}">↓</button>
           </span>
-          <button type="button" class="like-btn on" data-like="{{ s.id }}" aria-pressed="true" aria-label="{{ t('like') }}"><span class="heart">♥</span></button>
+          <form method="post" action="/me/likes/{{ s.id }}/delete"><input type="hidden" name="back" value="{{ link('/me/') }}?tab=likes">
+            <button class="btn small" type="submit" data-confirm="{{ t('like_delete_confirm') }}" aria-label="{{ t('delete') }} {{ tr(s, 'title') }}">{{ t('delete') }}</button></form>
         </li>
       {% endfor %}
     </ol>
   {% else %}<p class="empty">{{ t('likes_empty') }}</p>{% endif %}
+{% elif tab == 'recap' %}
+  {#- 回顧卡片：左邊選項、右邊畫布（可拖曳），全部在瀏覽器裡做（static/recap.js） #}
+  {% if not recap.shows and not recap.likes %}<p class="empty">{{ t('fp_empty') }}</p>{% else %}
+  <p class="small muted">{{ t('recap_intro') }}</p>
+  <div class="recap">
+    <div class="recap-controls">
+      <section class="card">
+        <h2>{{ t('recap_size') }}</h2>
+        <div class="pills">
+          <label class="pill"><input type="radio" name="recap-format" value="story" checked><span>{{ t('recap_story') }}</span></label>
+          <label class="pill"><input type="radio" name="recap-format" value="square"><span>{{ t('recap_square') }}</span></label>
+        </div>
+      </section>
+      <section class="card">
+        <h2>{{ t('recap_name') }}</h2>
+        <div class="pills">
+          {% if recap.names.google %}<label class="pill"><input type="radio" name="recap-name" value="google" checked><span>{{ t('name_google') }}：{{ recap.names.google }}</span></label>{% endif %}
+          {% if recap.names.nickname %}<label class="pill"><input type="radio" name="recap-name" value="nickname" {{ 'checked' if not recap.names.google }}><span>{{ t('name_nickname') }}：{{ recap.names.nickname }}</span></label>{% endif %}
+        </div>
+      </section>
+      <section class="card">
+        <h2>{{ t('recap_period') }}</h2>
+        <select id="recap-year" aria-label="{{ t('year') }}"></select>
+        <div class="date-row" style="margin-top: 8px">
+          <input type="date" id="recap-from" aria-label="{{ t('from') }}">
+          <input type="date" id="recap-to" aria-label="{{ t('to') }}">
+        </div>
+        <p class="small muted" style="margin: 6px 0 0">{{ t('recap_period_shows') }} <b id="recap-period-label"></b> · <span id="recap-period-n"></span></p>
+      </section>
+      <section class="card">
+        <h2>{{ t('recap_home') }}</h2>
+        <div class="date-row">
+          <select id="recap-county" aria-label="{{ t('recap_county') }}"><option value="">{{ t('recap_county') }}</option></select>
+          <select id="recap-town" aria-label="{{ t('recap_town') }}" disabled><option value="">{{ t('recap_town') }}</option></select>
+        </div>
+        {% if recap.can_save_home %}<label class="check-row small"><input type="checkbox" id="recap-remember"> {{ t('home_remember') }}</label>{% endif %}
+        <p class="small muted" style="margin: 6px 0 0">{{ t('recap_home_help') }} <b id="recap-km"></b></p>
+      </section>
+      <section class="card">
+        <h2>{{ t('recap_charts') }}</h2>
+        <p class="small muted" style="margin-top: 0">{{ t('recap_charts_help') }}</p>
+        <div class="recap-kinds" id="recap-kinds"></div>
+        <label class="field" for="recap-rows">{{ t('recap_rows') }}</label>
+        <select id="recap-rows"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option></select>
+        <button class="btn" type="button" id="recap-auto" style="margin-top: 12px">{{ t('recap_auto') }}</button>
+      </section>
+    </div>
+    <div class="recap-main">
+      <div class="recap-stage" id="recap-stage">
+        <canvas id="recap-canvas" width="1080" height="1920"></canvas>
+        <div class="recap-guides" aria-hidden="true"></div>
+        <div class="recap-frames"></div>
+      </div>
+      <p class="small muted recap-safe-hint">{{ t('recap_safe_hint') }}</p>
+      <button class="btn primary" type="button" id="recap-export">{{ t('recap_export') }}</button>
+      <section class="card recap-result" id="recap-result" hidden>
+        <img id="recap-img" alt="{{ t('tab_recap') }}">
+        <p class="small muted">{{ t('recap_save_help') }}</p>
+        <button class="btn primary" type="button" id="recap-download">{{ t('recap_download') }}</button>
+      </section>
+    </div>
+  </div>
+  <script type="application/json" id="recap-data">{{ dict(recap, lang=lang, districts="/static/tw-districts.json?v=" ~ asset_version, text={
+    "title": t('recap_title', name='{name}'), "footer": t('recap_footer'), "custom": t('fp_custom_range'), "all": t('fp_all_years'),
+    "numbers": t('recap_k_numbers'), "years": t('fp_by_year'), "months": t('recap_by_month'), "types": t('fp_by_type'),
+    "cities": t('recap_by_city'), "map": t('fp_map'), "routes": t('recap_routes'), "home": t('recap_home_dot'),
+    "routes_need_home": t('recap_routes_need_home'), "km_short": t('recap_km_short', km='{km}'), "heard": t('fp_heard'), "likes": t('tab_likes'),
+    "n_shows": t('recap_n_shows'), "n_songs": t('recap_n_songs'), "n_cities": t('recap_n_cities'), "km": t('recap_km'),
+    "times": t('times'), "shows": t('shows'), "other": t('recap_other'), "month": t('recap_month', m='{m}'),
+    "shows_n": t('results', n='{n}'), "km_note": t('recap_km_note', km='{km}', n='{n}'), "none": t('recap_none'),
+    "file": t('recap_file')}) | tojson }}</script>
+  {% endif %}
 {% elif tab == 'submissions' %}
   {#- 上方：四種投稿的入口；下方：各自的紀錄 #}
   {%- macro show_option(s) %}<option value="{{ s.id }}">{{ s.event_date | replace('-', '/') }} {{ tr(s, 'event_name') }}</option>{% endmacro %}
@@ -131,4 +204,7 @@
   </form>
 {% endif %}
 {% endblock %}
-{% block scripts %}{% if tab == 'footprint' %}<script src="/static/me.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
+{% block scripts %}
+{% if tab in ('footprint', 'recap') %}<script src="/static/home-route.js?v={{ asset_version }}"></script>{% endif %}
+{% if tab == 'footprint' %}<script src="/static/me.js?v={{ asset_version }}"></script>{% endif %}
+{% if tab == 'recap' and recap and (recap.shows or recap.likes) %}<script src="/static/recap.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

@@ -43,7 +43,10 @@ CREATE TABLE IF NOT EXISTS performances (
     venue                    TEXT NOT NULL DEFAULT '',
     venue_en                 TEXT NOT NULL DEFAULT '',
     city_id                  INTEGER NOT NULL REFERENCES cities(id),
-    setlist_order_uncertain  INTEGER NOT NULL DEFAULT 0
+    setlist_order_uncertain  INTEGER NOT NULL DEFAULT 0,
+    map_url                  TEXT NOT NULL DEFAULT '',   -- 場地的 Google Maps 連結（前台地點連過去）
+    lat                      REAL,                      -- 從連結讀出的座標（app/maps.py），算移動距離用
+    lng                      REAL
 );
 CREATE INDEX IF NOT EXISTS performances_date ON performances(event_date);
 
@@ -190,6 +193,7 @@ CREATE TABLE IF NOT EXISTS visitors (
     handle          TEXT UNIQUE,                -- 公開個人頁的網址 /fans/<handle>/；空白＝沒開
     profile_public  INTEGER NOT NULL DEFAULT 0, -- 1＝公開去過的場次與喜歡的歌
     banned          INTEGER NOT NULL DEFAULT 0, -- 1＝不能再投稿（已投的跑馬燈也不顯示）
+    home_district   TEXT NOT NULL DEFAULT '',   -- 選填：住的行政區「縣市|行政區」，算移動路線用；粉絲勾了「記在我的帳號」才存
     created_at      TEXT NOT NULL,
     last_login      TEXT
 );

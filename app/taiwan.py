@@ -68,6 +68,22 @@ INSETS = {
     "kinmen": ("金門", 12, 78),
 }
 INSET_SIZE = (56, 48)
+INSET_COORDS = {"lienchiang": (119.95, 26.16), "kinmen": (118.32, 24.44)}     # 算距離用的經緯度
+
+
+def lonlat(map_key):
+    """縣市的大致中心（經度, 緯度）；不在地圖上的（例如「海外」）是 None。"""
+    if map_key in CITIES:
+        return CITIES[map_key][1:]
+    return INSET_COORDS.get(map_key)
+
+
+def distance_km(a, b):
+    """兩個（經度, 緯度）之間的直線距離（大圓距離）。"""
+    (lon1, lat1), (lon2, lat2) = a, b
+    h = (math.sin(math.radians(lat2 - lat1) / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 2 * 6371 * math.asin(math.sqrt(h))
 
 
 def project(lon, lat):
@@ -91,4 +107,5 @@ def map_data():
         "mainland": _path(MAINLAND),
         "islands": [_path(PENGHU)],
         "nodes": nodes,
+        "proj": [LON0, LAT0, K, COS],       # 前端把經緯度換成地圖座標用（static/recap.js）
     }

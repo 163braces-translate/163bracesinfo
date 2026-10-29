@@ -7,7 +7,7 @@ from functools import partial
 
 from fastapi.templating import Jinja2Templates
 
-from . import db, i18n, navigation, queries as Q, visitors
+from . import db, i18n, maps, navigation, queries as Q, visitors
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSET_VERSION = str(int(max(os.path.getmtime(os.path.join(HERE, "static", f))
@@ -16,6 +16,16 @@ ASSET_VERSION = str(int(max(os.path.getmtime(os.path.join(HERE, "static", f))
 templates = Jinja2Templates(directory=os.path.join(HERE, "templates"))
 templates.env.globals.update(image_url=Q.image_url, page_url=Q.page_url, song_cover_id=Q.song_cover_id,
                              asset_version=ASSET_VERSION, youtube_id=Q.youtube_id)
+
+
+def venue_url(p):
+    """前台地點連到 Google 地圖：有原本的連結用連結，只有座標就用座標搜尋。"""
+    if p["map_url"]:
+        return p["map_url"]
+    return maps.search_url(p["lat"], p["lng"]) if p["lat"] is not None else ""
+
+
+templates.env.globals["venue_url"] = venue_url
 
 
 def get_con():

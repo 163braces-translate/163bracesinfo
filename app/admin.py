@@ -14,13 +14,14 @@ import re
 import secrets
 import sqlite3
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, navigation, pagetree, queries as Q, taiwan, visitors as V
+from . import auth, db, maps, navigation, pagetree, queries as Q, taiwan, visitors as V
 from .web import ASSET_VERSION
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +53,7 @@ def site_name():
 templates.env.globals["site_logo_id"] = site_logo_id
 templates.env.globals["asset_version"] = ASSET_VERSION
 templates.env.globals["site_name"] = site_name
+templates.env.globals["maps_search"] = maps.search_url
 
 PER_PAGE = 50
 LINE_BREAK = "⏎"      # 歌詞編輯器裡代表「同一格內換行」的符號
@@ -447,6 +449,8 @@ async def performance_save(item_id: str, request: Request, con=Depends(user_requ
         if song or custom:
             setlist.append((song, custom, note))
 
+    data["map_url"], data["lat"], data["lng"], map_msg = performance_location(con, item_id, data, form.get("map_url"))
+
     cols = list(data)
     if item_id == "new":
         item_id = con.execute("INSERT INTO performances (%s) VALUES (%s)" % (", ".join(cols), ", ".join("?" * len(cols))),
@@ -460,8 +464,104 @@ async def performance_save(item_id: str, request: Request, con=Depends(user_requ
                     "VALUES (?, ?, ?, ?, ?)", [(item_id, i, s, c, n) for i, (s, c, n) in enumerate(setlist)])
     con.commit()
     if form.get("action") == "save_new":
-        return done("/admin/performances/new")
-    return done("/admin/performances/%d" % item_id)
+        return done("/admin/performances/new", map_msg or "已儲存")
+    return done("/admin/performances/%d" % item_id, map_msg or "已儲存")
+
+
+def performance_location(con, item_id, data, text):
+    """演出存檔時的場地位置 → (連結, 緯度, 經度, 要提醒管理者的話)。
+    連結沒改就沿用原本的座標（不用每次都去問 Google）；沒填的話，同一個場地以前填過就自動帶入。"""
+    text = (text or "").strip()
+    old = con.execute("SELECT map_url, lat, lng FROM performances WHERE id = ?", (as_int(item_id),)).fetchone()
+    if not text:
+        same = con.execute("SELECT map_url, lat, lng FROM performances WHERE venue = ? AND city_id = ? AND lat IS NOT NULL "
+                           "ORDER BY event_date DESC LIMIT 1", (data["venue"], data["city_id"])).fetchone() \
+            if data["venue"] else None
+        return (same["map_url"], same["lat"], same["lng"], "已儲存，場地位置沿用同一個場地之前填的") if same \
+            else ("", None, None, "")
+    if old and old["map_url"] == text and old["lat"] is not None:
+        return text, old["lat"], old["lng"], ""
+    try:
+        url, lat, lng = maps.resolve(text)
+    except maps.MapLinkError as e:
+        return text, None, None, "已儲存，但場地位置沒讀到：" + str(e)
+    return url, lat, lng, far_warning(con, data["city_id"], lat, lng)
+
+
+def far_warning(con, city_id, lat, lng):
+    """座標離這場的縣市太遠（可能貼錯連結）就提醒；海外的城市沒有中心點，不檢查。"""
+    city = con.execute("SELECT name, map_key FROM cities WHERE id = ?", (city_id,)).fetchone()
+    center = city and taiwan.lonlat(city["map_key"])
+    if not center:
+        return ""
+    km = taiwan.distance_km(center, (lng, lat))
+    return "已儲存，但場地位置離%s的中心有 %d 公里，請確認連結有沒有貼錯" % (city["name"], km) if km > 60 else ""
+
+
+# ==================================================================== 場地位置
+def venue_rows(con, missing=False, q=""):
+    """不重複的場地（地點名稱＋城市），附上目前的連結、有幾場已經有座標。"""
+    rows = con.execute("""
+        SELECT p.venue, p.city_id, c.name AS city_name, COUNT(*) AS n, MAX(p.event_date) AS last,
+               SUM(p.lat IS NOT NULL) AS located,
+               (SELECT x.map_url FROM performances x WHERE x.venue = p.venue AND x.city_id = p.city_id
+                ORDER BY x.lat IS NULL, x.event_date DESC LIMIT 1) AS map_url,
+               (SELECT x.lat || ', ' || x.lng FROM performances x WHERE x.venue = p.venue AND x.city_id = p.city_id
+                AND x.lat IS NOT NULL ORDER BY x.event_date DESC LIMIT 1) AS coords
+        FROM performances p JOIN cities c ON c.id = p.city_id
+        WHERE p.venue != '' GROUP BY p.venue, p.city_id
+        ORDER BY located = COUNT(*), MAX(p.event_date) DESC""").fetchall()
+    return [r for r in rows if (not missing or r["located"] < r["n"]) and (not q or q.lower() in r["venue"].lower())]
+
+
+@router.get("/venues")
+def venues_page(request: Request, con=Depends(user_required)):
+    return venues_render(request, con, {}, "")
+
+
+def venues_render(request, con, results, summary):
+    p = request.query_params
+    all_rows = venue_rows(con)
+    return page(request, "venues.html", {
+        "nav": "venues", "rows": venue_rows(con, bool(p.get("missing")), (p.get("q") or "").strip()),
+        "total": len(all_rows), "done": sum(1 for r in all_rows if r["located"] == r["n"]),
+        "missing": bool(p.get("missing")), "q": p.get("q") or "", "results": results, "summary": summary,
+    })
+
+
+@router.post("/venues")
+async def venues_save(request: Request, con=Depends(user_required)):
+    """一次存很多個場地：只處理連結有改的，同一個場地（地點名稱＋城市）的每一場都套用。"""
+    form = await request.form(max_fields=5000)
+    changed = []
+    for key, orig, text in zip(form.getlist("key"), form.getlist("orig"), form.getlist("map_url")):
+        venue, _, city = key.rpartition("|")          # 城市 id 是數字，地點名稱裡有 | 也不會切錯
+        if text.strip() != orig.strip():
+            changed.append((venue, as_int(city), text.strip()))
+
+    def look_up(item):
+        if not item[2]:
+            return item, ("", None, None), ""
+        try:
+            return item, maps.resolve(item[2]), ""
+        except maps.MapLinkError as e:
+            return item, (item[2], None, None), str(e)
+    with ThreadPoolExecutor(max_workers=8) as pool:       # 短網址要問 Google，一起問比較快
+        looked = list(pool.map(look_up, changed))
+
+    results, ok = {}, 0
+    for (venue, city_id, _), (url, lat, lng), error in looked:
+        con.execute("UPDATE performances SET map_url = ?, lat = ?, lng = ? WHERE venue = ? AND city_id = ?",
+                    (url, lat, lng, venue, city_id))
+        warn = error or (far_warning(con, city_id, lat, lng).replace("已儲存，但", "") if lat is not None else "")
+        if warn:
+            results[(venue, city_id)] = warn
+        elif lat is not None:
+            ok += 1
+    con.commit()
+    summary = "更新了 %d 個場地" % len(looked) + ("，%d 個讀到座標" % ok if ok else "") \
+        + ("，%d 個要再看一下（標紅色的）" % len(results) if results else "") if looked else "沒有變更"
+    return venues_render(request, con, results, summary)
 
 
 # ==================================================================== 歌詞
@@ -505,6 +605,8 @@ async def lyrics_save(item_id: str, request: Request, con=Depends(user_required)
         slug = check_slug(form.get("slug") or slugify(form.get("title_en") or ""), allow_slash=False)
     except ValueError as e:
         return done(back, str(e))
+    if slug == Q.SHEETS_SEGMENT:
+        return done(back, "「%s%s/」是樂譜分頁的網址，請換一個" % (Q.lyrics_prefix(con), slug))
     # 歌詞與影片由頁面上的編輯器在送出時填進來；欄位是空字串代表編輯器沒有正常載入（JS 出錯、
     # 網路斷了沒載到 Quill），這時絕對不能當成「全部刪光」存進去
     if not form.get("blocks_json") or not form.get("videos_json"):
@@ -720,6 +822,8 @@ async def page_save(item_id: str, request: Request, con=Depends(user_required)):
     reserved = [u for tab, u in Q.tab_urls(con).items() if tab != "list"]
     if "/%s/" % slug in reserved:
         return done(back, "「/%s/」是演出頁分頁的網址，請換一個" % slug)
+    if "/%s/" % slug == Q.sheets_url(con):
+        return done(back, "「/%s/」是歌詞頁「樂譜」分頁的網址，請換一個" % slug)
     data = {
         "title": (form.get("title") or "").strip(), "title_en": (form.get("title_en") or "").strip(),
         "summary": (form.get("summary") or "").strip(), "summary_en": (form.get("summary_en") or "").strip(),
@@ -1115,6 +1219,7 @@ async def show_submission_review(item_id: int, request: Request, con=Depends(use
     if not con.execute("SELECT 1 FROM event_types WHERE id = ?", (data["event_type_id"],)).fetchone() \
             or not con.execute("SELECT 1 FROM cities WHERE id = ?", (data["city_id"],)).fetchone():
         return done(back, "請選類型與城市")
+    data["map_url"], data["lat"], data["lng"], map_msg = performance_location(con, None, data, form.get("map_url"))
     cols = list(data)
     perf_id = con.execute("INSERT INTO performances (%s) VALUES (%s)" % (", ".join(cols), ", ".join("?" * len(cols))),
                           [data[c] for c in cols]).lastrowid
@@ -1124,7 +1229,8 @@ async def show_submission_review(item_id: int, request: Request, con=Depends(use
     con.execute("UPDATE show_submissions SET status = 'approved', admin_note = ?, performance_id = ?, reviewed_at = ? "
                 "WHERE id = ?", (note, perf_id, db.now(), item_id))
     con.commit()
-    return done("/admin/performances/%d" % perf_id, "已加入演出列表，可以在這裡繼續補資料")
+    return done("/admin/performances/%d" % perf_id, "已加入演出列表，可以在這裡繼續補資料"
+                + ("。" + map_msg.replace("已儲存，", "") if map_msg else ""))
 
 
 @router.get("/submissions/sheet/{item_id:int}")

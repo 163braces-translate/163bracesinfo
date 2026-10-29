@@ -337,23 +337,60 @@ window.doughnutTopLabels = {
       });
   }
 
-  // 我去過：同一場在頁面上可能有好幾個按鈕（表格、展開的歌單、手機方塊），一起更新
+  // 我去過：按了先只改畫面（標成「未儲存」），按列表上方的「儲存參與場次」才一起存。
+  // 同一場在頁面上可能有好幾個按鈕（表格、展開的歌單、手機方塊），一起更新
+  var attendStatus = $("[data-attend-status]"), attendSubmit = $("[data-attend-submit]");
+  var attendPending = {};          // 演出 id → 要改成的狀態（true＝去過）
+  function showAttend(id, on) {
+    $$('[data-attend="' + id + '"]').forEach(function (b) {
+      b.classList.toggle("on", on);
+      b.classList.toggle("unsaved", on !== (b.dataset.saved === "1"));
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.textContent = on ? b.dataset.on : b.dataset.off;
+    });
+  }
+  function attendDirty(msg) {
+    var n = Object.keys(attendPending).length;
+    attendSubmit.disabled = !n;
+    attendStatus.textContent = msg || (n ? attendStatus.dataset.dirty.replace("{n}", n) : attendStatus.dataset.hint);
+    $("[data-attend-bar]").classList.toggle("dirty", n > 0);
+  }
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-attend]");
     if (!btn) return;
-    var id = btn.dataset.attend;
-    btn.disabled = true;
-    postJSON("/api/me/attendance/" + id).then(function (res) {
-      $$('[data-attend="' + id + '"]').forEach(function (b) {
-        b.classList.toggle("on", res.on);
-        b.setAttribute("aria-pressed", res.on ? "true" : "false");
-        b.textContent = res.on ? b.dataset.on : b.dataset.off;
-      });
-      $$('[data-attend-count="' + id + '"]').forEach(function (c) {
-        c.textContent = res.count ? c.dataset.label.replace("{n}", res.count) : "";
-      });
-    }).catch(function () {}).then(function () { btn.disabled = false; });
+    if (btn.dataset.login) { location.href = btn.dataset.login; return; }
+    var id = btn.dataset.attend, on = !btn.classList.contains("on");
+    if (on === (btn.dataset.saved === "1")) delete attendPending[id]; else attendPending[id] = on;
+    showAttend(id, on);
+    attendDirty();
   });
+  if (attendSubmit) {
+    attendSubmit.addEventListener("click", function () {
+      var ids = Object.keys(attendPending), body = new FormData();
+      body.append("on", ids.filter(function (id) { return attendPending[id]; }).join(","));
+      body.append("off", ids.filter(function (id) { return !attendPending[id]; }).join(","));
+      attendSubmit.disabled = true;
+      postJSON("/api/me/attendance", body).then(function (res) {
+        ids.forEach(function (id) {
+          $$('[data-attend="' + id + '"]').forEach(function (b) { b.dataset.saved = attendPending[id] ? "1" : "0"; });
+          showAttend(id, attendPending[id]);
+          delete attendPending[id];
+        });
+        Object.keys(res.counts).forEach(function (id) {
+          $$('[data-attend-count="' + id + '"]').forEach(function (c) {
+            c.textContent = res.counts[id] ? c.dataset.label.replace("{n}", res.counts[id]) : "";
+          });
+        });
+        attendDirty(attendStatus.dataset.done);
+      }).catch(function () { attendDirty(attendStatus.dataset.failed); });
+    });
+    // 還有沒存的就離開（換頁、篩選、關分頁）：讓瀏覽器先問一聲
+    window.addEventListener("beforeunload", function (e) {
+      if (!Object.keys(attendPending).length) return;
+      e.preventDefault();
+      e.returnValue = attendStatus.dataset.leave;
+    });
+  }
 
   // ---- 我的 → 喜歡的歌：拖曳 ⋮⋮ 或按 ↑↓ 排順序，放開就存（手機也能拖：用 pointer 事件，不用 HTML5 拖放）
   var likeList = $("[data-like-order]");

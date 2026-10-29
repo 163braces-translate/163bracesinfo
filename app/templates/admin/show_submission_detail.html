@@ -38,6 +38,7 @@
     {{ fx.text('event_name_en', '', '英文名稱', help='空白時英文版顯示中文名稱') }}
     {{ fx.text('venue', p.venue, '地點') }}
     {{ fx.text('venue_en', '', '英文地點') }}
+    {{ fx.text('map_url', p.map_url, '場地 Google Maps 連結', help='核准時自動讀出座標；空白的話，同一個場地以前填過就自動帶入。') }}
     <div class="form-row"><label class="field" for="f-city">城市 <span class="req">*</span></label>
       <select id="f-city" name="city_id" required>{% for c in cities %}<option value="{{ c.id }}" {{ 'selected' if c.id == p.city_id }}>{{ c.name }}</option>{% endfor %}</select></div>
   </div>

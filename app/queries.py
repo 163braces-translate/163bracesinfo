@@ -95,6 +95,13 @@ def lyrics_prefix(con):
     return "/%s/" % row["slug"] if row else "/lyrics/"
 
 
+SHEETS_SEGMENT = "sheets"      # 歌詞頁的「樂譜」分頁：/lyrics/sheets/。歌詞、頁面都不能用這個網址
+
+
+def sheets_url(con):
+    return lyrics_prefix(con) + SHEETS_SEGMENT + "/"
+
+
 def articles_under(con, slug, limit=-1):
     """某一頁（通常是「文章」列表頁）底下、所有層的已發佈文章，新到舊。跟舊站一樣，文章列表只列自己底下的文章。"""
     return con.execute("SELECT * FROM pages WHERE kind = 'article' AND published = 1 AND slug LIKE ? "
@@ -372,7 +379,7 @@ def stats_charts(con, lang, year):
                    "datasets": [{"data": [x[1] for x in totals], "backgroundColor": [color(x[2]) for x in totals]}]}
 
     city_rows = con.execute("SELECT c.name, c.name_en, COUNT(*) AS n FROM performances p JOIN cities c ON c.id = p.city_id"
-                            + where + " GROUP BY c.id ORDER BY n DESC", args).fetchall()
+                            + where + " GROUP BY c.id ORDER BY n DESC, c.sort_order, c.name", args).fetchall()     # 一樣多的照後台的排序
     slices = [(tr(lang, r, "name"), r["n"]) for r in city_rows]
     if len(slices) > len(CHART_COLORS):      # 顏色只有八個：前七名各一色，其餘併成「其他」
         keep = len(CHART_COLORS) - 1

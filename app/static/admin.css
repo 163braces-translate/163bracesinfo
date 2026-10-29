@@ -314,3 +314,8 @@ a.ttitle:hover { color: var(--primary); }
 .review-kind > .table-card, .review-kind > p { margin-top: 6px; }
 .count { font-size: .78rem; font-weight: 500; min-width: 1.6em; padding: 1px 7px; border-radius: 999px; background: var(--surface-2, #f3f4f6); color: var(--muted); text-align: center; }
 .count.warn { background: #fff5d6; color: #7a5a00; }
+
+/* 場地位置：連結欄位撐滿；儲存按鈕固定在畫面底部，表很長也按得到 */
+.venue-table .venue-link-cell { min-width: 280px; width: 50%; }
+.venue-table .venue-link-cell input[type=text] { width: 100%; }
+.sticky-actions { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 35%); text-align: right; }

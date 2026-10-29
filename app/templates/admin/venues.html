@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+{% block title %}場地位置{% endblock %}
+{% block content %}
+<div class="admin-head"><h1>場地位置</h1></div>
+<p class="muted small">每個場地貼一次 Google Maps 連結，這個場地的每一場演出都會套用。在 Google 地圖打開場地，按「分享」→「複製連結」貼上（網址裡有 @緯度,經度 的也可以，或直接貼座標）。
+  存檔時會自動讀出座標，用來算粉絲回顧裡的移動距離；前台的地點也會連到這個連結。同一個地點如果寫法不一樣（例如有沒有加館名），會分成兩列，各貼一次就好。</p>
+{% if summary %}<p class="flash">{{ summary }}</p>{% endif %}
+<form class="filterbar" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="場地名稱">
+  <label class="check small"><input type="checkbox" name="missing" value="1" {{ 'checked' if missing }}> 只看還沒有位置的</label>
+  <button class="btn small">篩選</button>
+</form>
+<p class="muted small">共 {{ total }} 個場地，{{ done }} 個已經有位置{% if missing or q %} · 目前列出 {{ rows | length }} 個{% endif %}</p>
+<form method="post" action="/admin/venues{{ '?' ~ request.url.query if request.url.query }}">
+<div class="table-card">
+<table class="admin-table venue-table">
+  <thead><tr><th>場地</th><th>城市</th><th>場次</th><th>Google Maps 連結</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    {%- set problem = results.get((r.venue, r.city_id)) %}
+    <tr>
+      <td><a href="/admin/performances/?q={{ r.venue | urlencode }}">{{ r.venue }}</a></td>
+      <td class="nowrap">{{ r.city_name }}</td>
+      <td class="nowrap small">{{ r.n }} 場<div class="muted">最近 {{ r.last | replace('-', '/') }}</div></td>
+      <td class="venue-link-cell">
+        <input type="hidden" name="key" value="{{ r.venue }}|{{ r.city_id }}">
+        {#- 只有部分場次有座標的（例如後來新增的演出）：存檔時當作有改，整個場地重新套用一次 #}
+        <input type="hidden" name="orig" value="{{ '' if 0 < r.located < r.n else (r.map_url or '') }}">
+        <input type="text" name="map_url" value="{{ r.map_url or '' }}" placeholder="https://maps.app.goo.gl/…" aria-label="{{ r.venue }} 的 Google Maps 連結">
+        {% if problem %}<div class="small warn-text">⚠ {{ problem }}</div>
+        {% elif r.coords %}<div class="small muted">✓ <a href="{{ maps_search(*r.coords.split(', ')) }}" target="_blank" rel="noopener">{{ r.coords }}</a>{% if r.located < r.n %} · {{ r.n - r.located }} 場還沒套用{% endif %}</div>
+        {% elif r.map_url %}<div class="small warn-text">這條連結沒讀到座標</div>{% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">沒有符合的場地</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if rows %}<div class="sticky-actions"><button class="btn primary" type="submit">儲存（只處理有改的）</button></div>{% endif %}
+</form>
+{% endblock %}

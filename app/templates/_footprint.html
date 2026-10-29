@@ -65,7 +65,25 @@
     <div class="card"><div class="card-head"><h2>{{ t('fp_by_year') }}</h2></div><div class="chart-box"><canvas data-fp-chart="years" data-type="bar" data-stacked="1"></canvas></div></div>
     <div class="card"><div class="card-head"><h2>{{ t('fp_by_type') }}</h2></div><div class="chart-box"><canvas data-fp-chart="types" data-type="doughnut"></canvas></div></div>
     <div class="card"><div class="card-head"><h2>{{ t('fp_map') }}</h2></div>{{ mp.tw_map(map, fp.map_cities, (), false) }}</div>
-    <div class="card">
+    {#- 移動路線：只有自己的「我的足跡」有（住的地方記在自己的瀏覽器，公開個人頁不畫） #}
+    {%- set own = request.url.path == '/me/' %}
+    {% if own %}
+    <div class="card fp-route">
+      <div class="card-head"><h2>{{ t('recap_routes') }}</h2><b class="small" id="fp-km"></b></div>
+      <div class="date-row">
+        <select id="fp-county" aria-label="{{ t('recap_county') }}"><option value="">{{ t('recap_county') }}</option></select>
+        <select id="fp-town" aria-label="{{ t('recap_town') }}" disabled><option value="">{{ t('recap_town') }}</option></select>
+      </div>
+      {% if not guest %}<label class="check-row small"><input type="checkbox" id="fp-remember"> {{ t('home_remember') }}</label>{% endif %}
+      <svg class="tw-map static route-map" id="fp-route" viewBox="0 0 {{ map.width }} {{ map.height }}" role="img" aria-label="{{ t('recap_routes') }}">
+        <path class="land" d="{{ map.mainland }}"/>
+        {% for d in map.islands %}<path class="land" d="{{ d }}"/>{% endfor %}
+        <g class="routes"></g>
+      </svg>
+      <p class="small muted" style="margin: 8px 0 0">{{ t('fp_route_help') }}</p>
+    </div>
+    {% endif %}
+    <div class="card {{ 'wide' if own }}">
       <div class="card-head"><h2>{{ t('fp_heard') }}</h2></div>
       {% if fp.heard %}
         <ol class="rank-list">
@@ -89,10 +107,15 @@
     <div class="card-head"><h2>{{ t('fp_list') }}</h2></div>
     <ul class="plain-list">
       {% for p in fp.performances %}
-        <li><span class="nowrap muted">{{ p.event_date | replace('-', '/') }}</span> {{ tr(p, 'event_name') }} <span class="small muted">· {{ tr(p, 'city_name') }}</span></li>
+        <li class="{{ 'sub-row' if own }}"><span><span class="nowrap muted">{{ p.event_date | replace('-', '/') }}</span> {{ tr(p, 'event_name') }} <span class="small muted">· {{ tr(p, 'city_name') }}</span></span>
+          {% if own %}<form method="post" action="/me/attendance/{{ p.id }}/delete"><input type="hidden" name="back" value="{{ link(request.url.path) }}?{{ request.url.query }}">
+            <button class="btn small" type="submit" data-confirm="{{ t('attendance_delete_confirm') }}">{{ t('delete') }}</button></form>{% endif %}</li>
       {% endfor %}
     </ul>
   </section>
   <script type="application/json" id="fp-data">{{ fp.charts | tojson }}</script>
+  {% if own %}<script type="application/json" id="fp-route-data">{{ dict(fp.route, map=map, lang=lang,
+    districts="/static/tw-districts.json?v=" ~ asset_version, km=t('recap_km_short', km='{km}'), home=t('recap_home_dot'),
+    home_saved=visitor.home_district) | tojson }}</script>{% endif %}
   {% endif %}
 {% endif %}

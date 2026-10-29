@@ -27,6 +27,12 @@
   {% endif %}
 {% endmacro %}
 
+{# 演出地點：有場地位置就連到 Google 地圖（另開分頁） #}
+{% macro venue(p, label) -%}
+  {%- set url = venue_url(p) %}
+  {%- if url %}<a class="venue-link" href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% else %}{{ label }}{% endif %}
+{%- endmacro %}
+
 {% macro cover(image_id, width=240, alt='') %}
   {% if image_id %}<img src="{{ image_url(image_id, width) }}" alt="{{ alt }}" loading="lazy" onerror="this.outerHTML='<span class=&quot;cover-ph&quot;></span>'">
   {% else %}<span class="cover-ph" aria-hidden="true"></span>{% endif %}

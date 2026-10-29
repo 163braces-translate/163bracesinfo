@@ -51,7 +51,8 @@
         <a class="me-link {{ 'on' if request.url.path.startswith('/me/') }}" href="{{ link('/me/') }}">
           {% if visitor.avatar_url %}<img src="{{ visitor.avatar_url }}" alt="" referrerpolicy="no-referrer">{% endif %}{{ t('my_page') }}</a>
       {% elif login_available %}
-        <a class="me-link" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a>
+        {#- 頁首的登入：登入後到「我的」（投稿表單裡的登入連結才回原本那頁，方便接著填） #}
+        <a class="me-link" href="/auth/login?next={{ link('/me/') | urlencode }}">{{ t('login') }}</a>
       {% endif %}
       <a class="lang" href="{{ alt_url }}" hreflang="{{ 'zh-Hant' if lang == 'en' else 'en' }}">{{ t('lang_switch') }}</a>
     </nav>

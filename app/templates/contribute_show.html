@@ -27,6 +27,9 @@
         </select></div>
       <div><label class="field" for="s-venue">{{ t('venue') }}</label><input type="text" id="s-venue" name="venue" maxlength="255" placeholder="{{ t('show_venue_help') }}"></div>
     </div>
+    <label class="field" for="s-map">{{ t('show_map_url') }}</label>
+    <input type="url" id="s-map" name="map_url" maxlength="500" placeholder="https://maps.app.goo.gl/…">
+    <p class="small muted">{{ t('show_map_url_help') }}</p>
     <label class="field" for="s-setlist">{{ t('show_setlist') }}</label>
     <textarea id="s-setlist" name="setlist" rows="8"></textarea>
     <p class="small muted">{{ t('contribute_setlist_help') }}</p>

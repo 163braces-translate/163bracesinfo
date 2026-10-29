@@ -62,19 +62,7 @@
         </div>
         {#- 只列卡片（縮圖、標題、作者、讚數），點進去才看整份 #}
         {% if sheets %}
-          <div class="sheet-cards">
-            {% for s in sheets %}
-              <a class="sheet-card" href="{{ link('/sheets/' ~ s.id ~ '/') }}">
-                {% if s.files %}<img src="/sheets/thumb/{{ s.files[0].id }}.jpg" alt="" loading="lazy">{% endif %}
-                <span class="sheet-card-body">
-                  <b>{{ s.title }}</b>
-                  {% if songs | length > 1 %}<span class="small muted">{{ s.song_title }}</span>{% endif %}
-                  <span class="small muted">{{ t('sheet_by', name=s.author) }}</span>
-                  <span class="small muted"><span class="heart-mini" aria-hidden="true">♥</span> {{ s.likes }}{% if s.files | length > 1 %} · {{ t('sheet_pages', n=s.files | length) }}{% endif %}{% if s.video_url %} · ▶{% endif %}</span>
-                </span>
-              </a>
-            {% endfor %}
-          </div>
+          {% set show_song = songs | length > 1 %}{% include "_sheet_cards.html" %}
         {% endif %}
         <p class="small muted" style="margin: 12px 0 0">{{ t('sheets_notice', email=contact_email) }}</p>
       </section>

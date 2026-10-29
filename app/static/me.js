@@ -32,3 +32,58 @@
   };
   document.head.appendChild(s);
 })();
+
+/* 我的足跡的移動路線：在地圖 SVG 上畫弧線（算法在 home-route.js，跟「回顧」共用）。 */
+(function () {
+  "use strict";
+  var el = document.getElementById("fp-route-data"), svg = document.getElementById("fp-route");
+  if (!el || !svg) return;
+  var R = JSON.parse(el.textContent), NS = "http://www.w3.org/2000/svg";
+  var route = HomeRoute.Route(R.shows, R.cities), place = HomeRoute.MapPlace(R.map, R.cities);
+  var layer = svg.querySelector(".routes"), kmOut = document.getElementById("fp-km");
+  function add(tag, attrs, title) {
+    var n = document.createElementNS(NS, tag);
+    Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    if (title) { var t = document.createElementNS(NS, "title"); t.textContent = title; n.appendChild(t); }
+    layer.appendChild(n);
+    return n;
+  }
+  function draw(home) {
+    layer.textContent = "";
+    var at = home && place.home(home), dots = [], boxes = {};
+    route.trips.forEach(function (day) {
+      var stops = day.map(function (s) {
+        var p = place.stop(s, route.where(s));
+        if (place.nodes[s.c].inset) boxes[s.c] = place.nodes[s.c];
+        dots.push([p, s.label]);
+        return p;
+      });
+      if (!at) return;
+      HomeRoute.legs(at, stops).forEach(function (l) {
+        add("path", { "class": "arc" + (l.a.far || l.b.far ? " far" : ""),
+                      d: "M" + l.a.x + "," + l.a.y + " Q" + l.c.x + "," + l.c.y + " " + l.b.x + "," + l.b.y });
+      });
+    });
+    // 去過的金門、連江、海外：畫出框跟名字
+    R.cities.forEach(function (c) {
+      var b = boxes[c.id];
+      if (!b) return;
+      add("rect", { "class": "inset", x: b.inset[0], y: b.inset[1], width: b.inset[2], height: b.inset[3], rx: 8 });
+      add("text", { "class": "box-label", x: b.x, y: b.inset[1] + 11, "text-anchor": "middle" }).textContent = R.lang === "en" ? c.name : b.name;
+    });
+    dots.forEach(function (d) { add("circle", { "class": "stop", cx: d[0].x, cy: d[0].y, r: 3 }, d[1]); });
+    if (at) {
+      add("circle", { "class": "home", cx: at.x, cy: at.y, r: 5.5 });
+      add("text", { "class": "home-label", x: at.x + 8, y: at.y + 4 }).textContent = R.home;
+      var dist = route.distance(home);
+      kmOut.textContent = R.km.replace("{km}", dist.km.toLocaleString(R.lang === "en" ? "en" : "zh-TW"));
+    } else {
+      kmOut.textContent = "";
+    }
+  }
+  draw(null);
+  HomeRoute.picker({
+    county: document.getElementById("fp-county"), town: document.getElementById("fp-town"),
+    url: R.districts, lang: R.lang, saved: R.home_saved, remember: document.getElementById("fp-remember"), onChange: draw
+  });
+})();

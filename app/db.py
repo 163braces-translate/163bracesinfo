@@ -103,6 +103,15 @@ def init(con):
     if "replaces_id" not in sheet_cols:
         con.execute("ALTER TABLE sheets ADD COLUMN replaces_id INTEGER REFERENCES sheets(id) ON DELETE SET NULL")
         con.commit()
+    if "home_district" not in [r["name"] for r in con.execute("PRAGMA table_info(visitors)")]:
+        con.execute("ALTER TABLE visitors ADD COLUMN home_district TEXT NOT NULL DEFAULT ''")
+        con.commit()
+    perf_cols = [r["name"] for r in con.execute("PRAGMA table_info(performances)")]
+    if "map_url" not in perf_cols:
+        con.execute("ALTER TABLE performances ADD COLUMN map_url TEXT NOT NULL DEFAULT ''")
+        con.execute("ALTER TABLE performances ADD COLUMN lat REAL")
+        con.execute("ALTER TABLE performances ADD COLUMN lng REAL")
+        con.commit()
     if "position" not in [r["name"] for r in con.execute("PRAGMA table_info(song_likes)")]:
         con.execute("ALTER TABLE song_likes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
         # 以前照按讚時間新到舊列出：照這個順序編號，粉絲看到的順序不變
