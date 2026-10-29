@@ -64,6 +64,7 @@ PRIVACY_ZH = """<h2>我們存了什麼</h2>
 <p>用 Google 帳號登入時，我們只會從 Google 取得：帳號 ID、email、名字、大頭貼。email 只用來辨識帳號，不會公開、不會寄信給你。</p>
 <p>你在網站上記錄的「去過的場次」「喜歡的歌」、投稿的跑馬燈、演出補充與樂譜，會跟你的帳號一起存在本站的資料庫。</p>
 <p>「回顧」與「我的足跡」裡選的住的地方（行政區），預設只記在你的瀏覽器；勾選「記在我的帳號」才會存到本站，取消勾選就會刪除。</p>
+<p>網站使用 Google Analytics 統計瀏覽人數與熱門頁面（會在你的瀏覽器存放 Google 的 Cookie），我們只看匿名的整體數字。</p>
 <h2>誰看得到</h2>
 <p>去過的場次與喜歡的歌預設只有你自己看得到；網站只會顯示匿名的加總（例如「12 位粉絲去過這場」）。你可以在「我的 → 設定」開啟公開個人頁。</p>
 <p>跑馬燈與樂譜的署名由你每次投稿時選擇：Google 帳號名、自選暱稱或匿名。</p>
@@ -76,6 +77,7 @@ PRIVACY_EN = """<h2>What we store</h2>
 <p>When you sign in with Google we only receive your account ID, email, name and profile picture. Your email is used to identify your account; it is never shown publicly and we never email you.</p>
 <p>The shows you attended, songs you like, and anything you submit (ticker messages, show details, sheet music) are stored with your account.</p>
 <p>The district you pick as where you live (in Recap and My shows) stays in your browser unless you tick "Remember on my account"; untick it to delete it from the site.</p>
+<p>We use Google Analytics to count visits and see which pages are popular (it sets Google cookies in your browser); we only look at anonymous totals.</p>
 <h2>Who can see it</h2>
 <p>Your shows and liked songs are private by default; the site only shows anonymous totals (e.g. "12 fans were there"). You can turn on a public profile in My page → Settings.</p>
 <p>For ticker messages and sheet music you choose the name each time: your Google name, your nickname, or anonymous.</p>

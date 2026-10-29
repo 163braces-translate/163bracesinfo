@@ -18,10 +18,10 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, maps, navigation, pagetree, queries as Q, taiwan, visitors as V
+from . import auth, backup, db, maps, navigation, pagetree, queries as Q, taiwan, visitors as V
 from .web import ASSET_VERSION
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -993,7 +993,9 @@ async def image_save(image_id: int, request: Request, con=Depends(user_required)
 SETTING_FIELDS = [
     ("網站", [("site_name", "網站名稱", "text"), ("site_name_en", "網站名稱（英文）", "text"),
               ("site_logo_id", "Logo（頁首左上角、瀏覽器分頁圖示）", "image",
-               "建議用正方形、背景不透明的圖；會自動裁成正方形。空白就用內建的「163」圖示。")]),
+               "建議用正方形、背景不透明的圖；會自動裁成正方形。空白就用內建的「163」圖示。"),
+              ("ga_measurement_id", "Google Analytics 評估 ID", "text",
+               "例如 G-F0SJGQ41L1；空白就不追蹤。只在正式站的前台載入，本機和後台都不會，自己測試不會灌進數據。")]),
     ("首頁要顯示的區塊", [("home_show_marquee", "粉絲留言跑馬燈", "bool"),
                    ("home_show_upcoming", "即將演出", "bool"),
                    ("home_show_top_songs", "最近常唱", "bool"),
@@ -1393,6 +1395,24 @@ async def navigation_save(request: Request, con=Depends(user_required)):
     db.set_setting(con, navigation.FOOTER_KEY, json.dumps(footer, ensure_ascii=False))
     con.commit()
     return done("/admin/navigation")
+
+
+# ==================================================================== 備份
+@router.get("/backups")
+def backups_page(request: Request, con=Depends(user_required)):
+    return page(request, "backups.html", {"nav": "backups", "rows": backup.list_backups(), "keep": backup.KEEP,
+                                          "folder": backup.DIR, "auto": db.ON_AZURE})
+
+
+@router.post("/backups")
+def backups_create(request: Request, con=Depends(user_required)):
+    return done("/admin/backups", "已備份：" + backup.create())
+
+
+@router.get("/backups/{name}")
+def backups_download(name: str, request: Request, con=Depends(user_required)):
+    path = backup.path_of(name) or _404()
+    return FileResponse(path, filename=name, media_type="application/vnd.sqlite3")
 
 
 @router.get("/redirects")

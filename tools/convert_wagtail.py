@@ -323,7 +323,7 @@ def convert(old_path, new_path, force=False):
     # ---- 圖片、帳號
     n = 0
     for r in old.execute("SELECT id, file, title, width, height, created_at FROM images_customimage"):
-        new.execute("INSERT INTO images VALUES (?, ?, ?, ?, ?, ?)",
+        new.execute("INSERT INTO images (id, file, title, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                     (r["id"], r["file"], r["title"], r["width"], r["height"], r["created_at"][:19]))
         n += 1
     report.counts.append(("圖片", n))
@@ -342,12 +342,12 @@ def convert(old_path, new_path, force=False):
 
     # ---- 演出資料、曲庫
     for r in old.execute('SELECT id, name, name_en, "order" FROM performances_eventtype'):
-        new.execute("INSERT INTO event_types VALUES (?, ?, ?, ?)", tuple(r))
+        new.execute("INSERT INTO event_types (id, name, name_en, sort_order) VALUES (?, ?, ?, ?)", tuple(r))
     for r in old.execute('SELECT id, name, name_en, "order" FROM performances_city'):
         key = CITY_MAP_KEYS.get(r["name"], "")
         if not key:
             report.note("城市「%s」沒有對應的地圖縣市，不會畫在地圖上。" % r["name"])
-        new.execute("INSERT INTO cities VALUES (?, ?, ?, ?, ?)", (r["id"], r["name"], r["name_en"], key, r["order"]))
+        new.execute("INSERT INTO cities (id, name, name_en, map_key, sort_order) VALUES (?, ?, ?, ?, ?)", (r["id"], r["name"], r["name_en"], key, r["order"]))
     for r in old.execute('SELECT id, name, name_en, "order", cover_image_id FROM performances_album'):
         new.execute("INSERT INTO albums (id, name, name_en, cover_image_id, sort_order) VALUES (?, ?, ?, ?, ?)",
                     (r["id"], r["name"], r["name_en"], r["cover_image_id"], r["order"]))
@@ -357,11 +357,12 @@ def convert(old_path, new_path, force=False):
                     (r["id"], r["title"], r["title_en"], r["artist"], r["artist_en"], r["album_id"],
                      r["single_image_id"], r["order"]))
     for r in old.execute("SELECT * FROM performances_performance"):
-        new.execute("INSERT INTO performances VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        new.execute("INSERT INTO performances (id, event_date, event_name, event_name_en, event_type_id, venue, venue_en, "
+                    "city_id, setlist_order_uncertain) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (r["id"], r["event_date"], r["event_name"], r["event_name_en"], r["event_type_id"],
                      r["venue"], r["venue_en"], r["city_id"], r["setlist_order_uncertain"]))
     for r in old.execute("SELECT * FROM performances_setlistitem ORDER BY performance_id, sort_order, id"):
-        new.execute("INSERT INTO setlist_items VALUES (?, ?, ?, ?, ?, ?)",
+        new.execute("INSERT INTO setlist_items (id, performance_id, position, song_id, custom_title, note) VALUES (?, ?, ?, ?, ?, ?)",
                     (r["id"], r["performance_id"], r["sort_order"] or 0, r["song_id"],
                      "" if r["song_id"] else r["custom_title"], r["note"]))
     for table, label in [("event_types", "演出類型"), ("cities", "城市"), ("performances", "演出"),

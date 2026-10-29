@@ -1,38 +1,7 @@
-# Core Django and Wagtail
-Django>=4.2,<5.0
-wagtail>=6.0,<7.0
-
-# Database
-psycopg2-binary>=2.9.0
-
-# Static files serving
-whitenoise>=6.0.0
-
-# Web server for production
-gunicorn>=21.0.0
-
-# Environment management
-python-dotenv>=1.0.0
-
-# Media and file handling
-Pillow>=10.0.0
-
-# Search (if using PostgreSQL search)
-django-extensions>=3.2.0
-
-# Additional packages that might be in your current requirements
-# Add any other packages your project needs here
-# Example:
-wagtail-factories
-wagtail-cache
-django-crispy-forms
-requests
-
-# Azure-specific packages (if needed)
-azure-storage-blob  # for Azure Blob Storage
-django-storages[azure]  # for cloud storage
-
-dj-database-url>=2.0.0
-wagtail-color-panel>=1.6.0
-
-wagtail-localize>=1.10,<2.0
+# 163braces 資訊站（FastAPI）。版本固定在本機測過的版本；Azure 與 GitHub Actions 用 Python 3.11 以上
+fastapi==0.162.0
+starlette==1.10.0
+uvicorn==0.54.0
+Jinja2==3.1.6
+python-multipart==0.0.32
+pillow==13.0.0

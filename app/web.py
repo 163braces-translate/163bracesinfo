@@ -3,6 +3,7 @@
 從 main.py 拆出來，讓其他前台路由（community.py 的粉絲功能）也能用同一個 render()，又不會循環 import。
 """
 import os
+import re
 from functools import partial
 
 from fastapi.templating import Jinja2Templates
@@ -44,6 +45,12 @@ def lang_of(request):
     return getattr(request.state, "lang", "zh")
 
 
+def ga_id(con):
+    """Google Analytics 的評估 ID：只在正式站載入；格式不對（例如貼錯成整段程式碼）就不放，免得插進奇怪的東西。"""
+    value = (db.get_setting(con, "ga_measurement_id") or "").strip()
+    return value if db.ON_AZURE and re.fullmatch(r"G-[A-Z0-9]{4,20}", value) else ""
+
+
 def render(request, con, name, ctx=None, status=200, page=None):
     lang = lang_of(request)
     path = request.url.path if lang == "zh" else "/en" + request.url.path
@@ -66,6 +73,7 @@ def render(request, con, name, ctx=None, status=200, page=None):
         "lyrics_prefix": Q.lyrics_prefix(con),
         "site_name": db.get_setting(con, "site_name_en" if lang == "en" else "site_name"),
         "logo_id": as_id(db.get_setting(con, "site_logo_id")),
+        "ga_id": ga_id(con),
         "visitor": visitor,
         "guest": visitors.is_guest(visitor),          # 自取暱稱的臨時帳號：不能投稿
         "login_available": visitors.login_available(),

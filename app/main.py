@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import admin, auth, community, db, i18n, navigation, pagecache, queries as Q, taiwan
+from . import admin, auth, backup, community, db, i18n, navigation, pagecache, queries as Q, taiwan
 from .web import HERE, as_id, get_con, lang_of, render
 
 
@@ -87,6 +87,7 @@ async def clear_cache_after_admin_save(request, call_next):
     response = await call_next(request)
     if request.method == "POST" and request.url.path.startswith("/admin/") and response.status_code < 400:
         pagecache.invalidate()
+    backup.maybe_weekly()           # 正式站每週自動備份（每小時才真的檢查一次）
     return response
 app.include_router(admin.router)          # 這兩個都要在下面的萬用路由之前
 app.include_router(community.router)

@@ -25,6 +25,7 @@ SETTINGS = {
     "site_name": "163braces 資訊站",
     "site_name_en": "163braces Info",
     "contact_email": "163braces.translate@gmail.com",
+    "ga_measurement_id": "G-F0SJGQ41L1",   # Google Analytics（沿用舊站的）；只在正式站的前台載入
     "site_logo_id": "",                 # 頁首左上角與瀏覽器分頁圖示；空白就用內建的「163」圖示
     "home_hero_image_id": "",           # 首頁大標題方框的背景圖
     "home_hero_mode": "cover",          # cover 滿版背景／side 放在右半邊往左淡出
