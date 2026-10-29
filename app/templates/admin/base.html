@@ -11,8 +11,8 @@
 {% if logo_id %}<link rel="icon" href="/site-icon/32.png?v={{ logo_id }}" type="image/png">
 {% else %}<link rel="icon" href="/static/icon.svg" type="image/svg+xml">{% endif %}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="/static/site.css">
-<link rel="stylesheet" href="/static/admin.css">
+<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
+<link rel="stylesheet" href="/static/admin.css?v={{ asset_version }}">
 {% block head %}{% endblock %}
 {% macro brand_mark(logo_id) %}{% if logo_id %}<img class="brand-mark" src="/site-icon/64.png?v={{ logo_id }}" alt="">{% else %}<span class="brand-mark">163</span>{% endif %}{% endmacro %}
 </head>
@@ -61,7 +61,7 @@
 {% block bare %}{% endblock %}
 {% endif %}
 {% include "admin/_picker.html" %}
-<script src="/static/admin.js"></script>
+<script src="/static/admin.js?v={{ asset_version }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

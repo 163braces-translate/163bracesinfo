@@ -49,6 +49,7 @@ SETTINGS = {
     "tab_status_setlist": "live",
     "tab_status_replay": "live",
     "home_facts_json": "[]",
+    "cache_version": "",                # 後台每次存檔就換一個，讓演出頁的快取作廢（見 pagecache.py）
     # 首頁各區塊要不要顯示（後台「設定 → 首頁要顯示的區塊」）
     "home_show_marquee": "1",
     "home_marquee_speed": "70",         # 跑馬燈每秒捲動幾像素（最少 10）；數字越大越快

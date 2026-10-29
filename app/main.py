@@ -14,9 +14,10 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import admin, auth, community, db, i18n, navigation, queries as Q, taiwan
+from . import admin, auth, community, db, i18n, navigation, pagecache, queries as Q, taiwan
 from .web import HERE, as_id, get_con, lang_of, render
 
 
@@ -48,9 +49,45 @@ async def lifespan(app):
     yield
 
 
+class CompressText:
+    """網頁、CSS、JS 先壓縮（gzip）再傳，演出頁從 600 多 KB 變成 50KB 左右；瀏覽器收到會自己解開。
+    圖片本來就是壓縮過的格式，再壓只是浪費時間，跳過。已經壓好的回應（演出頁快取）也不會再壓一次。"""
+    SKIP = ("/media/", "/images/", "/sheets/thumb/", "/site-icon/", "/favicon")
+
+    def __init__(self, app):
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1024, compresslevel=6)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and not scope["path"].startswith(self.SKIP):
+            await self.gzip(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+class VersionedStatic(StaticFiles):
+    """模板裡的 CSS、JS 都帶 ?v=版本號（檔案改了版本號就變）：這種網址讓瀏覽器記一年，不用每次回來問。"""
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if resp.status_code in (200, 304) and b"v=" in scope.get("query_string", b""):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+
+
 app = FastAPI(title="163braces", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.add_middleware(LanguagePrefix)
-app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
+app.add_middleware(CompressText)
+app.mount("/static", VersionedStatic(directory=os.path.join(HERE, "static")), name="static")
+
+
+@app.middleware("http")
+async def clear_cache_after_admin_save(request, call_next):
+    """後台任何存檔（含審核投稿）之後，演出頁的快取作廢，下一位訪客看到的就是新的。"""
+    response = await call_next(request)
+    if request.method == "POST" and request.url.path.startswith("/admin/") and response.status_code < 400:
+        pagecache.invalidate()
+    return response
 app.include_router(admin.router)          # 這兩個都要在下面的萬用路由之前
 app.include_router(community.router)
 app.add_exception_handler(admin.LoginRequired, admin.login_redirect)
@@ -324,6 +361,26 @@ def content_page(request, con, page):
     }, page=page)
 
 
+def cached_page(request, con, build):
+    """演出頁最重（所有場次、歌單和統計圖表都在同一頁）：沒登入的訪客走快取，見 pagecache.py。"""
+    if not pagecache.anonymous(request):
+        return build()
+    key = (lang_of(request), request.url.path, request.url.query)
+    hit = pagecache.get(con, key)
+    if not hit:
+        with pagecache.building(key):              # 同一頁同時只算一次，後面的人等著拿結果
+            hit = pagecache.get(con, key)
+            if not hit:
+                resp = build()
+                if resp.status_code != 200:
+                    return resp
+                pagecache.put(key, resp.body, resp.media_type)
+                hit = pagecache.get(con, key)
+    if "gzip" in request.headers.get("accept-encoding", ""):
+        return Response(hit["gz"], media_type=hit["type"], headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+    return Response(hit["body"], media_type=hit["type"])
+
+
 HANDLERS = {"home": home, "performances": performances_page, "lyrics": lyrics_index,
             "articles": articles_page, "article": content_page, "page": content_page}
 
@@ -338,13 +395,15 @@ def resolve(path: str, request: Request, con=Depends(get_con)):
     preview = previewing(request, con)
     page = con.execute("SELECT * FROM pages WHERE slug = ?", (slug,)).fetchone()
     if page and (page["published"] or preview):
+        if page["kind"] == "performances":
+            return cached_page(request, con, lambda: performances_page(request, con, page))
         return HANDLERS[page["kind"]](request, con, page)
     # 演出頁的統計、歌單、年度回顧分頁（各有自己的網址）
     for tab, url in Q.tab_urls(con).items():
         if tab != "list" and url == "/" + slug + "/":
             perf = Q.pages_by_kind(con).get("performances")
             if perf and ((perf["published"] and Q.tab_statuses(con)[tab] == "live") or preview):
-                return performances_page(request, con, perf, tab)
+                return cached_page(request, con, lambda: performances_page(request, con, perf, tab))
     prefix = Q.lyrics_prefix(con).strip("/")
     if slug.startswith(prefix + "/") and "/" not in slug[len(prefix) + 1:]:
         row = con.execute("SELECT * FROM lyrics WHERE slug = ?", (slug[len(prefix) + 1:],)).fetchone()

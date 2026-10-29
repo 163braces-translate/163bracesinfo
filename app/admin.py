@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from . import auth, db, navigation, pagetree, queries as Q, taiwan, visitors as V
+from .web import ASSET_VERSION
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 router = APIRouter(prefix="/admin")
@@ -49,6 +50,7 @@ def site_name():
 
 
 templates.env.globals["site_logo_id"] = site_logo_id
+templates.env.globals["asset_version"] = ASSET_VERSION
 templates.env.globals["site_name"] = site_name
 
 PER_PAGE = 50

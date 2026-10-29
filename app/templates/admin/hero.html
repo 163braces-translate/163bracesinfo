@@ -61,4 +61,4 @@
   <script type="application/json" data-hero-image>{{ image | tojson }}</script>
 </form>
 {% endblock %}
-{% block scripts %}<script src="/static/admin-hero.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/admin-hero.js?v={{ asset_version }}"></script>{% endblock %}

@@ -31,4 +31,4 @@
   <div class="form-actions sticky"><button class="btn primary" type="submit">儲存</button> <a class="btn" href="/" target="_blank" rel="noopener">看前台 ↗</a></div>
 </form>
 {% endblock %}
-{% block scripts %}<script src="/static/admin-nav.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/admin-nav.js?v={{ asset_version }}"></script>{% endblock %}
