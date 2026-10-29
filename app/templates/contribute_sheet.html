@@ -7,7 +7,7 @@
   <p class="muted small">{{ t('sheets_notice', email=contact_email) }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
   {% if need_login %}
-    <p><a class="btn primary" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> <span class="small muted">{{ t('need_login_to') }}</span></p>
+    {% include "_need_login.html" %}
   {% endif %}
   <form method="post" enctype="multipart/form-data" class="contribute-form" {{ 'inert' if need_login }}>
     <label class="field" for="s-title">{{ t('sheet_title') }}</label>

@@ -9,7 +9,7 @@
   <tbody>
     {% for v in rows %}
       <tr class="{{ 'warn-row' if v.banned }}">
-        <td>{{ v.nickname or v.google_name }}{% if v.nickname %} <span class="small muted">{{ v.google_name }}</span>{% endif %}
+        <td>{{ v.nickname or v.google_name }}{% if v.google_sub.startswith('guest:') %} <span class="chip">訪客</span>{% elif v.nickname %} <span class="small muted">{{ v.google_name }}</span>{% endif %}
           {% if v.profile_public and v.handle %}<div class="small"><a href="/fans/{{ v.handle }}/" target="_blank" rel="noopener">/fans/{{ v.handle }}/</a></div>{% endif %}</td>
         <td class="small">{{ v.email }}</td>
         <td class="small nowrap">{{ v.created_at[:10] }}</td>

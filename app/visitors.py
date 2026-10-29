@@ -55,7 +55,21 @@ def google_enabled():
 
 
 def login_available():
-    return google_enabled() or DEV_LOGIN
+    return True             # 訪客（自取暱稱）登入一直都可以用，見 is_guest()
+
+
+GUEST_HOURS = 24
+
+
+def is_guest(visitor):
+    """訪客：在登入頁自取暱稱、不用 Google 的臨時帳號（google_sub 是 guest:…）。
+    可以標記去過的場次、按喜歡，但只在他自己的「我的」裡有意義：網站上的總數不算訪客（community.COUNTED）。
+    不能投稿、不能開公開個人頁。登入 24 小時後失效，之後回不到這個帳號。"""
+    return bool(visitor) and visitor["google_sub"].startswith("guest:")
+
+
+def guest_expires(visitor):
+    return datetime.datetime.fromisoformat(visitor["session_created"]) + datetime.timedelta(hours=GUEST_HOURS)
 
 
 # ==================================================================== Google OAuth
@@ -132,7 +146,8 @@ def current_visitor(con, token):
                       "JOIN visitors v ON v.id = s.visitor_id WHERE s.token_hash = ?", (_sha(token),)).fetchone()
     if not row:
         return None
-    if datetime.datetime.fromisoformat(row["session_created"]) < datetime.datetime.now() - datetime.timedelta(days=SESSION_DAYS):
+    limit = datetime.timedelta(hours=GUEST_HOURS) if is_guest(row) else datetime.timedelta(days=SESSION_DAYS)
+    if datetime.datetime.fromisoformat(row["session_created"]) < datetime.datetime.now() - limit:
         end_session(con, token)
         return None
     return row

@@ -6,8 +6,8 @@
   {% for c in map_cities if c.map_key in map.nodes %}
     {{ city_node(c, map.nodes[c.map_key], tr(c, 'name') if lang == 'en' else map.nodes[c.map_key].name, selected, interactive) }}
   {% endfor %}
-  {#- 不在地圖上的城市（例如「海外」）：左下角各畫一個框，跟連江、金門一樣。沒有演出的不畫 #}
-  {% for c in map_cities | rejectattr('map_key') if c.n or c.id in selected %}
+  {#- 不在地圖上的城市（例如「海外」）：左下角各畫一個框，跟連江、金門一樣；沒有演出也畫，是灰色小點 #}
+  {% for c in map_cities | rejectattr('map_key') %}
     {%- set y = map.height - 62 - (loop.index0 * 60) %}
     {{ city_node(c, {"x": 40, "y": y + 28, "inset": (12, y, 56, 48)}, tr(c, 'name'), selected, interactive) }}
   {% endfor %}

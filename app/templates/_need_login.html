@@ -1,0 +1,6 @@
+{#- 投稿頁上方：沒登入的請他登入；訪客（自取暱稱的臨時帳號）不能投稿，請他改用 Google 登入 #}
+{% if guest %}
+  <p class="flash-front">{{ t('guest_cannot_submit') }} <a href="/auth/login?next={{ current_path | urlencode }}">{{ t('login_with_google') }} →</a></p>
+{% else %}
+  <p><a class="btn primary" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> <span class="small muted">{{ t('need_login_to') }}</span></p>
+{% endif %}

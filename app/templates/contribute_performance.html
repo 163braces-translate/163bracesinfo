@@ -8,7 +8,7 @@
   <p class="muted small">{{ t('contribute_intro') }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
   {% if need_login %}
-    <p><a class="btn primary" href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> <span class="small muted">{{ t('need_login_to') }}</span></p>
+    {% include "_need_login.html" %}
   {% endif %}
   <form method="post" class="contribute-form" {{ 'inert' if need_login }}>
     <label class="field" for="c-setlist">{{ t('setlist') }}</label>

@@ -1,3 +1,50 @@
+/* 甜甜圈圖：最大的三塊在色塊外面拉一條線，標上名稱和「數量 (%)」。
+ * 統計頁（stats.js）與我的足跡（me.js）共用：畫圖時 plugins: [window.doughnutTopLabels]，
+ * 再把甜甜圈縮小一點（radius: DOUGHNUT_RADIUS）留位置給文字。 */
+window.DOUGHNUT_RADIUS = "68%";
+window.doughnutTopLabels = {
+  id: "doughnutTopLabels",
+  afterDatasetsDraw: function (chart) {
+    var ds = chart.data.datasets[0], meta = chart.getDatasetMeta(0);
+    if (!ds || !meta.data.length) return;
+    var shown = ds.data.map(function (v, i) { return i; })
+      .filter(function (i) { return chart.getDataVisibility(i) && ds.data[i] > 0; });
+    var total = shown.reduce(function (n, i) { return n + ds.data[i]; }, 0);
+    if (!total) return;
+    // 「其他」是好幾個併在一起的，不算一名
+    var top3 = shown.filter(function (i) { return ["其他", "Other"].indexOf(String(chart.data.labels[i])) < 0; })
+      .sort(function (a, b) { return ds.data[b] - ds.data[a]; }).slice(0, 3);
+    var css = getComputedStyle(document.documentElement);
+    var font = getComputedStyle(document.body).fontFamily;
+    var ctx = chart.ctx;
+    ctx.save();
+    top3.forEach(function (i) {
+      var arc = meta.data[i].getProps(["x", "y", "startAngle", "endAngle", "outerRadius"], true);
+      var mid = (arc.startAngle + arc.endAngle) / 2, cos = Math.cos(mid), sin = Math.sin(mid);
+      var right = cos >= 0;
+      var x1 = arc.x + cos * (arc.outerRadius + 3), y1 = arc.y + sin * (arc.outerRadius + 3);
+      var x2 = arc.x + cos * (arc.outerRadius + 14), y2 = arc.y + sin * (arc.outerRadius + 14);
+      var x3 = x2 + (right ? 10 : -10);
+      var color = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y2); ctx.stroke();
+      var name = String(chart.data.labels[i]);
+      var value = ds.data[i] + " (" + Math.round(ds.data[i] / total * 100) + "%)";
+      ctx.font = "500 12px " + font;
+      var w = Math.max(ctx.measureText(name).width, (ctx.font = "12px " + font, ctx.measureText(value).width));
+      // 文字超出畫布就往內推
+      var tx = right ? Math.min(x3 + 4, chart.width - w - 2) : Math.max(x3 - 4, w + 2);
+      ctx.textAlign = right ? "left" : "right";
+      ctx.textBaseline = "middle";
+      ctx.font = "500 12px " + font; ctx.fillStyle = css.getPropertyValue("--text").trim() || "#1f2328";
+      ctx.fillText(name, tx, y2 - 7);
+      ctx.font = "12px " + font; ctx.fillStyle = css.getPropertyValue("--muted").trim() || "#646a73";
+      ctx.fillText(value, tx, y2 + 8);
+    });
+    ctx.restore();
+  }
+};
+
 /* 前台共用的小互動。每段都先檢查頁面上有沒有對應的元素，沒有就略過。 */
 (function () {
   "use strict";
@@ -74,10 +121,24 @@
     dFrom.addEventListener("change", syncDates);
     syncDates();
 
+    // 我的足跡：選整年 → 填好那一年的 1/1～12/31 直接送出（網址只留日期，不留 year）
+    var yearSel = $("#fp-year", form);
+    if (yearSel) {
+      yearSel.addEventListener("change", function () {
+        mode.value = "range";
+        dFrom.value = yearSel.value ? yearSel.value + "-01-01" : "";
+        dTo.value = yearSel.value ? yearSel.value + "-12-31" : "";
+        syncDates();
+        yearSel.disabled = true;
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+      });
+    }
+
     // 送出前把被隱藏的日期欄清掉，網址才乾淨
     form.addEventListener("submit", function () {
       if (dFrom.hidden) dFrom.value = "";
       if (dTo.hidden) dTo.value = "";
+      if ($("#fp-year", form)) $("#fp-year", form).disabled = true;   // 整年已經換成日期了，不用再送 year
       $$("input, select", form).forEach(function (el) {
         if (!el.value || (el.name === "sort" && el.value === "event_date_desc") ||
             (el.name === "date_filter_type" && !dFrom.value && !dTo.value)) el.disabled = true;

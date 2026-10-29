@@ -17,7 +17,21 @@
       <button class="btn" type="submit">{{ t('login') }}</button>
     </form>
   {% endif %}
-  {% if not google and not dev_login %}<p class="muted">{{ t('login_unavailable') }}</p>{% endif %}
+  {#- 訪客：自取暱稱的 24 小時臨時帳號，只能標記去過、按喜歡 #}
+  {% if not guest %}
+  <form method="post" action="/auth/guest-login" class="guest-login">
+    {% if google or dev_login %}<p class="or-line"><span>{{ t('or') }}</span></p>{% endif %}
+    <h2>{{ t('guest_title') }}</h2>
+    <p class="small muted">{{ t('guest_help', hours=24) }}</p>
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="guest-row">
+      <input type="text" name="nickname" maxlength="30" required placeholder="{{ t('guest_nickname') }}" aria-label="{{ t('guest_nickname') }}">
+      <button class="btn" type="submit">{{ t('guest_enter') }}</button>
+    </div>
+  </form>
+  {% else %}
+    <p class="flash-front">{{ t('guest_now') }}</p>
+  {% endif %}
   <p class="small muted" style="margin-top: 20px">{{ t('login_privacy') }} <a href="{{ link('/privacy/') }}">{{ t('privacy') }}</a></p>
 </div>
 {% endblock %}

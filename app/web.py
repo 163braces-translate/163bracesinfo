@@ -41,6 +41,7 @@ def render(request, con, name, ctx=None, status=200, page=None):
     if request.url.query:
         alt += "?" + request.url.query
     kinds = Q.pages_by_kind(con)
+    visitor = current_visitor(request, con)
     context = {
         "request": request,
         "lang": lang,
@@ -55,7 +56,8 @@ def render(request, con, name, ctx=None, status=200, page=None):
         "lyrics_prefix": Q.lyrics_prefix(con),
         "site_name": db.get_setting(con, "site_name_en" if lang == "en" else "site_name"),
         "logo_id": as_id(db.get_setting(con, "site_logo_id")),
-        "visitor": current_visitor(request, con),
+        "visitor": visitor,
+        "guest": visitors.is_guest(visitor),          # 自取暱稱的臨時帳號：不能投稿
         "login_available": visitors.login_available(),
         "current_path": path,
         "alt_url": alt,

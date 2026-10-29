@@ -9,9 +9,10 @@
   <form method="post" action="/auth/logout" style="margin-left: auto"><button class="btn small" type="submit">{{ t('logout') }}</button></form>
 </div>
 {% if msg %}<p class="flash-front" role="status">{{ msg }}</p>{% endif %}
+{% if guest_until %}<p class="flash-front">{{ t('guest_banner', time=guest_until) }} <a href="/auth/login">{{ t('login_with_google') }} →</a></p>{% endif %}
 
 <nav class="tabs" aria-label="{{ t('my_page') }}">
-  {% for key in ('footprint', 'likes', 'submissions', 'settings') %}
+  {% for key in tabs %}
     <a href="{{ link('/me/') }}?tab={{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ t('tab_' ~ key) }}</a>
   {% endfor %}
 </nav>
@@ -115,9 +116,11 @@
     <label class="field" for="nickname">{{ t('nickname') }}</label>
     <input type="text" id="nickname" name="nickname" maxlength="30" value="{{ visitor.nickname }}">
     <p class="small muted">{{ t('nickname_help') }}</p>
+    {% if not guest %}
     <label class="field" for="handle">{{ t('handle') }}</label>
     <div class="slug-row"><span class="muted">/fans/</span><input type="text" id="handle" name="handle" maxlength="30" value="{{ visitor.handle or '' }}"><span class="muted">/</span></div>
     <label class="check-row"><input type="checkbox" name="profile_public" value="1" {{ 'checked' if visitor.profile_public }}> {{ t('profile_public') }}</label>
+    {% endif %}
     <button class="btn primary" type="submit">{{ t('save') }}</button>
   </form>
   <form class="card settings-form danger-zone" method="post" action="/me/delete">

@@ -18,6 +18,7 @@ from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from starlette.datastructures import QueryParams
 
 from . import db, i18n, queries as Q, taiwan, visitors as V
 from .admin import same_origin
@@ -100,11 +101,11 @@ def redirect_uri(request):
     return "%s://%s/auth/google/callback" % (scheme, host)
 
 
-def finish_login(request, con, visitor_id, nxt):
+def finish_login(request, con, visitor_id, nxt, max_age=V.SESSION_DAYS * 86400):
     token = V.create_session(con, visitor_id)
     resp = RedirectResponse(safe_next(nxt), status_code=303)
     https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
-    resp.set_cookie(V.COOKIE, token, httponly=True, samesite="lax", secure=https, max_age=V.SESSION_DAYS * 86400, path="/")
+    resp.set_cookie(V.COOKIE, token, httponly=True, samesite="lax", secure=https, max_age=max_age, path="/")
     resp.delete_cookie(V.STATE_COOKIE, path="/")
     return resp
 
@@ -112,7 +113,8 @@ def finish_login(request, con, visitor_id, nxt):
 @router.get("/auth/login")
 def login_page(request: Request, con=Depends(get_con)):
     nxt = safe_next(request.query_params.get("next"))
-    if current_visitor(request, con):
+    visitor = current_visitor(request, con)
+    if visitor and not V.is_guest(visitor):             # 訪客可以再來這裡改用 Google 登入
         return RedirectResponse(nxt, status_code=303)
     return render(request, con, "login.html", {"next": nxt, "google": V.google_enabled(), "dev_login": V.DEV_LOGIN,
                                                "error": request.query_params.get("error")},
@@ -166,6 +168,35 @@ async def dev_login(request: Request, con=Depends(get_con)):
     return finish_login(request, con, visitor_id, form.get("next"))
 
 
+@router.post("/auth/guest-login")
+async def guest_login(request: Request, con=Depends(get_con)):
+    """訪客登入：自取暱稱，開一個 24 小時的臨時帳號（見 visitors.is_guest）。"""
+    check_post(request)
+    form = await request.form()
+    nickname = " ".join((form.get("nickname") or "").split())[:30]
+    if not nickname:
+        return RedirectResponse("/auth/login?error=" + quote(T(request, "guest_need_nickname")) +
+                                "&next=" + quote(safe_next(form.get("next"))), status_code=303)
+    stamp = db.now()
+    visitor_id = con.execute("INSERT INTO visitors (google_sub, google_name, nickname, created_at, last_login) "
+                             "VALUES (?, ?, ?, ?, ?)",
+                             ("guest:" + secrets.token_hex(12), nickname, nickname, stamp, stamp)).lastrowid
+    return finish_login(request, con, visitor_id, form.get("next"), max_age=V.GUEST_HOURS * 3600)
+
+
+# 網站上的總數（幾位粉絲去過、愛心數、樂譜的讚）不算訪客：訪客的紀錄只在他自己的「我的」裡有意義
+COUNTED = "visitor_id NOT IN (SELECT id FROM visitors WHERE google_sub LIKE 'guest:%')"
+
+
+def submit_block(request, visitor):
+    """不能投稿的原因（停權、訪客），可以的話回傳 None。"""
+    if visitor["banned"]:
+        return T(request, "banned")
+    if V.is_guest(visitor):
+        return T(request, "guest_cannot_submit")
+    return None
+
+
 @router.post("/auth/logout")
 def logout(request: Request, con=Depends(get_con)):
     check_post(request)
@@ -176,15 +207,39 @@ def logout(request: Request, con=Depends(get_con)):
 
 
 # ==================================================================== 我的足跡（統計）
-def footprint(con, lang, visitor_id):
+def footprint_filters(params):
+    """我的足跡的篩選：跟演出頁一樣（關鍵字、類型、城市、日期），另外可以直接選整年（year=2025 → 1/1～12/31）。"""
+    f = Q.parse_filters(params)
+    year = params.get("year") or ""
+    # 有填日期就以日期為準（選了整年之後又改成自訂期間）；只有 year 沒有日期時（沒有 JavaScript）才換算
+    if len(year) == 4 and year.isdigit() and not (f["date_from"] or f["date_to"]):
+        f.update(date_filter_type="range", date_from=year + "-01-01", date_to=year + "-12-31")
+    return f
+
+
+def footprint(con, lang, visitor_id, f=None):
+    attended = con.execute("SELECT p.event_date, p.city_id, p.event_type_id FROM performances p "
+                           "JOIN attendance a ON a.performance_id = p.id AND a.visitor_id = ?", (visitor_id,)).fetchall()
+    f = f or footprint_filters(QueryParams(""))
+    where, args = Q._where(f)
     perfs = [dict(r) for r in con.execute(
-        Q.PERF_SELECT + " JOIN attendance a ON a.performance_id = p.id AND a.visitor_id = ? ORDER BY p.event_date DESC",
-        (visitor_id,))]
+        Q.PERF_SELECT + " JOIN attendance a ON a.performance_id = p.id AND a.visitor_id = ?" + where +
+        " ORDER BY p.event_date DESC", [visitor_id] + args)]
     types = Q.event_types(con)
+    # 篩選選單只列出去過的年份、類型、城市；整年的話標出是哪一年
+    whole_year = (f["date_filter_type"] == "range" and f["date_from"][:4] == f["date_to"][:4]
+                  and f["date_from"][4:] == "-01-01" and f["date_to"][4:] == "-12-31")
+    options = {
+        "years": sorted({r["event_date"][:4] for r in attended}, reverse=True),
+        "types": [t for t in types if t["id"] in {r["event_type_id"] for r in attended}],
+        "cities": [c for c in Q.cities(con) if c["id"] in {r["city_id"] for r in attended}],
+        "year": f["date_from"][:4] if whole_year else "",
+    }
     by_year = Counter(p["event_date"][:4] for p in perfs)
     years = sorted(by_year)
     by_type = Counter(p["event_type_id"] for p in perfs)
-    type_rows = [(i, t) for i, t in enumerate(types) if by_type.get(t["id"])]
+    # 甜甜圈從 12 點鐘順時針、多的在前；顏色跟著類型走（i 是類型的順序），換順序顏色也不會跳
+    type_rows = sorted([(i, t) for i, t in enumerate(types) if by_type.get(t["id"])], key=lambda x: -by_type[x[1]["id"]])
 
     # 地圖：跟演出頁同一張，只是圓點大小換成「我去過幾場」
     city_n = Counter(p["city_id"] for p in perfs)
@@ -209,6 +264,8 @@ def footprint(con, lang, visitor_id):
              if s["id"] not in heard_song_ids]
 
     return {
+        "f": f, "options": options, "any": bool(attended),
+        "filtered": any([f["q"], f["city"], f["event_type"], f["date_from"], f["date_to"]]),
         "performances": perfs,
         "total": len(perfs),
         "past": len(past_ids),
@@ -218,8 +275,11 @@ def footprint(con, lang, visitor_id):
         "never": never,
         "map_cities": map_cities,
         "charts": {
-            "years": {"labels": years, "datasets": [{"label": i18n.t(lang, "shows"), "data": [by_year[y] for y in years],
-                                                     "backgroundColor": Q.color(0)}]},
+            # 每年去了幾場：依演出類型堆疊，顏色跟甜甜圈一樣（跟著類型走）
+            "years": {"labels": years, "datasets": [
+                {"label": i18n.tr(lang, t, "name"), "backgroundColor": Q.color(i),
+                 "data": [sum(1 for p in perfs if p["event_date"][:4] == y and p["event_type_id"] == t["id"]) for y in years]}
+                for i, t in type_rows]},
             "types": {"labels": [i18n.tr(lang, t, "name") for _, t in type_rows],
                       "datasets": [{"data": [by_type[t["id"]] for _, t in type_rows],
                                     "backgroundColor": [Q.color(i) for i, _ in type_rows]}]},
@@ -281,11 +341,14 @@ def me_page(request: Request, con=Depends(get_con)):
     if not visitor:
         return RedirectResponse(login_url(request), status_code=303)
     lang = lang_of(request)
-    tab = request.query_params.get("tab") if request.query_params.get("tab") in ME_TABS else "footprint"
+    tabs = [t for t in ME_TABS if not (V.is_guest(visitor) and t == "submissions")]
+    tab = request.query_params.get("tab") if request.query_params.get("tab") in tabs else "footprint"
     return render(request, con, "me.html", {
-        "tab": tab, "fp": footprint(con, lang, visitor["id"]), "likes": liked_songs(con, visitor["id"]),
+        "tab": tab, "fp": footprint(con, lang, visitor["id"], footprint_filters(request.query_params)),
+        "likes": liked_songs(con, visitor["id"]),
         "subs": my_submissions(con, visitor["id"]), "map": taiwan.map_data(), "msg": request.query_params.get("msg"),
         "choices": contribute_choices(con) if tab == "submissions" else None,
+        "tabs": tabs, "guest_until": V.guest_expires(visitor).strftime("%Y/%m/%d %H:%M") if V.is_guest(visitor) else None,
     }, page={"title": "我的", "title_en": "My page"})
 
 
@@ -329,6 +392,12 @@ async def me_settings(request: Request, con=Depends(get_con)):
     nickname = (form.get("nickname") or "").strip()[:30]
     public = 1 if form.get("profile_public") else 0
     handle = (form.get("handle") or "").strip()
+    if V.is_guest(visitor):                            # 訪客不能開公開個人頁，暱稱不能空白
+        if not nickname:
+            return RedirectResponse(back + "&msg=" + quote(T(request, "guest_need_nickname")), status_code=303)
+        con.execute("UPDATE visitors SET nickname = ?, google_name = ? WHERE id = ?", (nickname, nickname, visitor["id"]))
+        con.commit()
+        return RedirectResponse(back + "&msg=" + quote(T(request, "saved")), status_code=303)
     try:
         handle = V.check_handle(handle) if handle else None
         if public and not handle:
@@ -365,7 +434,7 @@ def public_profile(handle: str, request: Request, con=Depends(get_con)):
     lang = lang_of(request)
     name = row["nickname"] or i18n.t(lang, "fan")
     return render(request, con, "fan.html", {
-        "fan": row, "fan_name": name, "fp": footprint(con, lang, row["id"]), "likes": liked_songs(con, row["id"]),
+        "fan": row, "fan_name": name, "fp": footprint(con, lang, row["id"], footprint_filters(request.query_params)), "likes": liked_songs(con, row["id"]),
         "map": taiwan.map_data(),
     }, page={"title": name, "title_en": name})
 
@@ -392,7 +461,7 @@ def toggle_attendance(performance_id: int, request: Request, con=Depends(get_con
         con.execute("INSERT INTO attendance VALUES (?, ?, ?)", key + (db.now(),))
         on = True
     con.commit()
-    n = con.execute("SELECT COUNT(*) FROM attendance WHERE performance_id = ?", (performance_id,)).fetchone()[0]
+    n = con.execute("SELECT COUNT(*) FROM attendance WHERE performance_id = ? AND " + COUNTED, (performance_id,)).fetchone()[0]
     return {"on": on, "count": n}
 
 
@@ -430,7 +499,7 @@ def toggle_like(song_id: int, request: Request, con=Depends(get_con)):
                     key + (db.now(), (last or 0) + 1))
         on = True
     con.commit()
-    n = con.execute("SELECT COUNT(*) FROM song_likes WHERE song_id = ?", (song_id,)).fetchone()[0]
+    n = con.execute("SELECT COUNT(*) FROM song_likes WHERE song_id = ? AND " + COUNTED, (song_id,)).fetchone()[0]
     return {"on": on, "count": n}
 
 
@@ -441,7 +510,7 @@ def attended_ids(con, visitor):
 
 
 def attendance_counts(con):
-    return {r[0]: r[1] for r in con.execute("SELECT performance_id, COUNT(*) FROM attendance GROUP BY performance_id")}
+    return {r[0]: r[1] for r in con.execute("SELECT performance_id, COUNT(*) FROM attendance WHERE " + COUNTED + " GROUP BY performance_id")}
 
 
 def liked_ids(con, visitor):
@@ -451,11 +520,11 @@ def liked_ids(con, visitor):
 
 
 def like_counts(con):
-    return {r[0]: r[1] for r in con.execute("SELECT song_id, COUNT(*) FROM song_likes GROUP BY song_id")}
+    return {r[0]: r[1] for r in con.execute("SELECT song_id, COUNT(*) FROM song_likes WHERE " + COUNTED + " GROUP BY song_id")}
 
 
 def like_state(con, visitor, song_id):
-    n = con.execute("SELECT COUNT(*) FROM song_likes WHERE song_id = ?", (song_id,)).fetchone()[0]
+    n = con.execute("SELECT COUNT(*) FROM song_likes WHERE song_id = ? AND " + COUNTED, (song_id,)).fetchone()[0]
     on = bool(visitor and con.execute("SELECT 1 FROM song_likes WHERE visitor_id = ? AND song_id = ?",
                                       (visitor["id"], song_id)).fetchone())
     return {"on": on, "count": n}
@@ -479,8 +548,8 @@ async def post_marquee(request: Request, con=Depends(get_con)):
     text = " ".join((form.get("text") or "").split())         # 換行、連續空白收成一個空白
     mode = form.get("name_mode") if form.get("name_mode") in V.NAME_MODES else "nickname"
     units = V.text_units(text)
-    if visitor["banned"]:
-        error = T(request, "banned")
+    if submit_block(request, visitor):
+        error = submit_block(request, visitor)
     elif not text or not units:
         error = T(request, "marquee_empty")
     elif units > V.MARQUEE_MAX_UNITS or len(text) > V.MARQUEE_MAX_CHARS:
@@ -530,7 +599,7 @@ def contribute_performance_form(performance_id: int, request: Request, con=Depen
     visitor = current_visitor(request, con)
     return render(request, con, "contribute_performance.html", {
         "perf": perf, "setlist_text": setlist_text(con, performance_id), "error": request.query_params.get("error"),
-        "need_login": not visitor,
+        "need_login": not visitor or V.is_guest(visitor),
     }, page={"title": "補充演出資訊", "title_en": "Suggest an edit"})
 
 
@@ -546,8 +615,8 @@ async def contribute_performance(performance_id: int, request: Request, con=Depe
 
     def fail(key):
         return RedirectResponse(back + "?error=" + quote(T(request, key)), status_code=303)
-    if visitor["banned"]:
-        return fail("banned")
+    if submit_block(request, visitor):
+        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
     # 現有的演出只收歌單；名稱、地點有錯請寫在「給管理者的話」
     payload = {}
     new_setlist = (form.get("setlist") or "").strip()
@@ -578,7 +647,7 @@ SHOW_TEXT_FIELDS = ("event_name", "venue")
 def contribute_show_form(request: Request, con=Depends(get_con)):
     return render(request, con, "contribute_show.html", {
         "types": Q.event_types(con), "cities": Q.cities(con), "error": request.query_params.get("error"),
-        "need_login": not current_visitor(request, con),
+        "need_login": not current_visitor(request, con) or V.is_guest(current_visitor(request, con)),
     }, page={"title": "新增演出資訊", "title_en": "Add a show"})
 
 
@@ -593,8 +662,8 @@ async def contribute_show(request: Request, con=Depends(get_con)):
 
     def fail(key, **kw):
         return RedirectResponse(back + "?error=" + quote(T(request, key, **kw)), status_code=303)
-    if visitor["banned"]:
-        return fail("banned")
+    if submit_block(request, visitor):
+        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
     date = (form.get("event_date") or "").strip()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         return fail("show_need_date")
@@ -641,7 +710,7 @@ def sheets_for_songs(con, lang, song_ids, statuses=("approved",)):
     for f in con.execute("SELECT * FROM sheet_files WHERE sheet_id IN (%s) ORDER BY position"
                          % ",".join("?" * len(rows)), [r["id"] for r in rows]) if rows else []:
         files[f["sheet_id"]].append(f)
-    likes = dict(con.execute("SELECT sheet_id, COUNT(*) FROM sheet_likes WHERE sheet_id IN (%s) GROUP BY sheet_id"
+    likes = dict(con.execute("SELECT sheet_id, COUNT(*) FROM sheet_likes WHERE sheet_id IN (%s) AND " + COUNTED + " GROUP BY sheet_id"
                              % ",".join("?" * len(rows)), [r["id"] for r in rows]).fetchall()) if rows else {}
     anon = i18n.t(lang, "anonymous")
     out = []
@@ -702,7 +771,8 @@ def toggle_sheet_like(sheet_id: int, request: Request, con=Depends(get_con)):
         con.execute("INSERT INTO sheet_likes (visitor_id, sheet_id, created_at) VALUES (?, ?, ?)", key + (db.now(),))
         on = True
     con.commit()
-    return {"on": on, "count": con.execute("SELECT COUNT(*) FROM sheet_likes WHERE sheet_id = ?", (sheet_id,)).fetchone()[0]}
+    return {"on": on, "count": con.execute("SELECT COUNT(*) FROM sheet_likes WHERE sheet_id = ? AND " + COUNTED,
+                                           (sheet_id,)).fetchone()[0]}
 
 
 def store_sheet_image(upload):
@@ -739,7 +809,7 @@ def store_sheet_image(upload):
 def contribute_sheet_form(song_id: int, request: Request, con=Depends(get_con)):
     song = con.execute(Q.SONG_SELECT + " WHERE g.id = ?", (song_id,)).fetchone() or _404()
     return render(request, con, "contribute_sheet.html", {
-        "song": song, "error": request.query_params.get("error"), "need_login": not current_visitor(request, con),
+        "song": song, "error": request.query_params.get("error"), "need_login": not current_visitor(request, con) or V.is_guest(current_visitor(request, con)),
         "max_files": SHEET_MAX_FILES, "contact_email": db.get_setting(con, "contact_email"),
     }, page={"title": "投稿樂譜", "title_en": "Submit sheet music"})
 
@@ -821,8 +891,8 @@ async def save_sheet(request, con, visitor, song_id, original, current=None):
 
     def fail(key, **kw):
         return RedirectResponse(back + "?error=" + quote(T(request, key, **kw)), status_code=303)
-    if visitor["banned"]:
-        return fail("banned")
+    if submit_block(request, visitor):
+        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
     title = (form.get("title") or "").strip()[:80]
     text_body = (form.get("text_body") or "").strip()[:20000]
     video = (form.get("video_url") or "").strip()[:500]

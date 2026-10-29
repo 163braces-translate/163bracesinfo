@@ -43,6 +43,7 @@
     if (type === "doughnut") {
       opts.interaction = { mode: "nearest", intersect: true };
       opts.cutout = "58%";
+      opts.radius = window.DOUGHNUT_RADIUS;          // 外面留位置給前三名的標籤（site.js 的 doughnutTopLabels）
       return opts;
     }
     if (type === "line") {
@@ -67,7 +68,8 @@
       canvases.forEach(function (canvas) {
         if (drawn[canvas.dataset.chart]) return;
         drawn[canvas.dataset.chart] = new Chart(canvas, {
-          type: canvas.dataset.type, data: data[canvas.dataset.chart], options: options(canvas)
+          type: canvas.dataset.type, data: data[canvas.dataset.chart], options: options(canvas),
+          plugins: canvas.dataset.type === "doughnut" ? [window.doughnutTopLabels] : []
         });
       });
     });

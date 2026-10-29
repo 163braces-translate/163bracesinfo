@@ -322,6 +322,19 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .filter-actions { display: flex; gap: 8px; }
 .filter-actions .btn { flex: 1; }
 .filters-toggle { display: none; width: 100%; }
+/* 我的足跡的篩選：橫著排在統計上面 */
+.fp-filters { margin-bottom: 18px; }
+/* 電腦版：搜尋、年份、日期方式、起訖日排成同一行；手機版一個一行，起訖日兩個並排 */
+.fp-filter-grid { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) minmax(0, 2.6fr); align-items: start; }
+.fp-date-inline { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 2fr); gap: 8px; }
+.fp-filter-grid > div > .field, .fp-filter-grid > fieldset > legend { display: block; margin: 0 0 6px; padding: 0; font-size: .85rem; line-height: 1.4; }
+.fp-filter-grid input:not([type=checkbox]), .fp-filter-grid select { height: 44px; box-sizing: border-box; }
+@media (max-width: 760px) {
+  .fp-filter-grid { grid-template-columns: 1fr; }
+  .fp-date-inline { grid-template-columns: 1fr; }
+}
+.fp-filter-grid .wide { grid-column: 1 / -1; }
+.fp-filter-grid .filter-actions { max-width: 320px; }
 @media (max-width: 960px) {
   .filters-toggle { display: inline-flex; }
   .filters-card:not(.open) .filters { display: none; }
@@ -603,6 +616,12 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .narrow-card label.field { margin-top: 14px; }
 .flash-front { background: var(--warn-soft); color: var(--warn-text); border-radius: 12px; padding: 10px 14px; }
 .google-btn { width: 100%; padding: 12px; gap: 10px; margin-top: 8px; }
+.guest-login { margin-top: 18px; }
+.guest-login h2 { font-size: 1rem; margin: 0 0 4px; }
+.guest-row { display: flex; gap: 8px; margin-top: 10px; }
+.guest-row input { flex: 1; min-width: 0; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: .85rem; margin: 0 0 14px; }
+.or-line::before, .or-line::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 .dev-login { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); display: grid; gap: 8px; }
 .dev-login p { margin: 0; }
 .contribute-form { display: grid; gap: 4px; }
