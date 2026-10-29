@@ -1,0 +1,46 @@
+{% extends "admin/base.html" %}
+{% block title %}演出與歌單{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>演出與歌單</h1>
+  <a class="btn primary" href="/admin/performances/new">＋ 新增演出</a>
+</div>
+<form class="filterbar" method="get">
+  <input type="search" name="q" value="{{ query.q or '' }}" placeholder="活動名稱或地點">
+  <select name="year"><option value="">所有年份</option>{% for y in years %}<option {{ 'selected' if y == query.year }}>{{ y }}</option>{% endfor %}</select>
+  <select name="type"><option value="">所有類型</option>{% for t in types %}<option value="{{ t.id }}" {{ 'selected' if t.id | string == query.type }}>{{ t.name }}</option>{% endfor %}</select>
+  <label class="check small"><input type="checkbox" name="missing" value="1" {{ 'checked' if query.missing }}> 只看缺歌單的</label>
+  <button class="btn small">篩選</button>
+</form>
+<p class="muted small">共 {{ total }} 場</p>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>日期</th><th>活動名稱</th><th>類型</th><th>城市</th><th>歌單</th><th></th></tr></thead>
+  <tbody>
+  {% for p in rows %}
+    <tr>
+      <td class="nowrap">{{ p.event_date | replace('-', '/') }}</td>
+      <td><a href="/admin/performances/{{ p.id }}">{{ p.event_name }}</a>{% if p.event_name_en %}<div class="muted small">{{ p.event_name_en }}</div>{% endif %}</td>
+      <td>{{ p.type_name }}</td>
+      <td class="nowrap">{{ p.city_name }}</td>
+      <td class="nowrap">
+        {% if p.song_count %}<span class="chip {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.song_count }}</span>
+        {% elif p.event_date <= today %}<span class="chip warn">缺</span>{% endif %}
+      </td>
+      <td class="nowrap"><a class="small" href="/admin/performances/new?copy={{ p.id }}">複製</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">沒有符合的演出</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pages > 1 %}
+  <nav class="pager">
+    {% for n in range(1, pages + 1) %}
+      {%- set q = dict(query, page=n) %}
+      <a href="?{% for k, v in q.items() %}{{ k }}={{ v | urlencode }}{{ '&' if not loop.last }}{% endfor %}" class="{{ 'on' if n == page_no }}">{{ n }}</a>
+    {% endfor %}
+  </nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% macro show_item(p) %}
+  <li class="show-item">
+    <span class="date-badge">
+      <span class="m">{{ p.event_date[:4] }}/{{ p.event_date[5:7] }}</span>
+      <span class="d">{{ p.event_date[8:10] | int }}</span>
+      <span class="w">{{ weekday(p.event_date) }}</span>
+    </span>
+    <div class="info">
+      <div class="name">{{ tr(p, 'event_name') }}</div>
+      <div class="meta">{{ tr(p, 'type_name') }} · {{ tr(p, 'city_name') }}{% if p.venue %} · {{ m.venue(p, tr(p, 'venue')) }}{% endif %}</div>
+    </div>
+  </li>
+{% endmacro %}
+{% block content %}
+<div class="hero-frame">
+<section class="hero {{ 'hero-' ~ hero_mode if hero_image }}"
+  {%- if hero_image %} style="--hero-image: url('{{ image_url(hero_image, 1600) }}'); --hero-overlay: {{ hero_overlay }}; --hero-x: {{ hero_x }}%; --hero-y: {{ hero_y }}%; --hero-zoom: {{ hero_zoom }}"{% endif %}>
+  {% if not hero_image %}<div class="hero-art"></div>{% endif %}
+  <h1>{{ tr(page, 'title') }}</h1>
+  {% if tr(page, 'summary') %}<p>{{ tr(page, 'summary') }}</p>{% endif %}
+  <div class="hero-links">
+    {% for kind in ('performances', 'lyrics') %}
+      {% if kinds[kind] and kinds[kind].published %}
+        <a class="btn {{ 'primary' if loop.first }}" href="{{ link(page_url(kinds[kind])) }}">{{ tr(kinds[kind], 'title') }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if kinds.performances %}<a class="btn" href="{{ link(page_url(kinds.performances)) }}stats/">{{ t('tab_charts') }}</a>{% endif %}
+  </div>
+</section>
+</div>
+
+{% if show.marquee %}
+{# 粉絲留言跑馬燈：送出就顯示，後台可以隱藏。內容複製兩份接在一起，捲到一半時剛好接回開頭，看起來不會斷 #}
+<section class="marquee-box" aria-label="{{ t('marquee') }}">
+  {% if marquee %}
+    <div class="marquee" tabindex="0">
+      <div class="marquee-track" data-speed="{{ marquee_speed }}">
+        {% for copy in (1, 2) %}
+          <ul class="marquee-list" {{ 'aria-hidden=true' if copy == 2 }}>
+            {% for m in marquee %}<li><b>{{ m.name }}</b>{{ m.text }}</li>{% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <p class="marquee-empty muted">{{ t('marquee') }}</p>
+  {% endif %}
+  <details class="marquee-compose" id="marquee">
+    <summary class="btn small">✎ {{ t('marquee_post') }}</summary>
+    {% if visitor and not guest %}
+      <form class="marquee-form" data-marquee-form data-max="{{ marquee_max }}" data-sent="{{ t('marquee_sent') }}">
+        <input type="text" name="text" maxlength="120" required placeholder="{{ t('marquee_placeholder', n=marquee_max) }}" aria-label="{{ t('marquee_post') }}">
+        <div class="marquee-form-row">
+          <span class="small muted" data-units data-label="{{ t('units_left', n='{n}') }}" data-over="{{ t('units_over', n='{n}') }}"></span>
+          <label class="small">{{ t('sign_as') }}
+            <select name="name_mode">
+              <option value="nickname" {{ 'disabled' if not visitor.nickname }}>{{ t('name_nickname') }}{% if visitor.nickname %}（{{ visitor.nickname }}）{% endif %}</option>
+              <option value="google" {{ 'selected' if not visitor.nickname }}>{{ t('name_google') }}（{{ visitor.google_name }}）</option>
+              <option value="anonymous">{{ t('name_anonymous') }}</option>
+            </select>
+          </label>
+          <button class="btn primary small" type="submit">{{ t('send') }}</button>
+        </div>
+        <p class="small" data-marquee-status role="status"></p>
+      </form>
+    {% elif guest %}
+      <p class="small">{{ t('guest_cannot_submit') }} <a href="/auth/login?next={{ current_path | urlencode }}">{{ t('login_with_google') }} →</a></p>
+    {% elif login_available %}
+      <p class="small"><a href="/auth/login?next={{ current_path | urlencode }}">{{ t('login') }}</a> · {{ t('need_login_to') }}</p>
+    {% else %}
+      <p class="small muted">{{ t('login_unavailable') }}</p>
+    {% endif %}
+  </details>
+</section>
+{% endif %}
+
+<div class="home-grid">
+  {#- 每一區要不要顯示在後台「設定 → 首頁要顯示的區塊」；即將演出、最近常唱只剩一個時佔滿整行 #}
+  {% if show.upcoming %}
+  <section class="card {{ 'span-7' if show.top_songs else 'span-12' }}" aria-labelledby="h-upcoming">
+    <div class="card-head">
+      <h2 id="h-upcoming">{{ t('upcoming') }}</h2>
+      {% if kinds.performances %}<a class="more" href="{{ link(page_url(kinds.performances)) }}">{{ t('all_performances') }} →</a>{% endif %}
+    </div>
+    {% if upcoming %}
+      <ul class="show-list">
+        {% for p in upcoming %}{{ show_item(p) }}{% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">{{ t('upcoming_none') }}</p>
+      {% if recent %}
+        <h3 class="small muted" style="margin: 16px 0 8px">{{ t('recent_shows') }}</h3>
+        <ul class="show-list">{% for p in recent %}{{ show_item(p) }}{% endfor %}</ul>
+      {% endif %}
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if show.top_songs %}
+  <section class="card {{ 'span-5' if show.upcoming else 'span-12' }}" aria-labelledby="h-top">
+    <div class="card-head"><h2 id="h-top">{{ t('top_songs') }}</h2></div>
+    {% if top_songs %}
+      {%- set top_max = top_songs[0].count %}
+      <ol class="rank-list">
+        {% for s in top_songs %}
+          <li class="rank-item">
+            <span class="rank-no">{{ loop.index }}</span>
+            <span class="rank-title">
+              {% if s.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}
+              {% if s.artist %}<span class="small muted"> · {{ s.artist }}</span>{% endif %}
+            </span>
+            {#- 這幾場裡有唱這首的比例；滑鼠移上去看實際場數 #}
+            <span class="rank-count" title="{{ s.count }} / {{ top_window }} {{ t('shows') }}">{{ (s.count / top_window * 100) | round | int }}%</span>
+            <span class="rank-bar"><span style="width: {{ (s.count / top_window * 100) | round(1) }}%"></span></span>
+          </li>
+        {% endfor %}
+      </ol>
+      <p class="small muted" style="margin: 14px 0 0">{{ t('top_songs_hint', n=top_window) }}</p>
+    {% else %}
+      <p class="empty">—</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if show.listen %}
+  <section class="card span-12" aria-labelledby="h-listen">
+    <div class="card-head"><h2 id="h-listen">{{ t('random_listen') }}</h2></div>
+    <div id="listen-slot">{% include "_listen.html" %}</div>
+  </section>
+  {% endif %}
+
+  {% if show.facts and facts %}
+  <section class="span-12 facts" aria-label="Facts">
+    {% for f in facts %}
+      <div class="fact"><b>{{ f.value_en if lang == 'en' and f.value_en else f.value }}</b><span>{{ f.label_en if lang == 'en' and f.label_en else f.label }}</span></div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if show.articles and articles %}
+  <section class="span-12" aria-labelledby="h-articles">
+    <div class="card-head">
+      <h2 id="h-articles">{{ t('latest_articles') }}</h2>
+      {% if kinds.articles %}<a class="more" href="{{ link(page_url(kinds.articles)) }}">{{ t('read_more') }} →</a>{% endif %}
+    </div>
+    <div class="article-grid">
+      {% for a in articles %}{% include "_article_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% set body = tr(page, 'body_html') %}
+  {% if body %}
+  <section class="card span-12">
+    <div class="prose">{{ body | safe }}</div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}新演出投稿{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/submissions">← 投稿審核</a></p>
+<div class="admin-head">
+  <h1>新演出：{{ p.event_date | replace('-', '/') }} {{ p.event_name }}</h1>
+  {% if s.performance_id %}<a class="btn small" href="/admin/performances/{{ s.performance_id }}">開啟建立的演出</a>{% endif %}
+</div>
+<div class="card">
+  <p><b>投稿者</b>：{{ label }}{% if s.email %} <span class="muted small">{{ s.email }}</span>{% endif %} · <span class="muted small">{{ s.created_at | replace('T', ' ') }}</span></p>
+  <p><b>資料來源</b>：{{ p.source }}</p>
+  {% if p.message %}<p><b>留言</b>：{{ p.message }}</p>{% endif %}
+  {% if s.status != 'pending' %}<p class="flash">狀態：{{ {'approved': '已加入演出列表', 'rejected': '已退回'}[s.status] }}{% if s.admin_note %}（{{ s.admin_note }}）{% endif %}</p>{% endif %}
+</div>
+{% if same_day %}
+<div class="card">
+  <h2>同一天已經有的演出</h2>
+  <p class="help">確認不是同一場，避免重複新增。</p>
+  <ul>{% for x in same_day %}<li><a href="/admin/performances/{{ x.id }}">{{ x.event_name }}</a> <span class="muted small">· {{ x.type_name }} · {{ x.city_name }}{% if x.venue %} · {{ x.venue }}{% endif %}</span></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if setlist %}
+<div class="card">
+  <h2>附上的歌單（{{ setlist | length }} 首）</h2>
+  <ol class="diff-list new">{% for x in setlist %}<li>{{ x }}</li>{% endfor %}</ol>
+  <p class="help">核准時會一起存進這場演出。標「（自訂）」的是曲庫裡找不到的曲名；核准後會帶你到演出的編輯頁，可以在那裡改成曲庫的歌。</p>
+</div>
+{% endif %}
+{% if s.status == 'pending' %}
+<form class="card form" method="post">
+  <h2>核准前可以先修改</h2>
+  <div class="grid-2">
+    {{ fx.text('event_date', p.event_date, '日期', type='date', required=true) }}
+    <div class="form-row"><label class="field" for="f-type">類型 <span class="req">*</span></label>
+      <select id="f-type" name="event_type_id" required>{% for ty in types %}<option value="{{ ty.id }}" {{ 'selected' if ty.id == p.event_type_id }}>{{ ty.name }}</option>{% endfor %}</select></div>
+    {{ fx.text('event_name', p.event_name, '活動名稱', required=true) }}
+    {{ fx.text('event_name_en', '', '英文名稱', help='空白時英文版顯示中文名稱') }}
+    {{ fx.text('venue', p.venue, '地點') }}
+    {{ fx.text('venue_en', '', '英文地點') }}
+    {{ fx.text('map_url', p.map_url, '場地 Google Maps 連結', help='核准時自動讀出座標；空白的話，同一個場地以前填過就自動帶入。') }}
+    <div class="form-row"><label class="field" for="f-city">城市 <span class="req">*</span></label>
+      <select id="f-city" name="city_id" required>{% for c in cities %}<option value="{{ c.id }}" {{ 'selected' if c.id == p.city_id }}>{{ c.name }}</option>{% endfor %}</select></div>
+  </div>
+  {{ fx.text('admin_note', '', '給投稿者的說明（選填，退回時建議寫原因；投稿者在「我的投稿」看得到）') }}
+  <div class="form-actions">
+    <button class="btn primary" type="submit" name="action" value="approve" data-confirm="用上面的內容新增這場演出？">核准並加入演出列表</button>
+    <button class="btn danger" type="submit" name="action" value="reject" formnovalidate>退回</button>
+  </div>
+</form>
+{% endif %}
+{% if s.visitor_id %}
+<form method="post" action="/admin/visitors" class="small">
+  <input type="hidden" name="id" value="{{ s.visitor_id }}"><input type="hidden" name="back" value="/admin/submissions/show/{{ s.id }}">
+  {% if s.banned %}<button class="btn small" name="action" value="unban">恢復這位粉絲的投稿權</button>
+  {% else %}<button class="btn small danger" name="action" value="ban" data-confirm="停權後這位粉絲不能再投稿，跑馬燈也不再顯示。">停權這位粉絲</button>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

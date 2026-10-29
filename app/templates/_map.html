@@ -1,0 +1,46 @@
+{# 台灣地圖。interactive：演出頁可以點縣市篩選（selected 是已選的城市 id）；false：統計、個人足跡用，只看不點 #}
+{% macro tw_map(map, map_cities, selected=(), interactive=true) %}
+<svg class="tw-map {{ '' if interactive else 'static' }}" viewBox="0 0 {{ map.width }} {{ map.height }}" role="{{ 'group' if interactive else 'img' }}" aria-label="{{ t('map') }}">
+  <path class="land" d="{{ map.mainland }}"/>
+  {% for d in map.islands %}<path class="land" d="{{ d }}"/>{% endfor %}
+  {% for c in map_cities if c.map_key in map.nodes %}
+    {{ city_node(c, map.nodes[c.map_key], tr(c, 'name') if lang == 'en' else map.nodes[c.map_key].name, selected, interactive) }}
+  {% endfor %}
+  {#- 不在地圖上的城市（例如「海外」）：左下角各畫一個框，跟連江、金門一樣；沒有演出也畫，是灰色小點 #}
+  {% for c in map_cities | rejectattr('map_key') %}
+    {%- set y = map.height - 62 - (loop.index0 * 60) %}
+    {{ city_node(c, {"x": 40, "y": y + 28, "inset": (12, y, 56, 48)}, tr(c, 'name'), selected, interactive) }}
+  {% endfor %}
+</svg>
+{% endmacro %}
+
+{% macro city_node(c, node, label, selected, interactive) %}
+    {% if node.inset %}
+      <rect class="inset" x="{{ node.inset[0] }}" y="{{ node.inset[1] }}" width="{{ node.inset[2] }}" height="{{ node.inset[3] }}" rx="8"/>
+    {% endif %}
+    <g class="node {{ 'on' if c.id in selected }} {{ 'zero' if not c.n }}" {% if interactive %}data-city="{{ c.id }}" tabindex="0" role="button"
+       aria-pressed="{{ 'true' if c.id in selected else 'false' }}" aria-label="{{ label }} {{ c.n }}"{% endif %}>
+      <title>{{ tr(c, 'name') }}：{{ c.n }}</title>
+      {#- 看不見的點擊區：圓點加名稱整塊都能點，不用瞄準小圓點。名稱寬度用字數估：中文一字約 11、英文約 6.3 #}
+      {%- set lw = label | length * (6.3 if lang == 'en' else 11) %}
+      {%- set hr = [c.r, 7] | max %}
+      {% if interactive %}
+        {% if node.inset %}
+          <rect class="hit" x="{{ node.inset[0] }}" y="{{ node.inset[1] }}" width="{{ node.inset[2] }}" height="{{ node.inset[3] }}" rx="8"/>
+        {% elif node.left %}
+          <rect class="hit" x="{{ node.x - c.r - lw - 6 }}" y="{{ node.y - hr - 2 }}" width="{{ c.r * 2 + lw + 9 }}" height="{{ hr * 2 + 4 }}" rx="4"/>
+        {% else %}
+          <rect class="hit" x="{{ node.x - c.r - 3 }}" y="{{ node.y - hr - 2 }}" width="{{ c.r * 2 + lw + 9 }}" height="{{ hr * 2 + 4 }}" rx="4"/>
+        {% endif %}
+      {% endif %}
+      <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ c.r }}"/>
+      {% if c.r >= 7.5 %}<text class="count" x="{{ node.x }}" y="{{ node.y + 2.6 }}" text-anchor="middle">{{ c.n }}</text>{% endif %}
+      {% if node.inset %}
+        <text x="{{ node.x }}" y="{{ node.inset[1] + 11 }}" text-anchor="middle">{{ label }}</text>
+      {% elif node.left %}
+        <text x="{{ node.x - c.r - 2 }}" y="{{ node.y + 3 }}" text-anchor="end">{{ label }}</text>
+      {% else %}
+        <text x="{{ node.x + c.r + 2 }}" y="{{ node.y + 3 }}">{{ label }}</text>
+      {% endif %}
+    </g>
+{% endmacro %}

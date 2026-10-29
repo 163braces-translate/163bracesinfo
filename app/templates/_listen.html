@@ -1,0 +1,25 @@
+{% import "_macros.html" as m %}
+{% if song %}
+<div class="listen" data-song="{{ song.id }}">
+  <div class="listen-video">{{ m.youtube(song.listen_url, tr(song, 'title')) }}</div>
+  <div class="listen-side">
+    <div class="listen-title">
+      {{ m.cover(song_cover_id(song), 120) }}
+      <div>
+        <h3>{{ tr(song, 'title') }}</h3>
+        <div class="small muted">{{ tr(song, 'album_name') }}{% if song.artist %} · {{ tr(song, 'artist') }}{% endif %}</div>
+      </div>
+    </div>
+    {#- 只顯示主要語言（左欄）；對唱的左右是兩個聲部，兩邊都要顯示 #}
+    <div class="listen-lyrics compact {{ 'duet' if song.lyrics.display_mode == 'duet' else 'only-left' }}">
+      {% if song.blocks %}{{ m.lyric_blocks(song.blocks, tr) }}{% else %}<p class="muted">{{ t('no_lyrics') }}</p>{% endif %}
+    </div>
+    <div class="listen-actions">
+      <button type="button" class="btn primary small" data-another="{{ song.id }}">↻ {{ t('another_song') }}</button>
+      <a class="btn small" href="{{ link(lyrics_prefix ~ song.lyrics.slug ~ '/') }}">{{ t('full_lyrics') }} →</a>
+    </div>
+  </div>
+</div>
+{% else %}
+<p class="empty">{{ t('no_lyrics') }}</p>
+{% endif %}

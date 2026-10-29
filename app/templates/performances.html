@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% import "_map.html" as mp with context %}
+{% import "_macros.html" as m %}
+{% block head %}{% include "_stats_head.html" %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tr(page, 'title') }}</h1>
+</div>
+
+<nav class="tabs" role="tablist" aria-label="{{ tr(page, 'title') }}">
+  {% for key, label in [('list', t('tab_list')), ('charts', t('tab_charts')), ('setlist', t('tab_setlist')), ('replay', t('tab_replay'))] if tab_shown[key] %}
+    <a role="tab" id="tab-{{ key }}" href="{{ link(tab_urls[key]) }}{{ '?preview=1' if previewing }}" data-tab="{{ key }}"
+       data-title="{{ (tr(page, 'title') if key == 'list' else label) }} · {{ site_name }}"
+       aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}">{{ label }}{% if key != 'list' and tab_status[key] != 'live' %} <small class="muted">（未上線）</small>{% endif %}</a>
+  {% endfor %}
+</nav>
+
+<section class="tab-panel" id="panel-list" role="tabpanel" aria-labelledby="tab-list" {{ 'hidden' if tab != 'list' }}>
+{% set body = tr(page, 'body_html') %}
+{% if body %}<div class="intro muted prose" style="margin-bottom: 16px">{{ body | safe }}</div>{% endif %}
+<div class="perf-layout">
+  <aside class="perf-side">
+    <form class="card filters-card {{ 'open' if filtered }}" id="filters" method="get" action="{{ link(page_url(page)) }}">
+      <button type="button" class="btn filters-toggle" aria-expanded="{{ 'true' if filtered else 'false' }}">
+        {{ t('filters') }}{% if filtered %} · {{ t('results', n=total) }}{% endif %}
+      </button>
+      <div class="filters">
+        <div>
+          <label class="field" for="q">{{ t('search') }}</label>
+          <input type="search" id="q" name="q" value="{{ f.q }}" placeholder="{{ t('search_placeholder') }}">
+        </div>
+        <fieldset>
+          <legend>{{ t('type') }}</legend>
+          <div class="pills">
+            {% for ty in types %}
+              <label class="pill"><input type="checkbox" name="event_type" value="{{ ty.id }}" {{ 'checked' if ty.id in f.event_type }}><span>{{ tr(ty, 'name') }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <details class="city-list" {{ 'open' if f.city }}>
+          <summary>{{ t('city') }}{% if f.city %} · <b>{{ f.city | length }}</b>{% endif %}</summary>
+          <div class="pills" id="city-pills">
+            {% for c in map_cities if c.n or c.id in f.city %}
+              <label class="pill"><input type="checkbox" name="city" value="{{ c.id }}" {{ 'checked' if c.id in f.city }}><span>{{ tr(c, 'name') }} <small class="muted">{{ c.n }}</small></span></label>
+            {% endfor %}
+          </div>
+        </details>
+        <fieldset>
+          <legend>{{ t('date') }}</legend>
+          <select name="date_filter_type" id="date-mode" aria-label="{{ t('date') }}">
+            <option value="range" {{ 'selected' if f.date_filter_type == 'range' }}>{{ t('date_range') }}</option>
+            <option value="after" {{ 'selected' if f.date_filter_type == 'after' }}>{{ t('date_after') }}</option>
+            <option value="before" {{ 'selected' if f.date_filter_type == 'before' }}>{{ t('date_before') }}</option>
+          </select>
+          <div class="date-row" style="margin-top: 8px">
+            <input type="date" name="date_from" id="date-from" value="{{ f.date_from }}" aria-label="{{ t('from') }}">
+            <input type="date" name="date_to" id="date-to" value="{{ f.date_to }}" aria-label="{{ t('to') }}">
+          </div>
+        </fieldset>
+        <div>
+          <select name="sort" aria-label="Sort">
+            <option value="event_date_desc" {{ 'selected' if f.sort == 'event_date_desc' }}>{{ t('sort_desc') }}</option>
+            <option value="event_date_asc" {{ 'selected' if f.sort == 'event_date_asc' }}>{{ t('sort_asc') }}</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button class="btn primary" type="submit">{{ t('apply') }}</button>
+          <a class="btn" href="{{ link(page_url(page)) }}">{{ t('clear') }}</a>
+        </div>
+      </div>
+    </form>
+
+    <section class="card" aria-labelledby="h-map">
+      <div class="card-head" style="margin-bottom: 4px"><h2 id="h-map">{{ t('map') }}</h2><span class="small muted">{{ t('map_hint') }}</span></div>
+      {{ mp.tw_map(map, map_cities, f.city) }}
+    </section>
+  </aside>
+
+  <section aria-label="{{ tr(page, 'title') }}">
+    <div class="results-head" data-attend-bar>
+      <span class="muted">{{ t('results', n=total) }}</span>
+      {% if visitor and total %}
+        <span class="attend-save">
+          <span class="small muted" data-attend-status data-hint="{{ t('attend_hint') }}" data-dirty="{{ t('attend_unsaved', n='{n}') }}"
+                data-done="{{ t('attend_saved') }}" data-failed="{{ t('attend_save_failed') }}" data-leave="{{ t('attend_leave') }}">{{ t('attend_hint') }}</span>
+          <button class="btn small primary" type="button" data-attend-submit disabled>{{ t('attend_save') }}</button>
+        </span>
+      {% endif %}
+    </div>
+    {% if not total %}
+      <p class="empty">{{ t('no_results') }}</p>
+    {% else %}
+    {#- 登入後多一欄「去過」；欄數跟著變 #}
+    {%- set cols = 6 if visitor else 5 %}
+    {% macro attend_button(p, cls='att-btn') -%}
+      {#- data-saved：資料庫裡的狀態；按了先只改畫面，按「儲存參與場次」才存（site.js）。沒登入的按了去登入 #}
+      <button type="button" class="{{ cls }} {{ 'on' if p.id in attended }}" data-attend="{{ p.id }}" aria-pressed="{{ 'true' if p.id in attended else 'false' }}"
+              data-saved="{{ '1' if p.id in attended else '0' }}" {% if not visitor %}data-login="/auth/login?next={{ current_path | urlencode }}"{% endif %}
+              data-on="{{ t('attended_on') }}" data-off="{{ t('attended') }}">{{ t('attended_on') if p.id in attended else t('attended') }}</button>
+    {%- endmacro %}
+    {% macro perf_extra(p) %}
+      <div class="perf-extra">
+        {% if login_available %}{{ attend_button(p) }}{% endif %}
+        <span class="muted small" data-attend-count="{{ p.id }}" data-label="{{ t('fans_attended', n='{n}') }}">{% if attend_counts.get(p.id) %}{{ t('fans_attended', n=attend_counts[p.id]) }}{% endif %}</span>
+        {% if p.event_date < today %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>{% endif %}
+      </div>
+    {% endmacro %}
+    {% macro setlist_block(p) %}
+      <div class="setlist-content">
+        {% if p.setlist_order_uncertain %}<p class="uncertain">⚠️ {{ t('order_uncertain') }}</p>{% endif %}
+        <ol class="setlist">
+          {% for it in p.setlist %}
+            <li>
+              {%- set title = it.custom_title if it.song_id is none else tr(it, 'title') %}
+              {% if it.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ it.lyrics_slug ~ '/') }}">{{ title }}</a>{% else %}{{ title }}{% endif %}
+              {% if it.song_id and it.artist %}<span class="artist"> · {{ tr(it, 'artist') }}</span>{% endif %}
+              {% if it.note %}<span class="chip note">{{ it.note }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      </div>
+    {% endmacro %}
+    <table class="perf-table">
+      <thead><tr>{% if visitor %}<th class="att-col"><span class="sr-only">{{ t('attended') }}</span></th>{% endif %}<th>{{ t('date') }}</th><th>{{ t('event') }}</th><th>{{ t('type') }}</th><th>{{ t('venue') }}</th><th>{{ t('city') }}</th></tr></thead>
+      <tbody>
+      {% for ym, rows in groups %}
+        <tr class="month-row"><th colspan="{{ cols }}">{{ ym_label(ym) }}</th></tr>
+        {% for p in rows %}
+          {%- set soon = p.event_date >= today %}
+          <tr id="p{{ p.id }}" class="{{ 'soon' if soon }}">
+            {% if visitor %}<td class="att-col">{{ attend_button(p, 'att-btn compact') }}</td>{% endif %}
+            <td class="date">{{ p.event_date | replace('-', '/') }} <span class="w">({{ weekday(p.event_date) }})</span></td>
+            <td>
+              {% if p.setlist %}
+                <button type="button" class="perf-name" aria-expanded="false" aria-controls="sl{{ p.id }}">
+                  <span class="t">{{ tr(p, 'event_name') }}</span><span class="chip badge-songs {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span>
+                </button>
+              {% else %}{{ tr(p, 'event_name') }}
+                {% if not soon %}<a class="add-setlist" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('add_setlist') }}</a>{% endif %}
+              {% endif %}
+              {% if soon %} <span class="chip blue">{{ t('soon') }}</span>{% endif %}
+            </td>
+            <td><span class="chip">{{ tr(p, 'type_name') }}</span></td>
+            <td>{{ m.venue(p, tr(p, 'venue')) }}</td>
+            <td class="nowrap">{{ tr(p, 'city_name') }}</td>
+          </tr>
+          {% if p.setlist %}
+          <tr class="setlist-row" id="sl{{ p.id }}" hidden>
+            <td colspan="{{ cols }}">
+              {{ setlist_block(p) }}
+              {{ perf_extra(p) }}
+            </td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="perf-cards">
+      {% for ym, rows in groups %}
+        <h3 class="month-head">{{ ym_label(ym) }}</h3>
+        <div class="card-grid">
+          {% for p in rows %}
+            {%- set soon = p.event_date >= today %}
+            <article class="perf-card {{ 'soon' if soon }}" id="m{{ p.id }}">
+              <div class="perf-card-top">
+                <span class="d">{{ p.event_date[5:] | replace('-', '/') }} ({{ weekday(p.event_date) }})</span>
+                <span class="chip">{{ tr(p, 'type_name') }}</span>
+                {% if soon %}<span class="chip blue">{{ t('soon') }}</span>{% endif %}
+              </div>
+              <div class="n">{{ tr(p, 'event_name') }}</div>
+              <div class="m">{{ tr(p, 'city_name') }}{% if tr(p, 'venue') %} · {{ m.venue(p, tr(p, 'venue')) }}{% endif %}</div>
+              {{ perf_extra(p) }}
+              {% if p.setlist %}
+                <details class="perf-card-setlist">
+                  <summary><span class="chip {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span> {{ t('setlist') }}</summary>
+                  {{ setlist_block(p) }}
+                </details>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+</section>
+
+{% include "_stats_panels.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/stats.js?v={{ asset_version }}"></script>
+{% if tab_shown.replay %}<script src="/static/replay.js?v={{ asset_version }}"></script>{% endif %}
+{% endblock %}

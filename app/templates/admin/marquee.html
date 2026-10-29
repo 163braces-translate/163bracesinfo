@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}跑馬燈{% endblock %}
+{% block content %}
+<h1>跑馬燈</h1>
+<p class="muted">粉絲送出就會顯示在首頁（最新 30 則）。不適合的可以隱藏或刪除；一再洗版的可以到「粉絲帳號」停權。</p>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>時間</th><th>內容</th><th>投稿者 · 署名</th><th></th></tr></thead>
+  <tbody>
+    {% for m in rows %}
+      <tr class="{{ 'warn-row' if m.hidden or m.banned }}">
+        <td class="nowrap small">{{ m.created_at | replace('T', ' ') }}</td>
+        <td>{{ m.text }}{% if m.hidden %} <span class="chip">已隱藏</span>{% endif %}</td>
+        <td class="small">{{ label(m) }} · {{ {'google': 'Google 名', 'nickname': '暱稱', 'anonymous': '匿名'}[m.name_mode] }}</td>
+        <td class="nowrap">
+          <form method="post" style="display: inline"><input type="hidden" name="id" value="{{ m.id }}">
+            {% if m.hidden %}<button class="btn small" name="action" value="show">顯示</button>{% else %}<button class="btn small" name="action" value="hide">隱藏</button>{% endif %}
+            <button class="btn small danger" name="action" value="delete" data-confirm="刪除這則留言？">刪除</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="4" class="muted">還沒有留言</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

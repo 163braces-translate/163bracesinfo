@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ t('sheets') ~ ' · ' if tab == 'sheets' }}{{ tr(page, 'title') }} · {{ site_name }}{% endblock %}
+{% import "_macros.html" as m %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tr(page, 'title') }}</h1>
+  {% set body = tr(page, 'body_html') %}
+  {% if body and tab == 'lyrics' %}<div class="intro">{{ body | safe }}</div>{% endif %}
+</div>
+{#- 分頁：歌詞（專輯、曲目）／樂譜（所有公開的樂譜），各有自己的網址 #}
+<nav class="tabs" aria-label="{{ t('lyrics') }}">
+  <a href="{{ link(lyrics_prefix) }}" aria-selected="{{ 'true' if tab == 'lyrics' else 'false' }}">{{ t('lyrics') }}</a>
+  <a href="{{ link(lyrics_prefix ~ 'sheets/') }}" aria-selected="{{ 'true' if tab == 'sheets' else 'false' }}">{{ t('sheets') }}</a>
+</nav>
+
+{% if tab == 'sheets' %}
+  <p class="muted small">{{ t('sheets_tab_intro', n=total) }}</p>
+  {% for song, sheets in groups %}
+    <section class="card sheet-group">
+      <div class="card-head">
+        <h2>{% if song.lyrics_slug and song.lyrics_published %}<a href="{{ link(lyrics_prefix ~ song.lyrics_slug ~ '/') }}">{{ tr(song, 'title') }}</a>{% else %}{{ tr(song, 'title') }}{% endif %}
+          <span class="small muted">· {{ tr(song, 'album_name') }}</span></h2>
+        <a class="btn small" href="{{ link('/contribute/sheet/' ~ song.id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
+      </div>
+      {% set show_song = false %}{% include "_sheet_cards.html" %}
+    </section>
+  {% else %}
+    <p class="empty">{{ t('sheets_none') }}</p>
+  {% endfor %}
+{% else %}
+
+{%- macro sheet_mark(s) %}{% if sheet_counts.get(s.id) %} <span class="sheet-mark" title="{{ t('sheets') }} {{ sheet_counts[s.id] }}">🎼 {{ t('sheets') }}{% if sheet_counts[s.id] > 1 %} {{ sheet_counts[s.id] }}{% endif %}</span>{% endif %}{% endmacro %}
+{# 可收放的清單：每張專輯一列，點名稱展開曲目。預設只展開第一個。順序在後台「歌詞索引排序」設定 #}
+<div class="lyrics-menu" data-lyrics-menu>
+  <div class="lyrics-menu-tools">
+    <button type="button" class="btn small" data-toggle-all data-expand="{{ t('expand_all') }}" data-collapse="{{ t('collapse_all') }}">{{ t('expand_all') }}</button>
+  </div>
+  {% for box in boxes %}
+    <details class="card album-menu" {{ 'open' if loop.first }}>
+      {% if box.kind == 'album' %}
+        {%- set a = box.album %}
+        <summary>
+          {{ m.cover(a.cover_image_id or (a.songs | map(attribute='cover_image_id') | select | first), 120, tr(a, 'name')) }}
+          <span class="album-menu-title">
+            <span class="name">{{ tr(a, 'name') }}</span>
+            <span class="sub">{% if a.release_date %}{{ a.release_date[:4] }} · {% endif %}{{ t('songs_n', n=a.songs | length) }}</span>
+          </span>
+          <span class="chevron" aria-hidden="true"></span>
+        </summary>
+        <ol class="tracks">
+          {% for s in a.songs %}
+            <li>
+              {% if s.lyrics_slug and s.lyrics_published %}
+                <a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}"><span>{{ s.title }}{% if s.title_en and s.title_en != s.title %} <span class="en">{{ s.title_en }}</span>{% endif %}{{ sheet_mark(s) }}</span></a>
+              {% else %}
+                <span class="no-lyrics">{{ tr(s, 'title') }}{{ sheet_mark(s) }}</span>
+              {% endif %}
+              {%- set n = like_counts.get(s.id, 0) %}
+              {% if login_available or n %}
+                <button type="button" class="like-btn mini {{ 'on' if s.id in liked }}" data-like="{{ s.id }}" aria-pressed="{{ 'true' if s.id in liked else 'false' }}"
+                        aria-label="{{ t('like') }} {{ tr(s, 'title') }}"><span class="heart" aria-hidden="true">♥</span><span data-like-count data-hide-zero>{{ n or '' }}</span></button>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <summary>
+          <span class="cover-ph" aria-hidden="true"></span>
+          <span class="album-menu-title">
+            <span class="name">{{ t('other_lyrics') }}</span>
+            <span class="sub">{{ t('songs_n', n=box.lyrics | length) }}</span>
+          </span>
+          <span class="chevron" aria-hidden="true"></span>
+        </summary>
+        <ol class="tracks">
+          {% for l in box.lyrics %}
+            <li><a href="{{ link(lyrics_prefix ~ l.slug ~ '/') }}"><span>{{ l.title }}{% if l.title_en %} <span class="en">{{ l.title_en }}</span>{% endif %}</span></a></li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+    </details>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

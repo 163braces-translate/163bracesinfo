@@ -1,0 +1,78 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}{{ row.title if row else '新增' ~ kind_label }}{% endblock %}
+{% block head %}{% include "admin/_quill_head.html" %}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/pages/">← 頁面與文章</a></p>
+<div class="admin-head">
+  <h1>{{ row.title if row else '新增' ~ kind_label }} <span class="chip">{{ kind_label }}</span></h1>
+  {% if row %}<a class="btn small" href="{{ page_url(row) }}{{ '?preview=1' if row.status != 'live' }}" target="_blank" rel="noopener">{{ '看前台' if row.status == 'live' else '預覽' }} ↗</a>{% endif %}
+</div>
+<form class="form" method="post" action="/admin/pages/{{ row.id if row else 'new' }}">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <div class="page-form">
+    <div class="card">
+      <div class="grid-2">
+        {{ fx.text('title', row.title if row else '', '標題', required=true) }}
+        {{ fx.text('title_en', row.title_en if row else '', '英文標題', help='也是選單上的英文文字') }}
+      </div>
+      <div class="lang-tabs" data-lang-tabs>
+        <button type="button" data-lang="zh" aria-pressed="true">中文內文</button>
+        <button type="button" data-lang="en" aria-pressed="false">英文內文</button>
+      </div>
+      <div data-lang-pane="zh">{{ fx.rich('body_html', row.body_html if row else '', '內文', help='標題（H1–H3）、文字顏色、字級、連結、圖片、YouTube 影片都在工具列。' ~ (' 演出、歌詞索引頁的內文會顯示在頁面上方當作說明。' if fixed and kind != 'home' else '')) }}</div>
+      <div data-lang-pane="en" hidden>{{ fx.rich('body_html_en', row.body_html_en if row else '', '英文內文', help='空白時英文版顯示中文內文。') }}</div>
+    </div>
+    <aside class="card side">
+      <h2>網址與發佈</h2>
+      {% if kind == 'home' %}
+        <p class="help">首頁的網址固定是 /，它是所有頁面的最上層。</p>
+      {% else %}
+        <div class="form-row">
+          <label class="field" for="f-parent">上層頁面 <span class="req">*</span></label>
+          <select id="f-parent" name="parent_id" data-parent-select>
+            {% for p, depth in parents %}
+              <option value="{{ p.id }}" data-slug="{{ p.slug }}" {{ 'selected' if parent and p.id == parent.id }}>{{ '　' * depth }}{{ p.title }}</option>
+            {% endfor %}
+          </select>
+          <p class="help">這一頁放在哪一頁底下。換了上層就是搬家{% if children %}，底下的子頁面會一起搬{% endif %}，舊網址自動轉到新網址。</p>
+        </div>
+        <div class="form-row">
+          <label class="field" for="f-segment">網址 <span class="req">*</span></label>
+          <div class="slug-input"><span data-slug-prefix>/{{ parent.slug ~ '/' if parent and parent.slug }}</span><input type="text" id="f-segment" name="segment" value="{{ segment }}" required pattern="[a-z0-9][a-z0-9_\-]*"><span>/</span></div>
+          <p class="help">只填這一頁自己那一段：英文小寫、數字、- 和 _。</p>
+        </div>
+      {% endif %}
+      {{ fx.status_row(row, always_live=(kind == 'home')) }}
+      <p class="help">要放進頁首選單或頁尾，到「<a href="/admin/navigation">頁首與頁尾</a>」設定。</p>
+      {% if kind == 'article' %}{{ fx.text('published_at', row.published_at if row else '', '發佈日期', type='date') }}{% endif %}
+      <hr>
+      <h2>縮圖與摘要</h2>
+      {{ fx.image_field('thumbnail_id', row.thumbnail_id if row else none, '縮圖', '文章列表、社群分享（Facebook、LINE 預覽）用的圖。') }}
+      <div class="form-row">
+        <label class="field" for="f-summary">摘要</label>
+        <textarea id="f-summary" name="summary" rows="3">{{ row.summary if row else '' }}</textarea>
+        <p class="help">列表、搜尋引擎、社群分享用的一兩句話。{% if kind == 'home' %}首頁會顯示在大標題下面。{% endif %}</p>
+      </div>
+      <div class="form-row">
+        <label class="field" for="f-summary-en">英文摘要</label>
+        <textarea id="f-summary-en" name="summary_en" rows="3">{{ row.summary_en if row else '' }}</textarea>
+      </div>
+    </aside>
+  </div>
+  {% if tabs %}
+    <div class="card">
+      <h2>底下的分頁</h2>
+      <p class="help">這一頁本身就是「演出列表」分頁。另外三個分頁各有自己的說明文字、參數和狀態，點進去改；網址跟著演出頁走。
+        演出頁取消發佈的話，底下的分頁也會一起看不到。</p>
+      <ul class="tab-links">
+        {% for key, name, url, edit_url in tabs if key != 'list' %}
+          <li><a href="{{ edit_url }}">{{ name }}</a> <span class="muted small">{{ url }}</span> {{ fx.status_chip(tab_status[key]) }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {{ fx.publish_actions(row, can_delete=not fixed, always_live=(kind == 'home')) }}
+</form>
+{% endblock %}
+{% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}

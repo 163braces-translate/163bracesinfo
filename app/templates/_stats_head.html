@@ -1,0 +1,18 @@
+<style>
+  .selection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+  .selection-card { position: relative; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 12px; cursor: pointer; background: var(--surface); }
+  .performance-card { display: block; }
+  .selection-card h3 { font-size: .95rem; margin: 0; }
+  .selection-card:hover { border-color: #b9d0f3; }
+  .selection-card.selected { border-color: var(--primary); background: var(--primary-softer); box-shadow: 0 0 0 1px var(--primary) inset; }
+  .selection-badge { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--primary);
+    color: #fff; font-size: .75rem; display: none; align-items: center; justify-content: center; font-weight: 700; }
+  .selection-card.selected .selection-badge { display: flex; }
+  .album-cover { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex: none; }
+  .album-name, .artist-name { font-size: .78rem; color: var(--muted); }
+  .generate-btn { width: 100%; padding: 14px; font-size: 1.05rem; }
+  .generate-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .preview-container { text-align: center; }
+  #replayCanvas, #resultImage { max-width: 100%; height: auto; border-radius: 12px; box-shadow: var(--shadow); }
+</style>

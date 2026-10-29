@@ -1,0 +1,121 @@
+{# 個人足跡：「我的」頁與公開個人頁共用。fp 是 community.footprint() 的結果 #}
+{% import "_map.html" as mp with context %}
+{% if not fp.any %}
+  <p class="empty">{{ t('fp_empty') }}</p>
+{% else %}
+  {#- 篩選：跟演出頁一樣，另外可以直接選整年。表單用演出頁同一套 JavaScript（#filters） #}
+  {%- set f = fp.f %}
+  {%- set here = link(request.url.path) %}
+  <form class="card filters-card fp-filters {{ 'open' if fp.filtered }}" id="filters" method="get" action="{{ here }}">
+    {% if request.url.path == '/me/' %}<input type="hidden" name="tab" value="footprint">{% endif %}
+    <button type="button" class="btn filters-toggle" aria-expanded="{{ 'true' if fp.filtered else 'false' }}">
+      {{ t('filters') }}{% if fp.filtered %} · {{ t('results', n=fp.total) }}{% endif %}
+    </button>
+    <div class="filters fp-filter-grid">
+      <div>
+        <label class="field" for="q">{{ t('search') }}</label>
+        <input type="search" id="q" name="q" value="{{ f.q }}" placeholder="{{ t('search_placeholder') }}">
+      </div>
+      <div>
+        <label class="field" for="fp-year">{{ t('year') }}</label>
+        <select id="fp-year" name="year">
+          <option value="">{{ t('fp_all_years') if not (f.date_from or f.date_to) or fp.options.year else t('fp_custom_range') }}</option>
+          {% for y in fp.options.years %}<option value="{{ y }}" {{ 'selected' if y == fp.options.year }}>{{ y }}</option>{% endfor %}
+        </select>
+      </div>
+      <fieldset>
+        <legend>{{ t('date') }}</legend>
+        <div class="fp-date-inline">
+          <select name="date_filter_type" id="date-mode" aria-label="{{ t('date') }}">
+            <option value="range" {{ 'selected' if f.date_filter_type == 'range' }}>{{ t('date_range') }}</option>
+            <option value="after" {{ 'selected' if f.date_filter_type == 'after' }}>{{ t('date_after') }}</option>
+            <option value="before" {{ 'selected' if f.date_filter_type == 'before' }}>{{ t('date_before') }}</option>
+          </select>
+          <div class="date-row">
+            <input type="date" name="date_from" id="date-from" value="{{ f.date_from }}" aria-label="{{ t('from') }}">
+            <input type="date" name="date_to" id="date-to" value="{{ f.date_to }}" aria-label="{{ t('to') }}">
+          </div>
+        </div>
+      </fieldset>
+      <fieldset class="wide">
+        <legend>{{ t('type') }}</legend>
+        <div class="pills">
+          {% for ty in fp.options.types %}<label class="pill"><input type="checkbox" name="event_type" value="{{ ty.id }}" {{ 'checked' if ty.id in f.event_type }}><span>{{ tr(ty, 'name') }}</span></label>{% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="wide">
+        <legend>{{ t('city') }}</legend>
+        <div class="pills">
+          {% for c in fp.options.cities %}<label class="pill"><input type="checkbox" name="city" value="{{ c.id }}" {{ 'checked' if c.id in f.city }}><span>{{ tr(c, 'name') }}</span></label>{% endfor %}
+        </div>
+      </fieldset>
+      <div class="filter-actions wide">
+        <button class="btn primary" type="submit">{{ t('apply') }}</button>
+        <a class="btn" href="{{ here }}{{ '?tab=footprint' if request.url.path == '/me/' }}">{{ t('clear') }}</a>
+      </div>
+    </div>
+  </form>
+  {% if not fp.total %}<p class="empty">{{ t('fp_no_match') }}</p>{% else %}
+  <div class="stat-tiles" style="margin-bottom: 18px">
+    <span class="stat-tile"><b>{{ fp.total }}</b>{{ t('fp_total') }}</span>
+    <span class="stat-tile"><b>{{ fp.distinct_songs }}</b>{{ t('fp_songs') }}</span>
+    {% if fp.first %}<span class="stat-tile"><b>{{ fp.first[:4] }}</b>{{ t('fp_first') }} {{ fp.first[5:] | replace('-', '/') }}</span>{% endif %}
+  </div>
+  <div class="chart-grid">
+    <div class="card"><div class="card-head"><h2>{{ t('fp_by_year') }}</h2></div><div class="chart-box"><canvas data-fp-chart="years" data-type="bar" data-stacked="1"></canvas></div></div>
+    <div class="card"><div class="card-head"><h2>{{ t('fp_by_type') }}</h2></div><div class="chart-box"><canvas data-fp-chart="types" data-type="doughnut"></canvas></div></div>
+    <div class="card"><div class="card-head"><h2>{{ t('fp_map') }}</h2></div>{{ mp.tw_map(map, fp.map_cities, (), false) }}</div>
+    {#- 移動路線：只有自己的「我的足跡」有（住的地方記在自己的瀏覽器，公開個人頁不畫） #}
+    {%- set own = request.url.path == '/me/' %}
+    {% if own %}
+    <div class="card fp-route">
+      <div class="card-head"><h2>{{ t('recap_routes') }}</h2><b class="small" id="fp-km"></b></div>
+      <div class="date-row">
+        <select id="fp-county" aria-label="{{ t('recap_county') }}"><option value="">{{ t('recap_county') }}</option></select>
+        <select id="fp-town" aria-label="{{ t('recap_town') }}" disabled><option value="">{{ t('recap_town') }}</option></select>
+      </div>
+      {% if not guest %}<label class="check-row small"><input type="checkbox" id="fp-remember"> {{ t('home_remember') }}</label>{% endif %}
+      <svg class="tw-map static route-map" id="fp-route" viewBox="0 0 {{ map.width }} {{ map.height }}" role="img" aria-label="{{ t('recap_routes') }}">
+        <path class="land" d="{{ map.mainland }}"/>
+        {% for d in map.islands %}<path class="land" d="{{ d }}"/>{% endfor %}
+        <g class="routes"></g>
+      </svg>
+      <p class="small muted" style="margin: 8px 0 0">{{ t('fp_route_help') }}</p>
+    </div>
+    {% endif %}
+    <div class="card {{ 'wide' if own }}">
+      <div class="card-head"><h2>{{ t('fp_heard') }}</h2></div>
+      {% if fp.heard %}
+        <ol class="rank-list">
+          {% for s in fp.heard[:12] %}
+            <li class="rank-item">
+              <span class="rank-no">{{ loop.index }}</span>
+              <span class="rank-title">{% if s.lyrics_slug %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}</span>
+              <span class="rank-count">{{ s.count }} {{ t('times') }}</span>
+              <span class="rank-bar"><span style="width: {{ (s.count / fp.heard[0].count * 100) | round(1) }}%"></span></span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}<p class="muted small">—</p>{% endif %}
+      {% if fp.never %}
+        <h3 class="small muted" style="margin: 18px 0 6px">{{ t('fp_never') }}</h3>
+        <p class="small">{% for s in fp.never %}<a href="{{ link(lyrics_prefix ~ s.lyrics_slug ~ '/') }}">{{ tr(s, 'title') }}</a>{{ '、' if not loop.last }}{% endfor %}</p>
+      {% endif %}
+    </div>
+  </div>
+  <section class="card" style="margin-top: 18px">
+    <div class="card-head"><h2>{{ t('fp_list') }}</h2></div>
+    <ul class="plain-list">
+      {% for p in fp.performances %}
+        <li class="{{ 'sub-row' if own }}"><span><span class="nowrap muted">{{ p.event_date | replace('-', '/') }}</span> {{ tr(p, 'event_name') }} <span class="small muted">· {{ tr(p, 'city_name') }}</span></span>
+          {% if own %}<form method="post" action="/me/attendance/{{ p.id }}/delete"><input type="hidden" name="back" value="{{ link(request.url.path) }}?{{ request.url.query }}">
+            <button class="btn small" type="submit" data-confirm="{{ t('attendance_delete_confirm') }}">{{ t('delete') }}</button></form>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <script type="application/json" id="fp-data">{{ fp.charts | tojson }}</script>
+  {% if own %}<script type="application/json" id="fp-route-data">{{ dict(fp.route, map=map, lang=lang,
+    districts="/static/tw-districts.json?v=" ~ asset_version, km=t('recap_km_short', km='{km}'), home=t('recap_home_dot'),
+    home_saved=visitor.home_district) | tojson }}</script>{% endif %}
+  {% endif %}
+{% endif %}

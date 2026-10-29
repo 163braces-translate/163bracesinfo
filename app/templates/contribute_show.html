@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card narrow-card wide">
+  <p class="small" style="margin: 0"><a href="{{ link('/me/') }}?tab=submissions">← {{ t('tab_submissions') }}</a></p>
+  <h1>{{ t('contrib_show') }}</h1>
+  <p class="muted small">{{ t('show_intro') }}</p>
+  {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
+  {% if need_login %}
+    {% include "_need_login.html" %}
+  {% endif %}
+  <form method="post" class="contribute-form" {{ 'inert' if need_login }}>
+    <div class="grid-2">
+      <div><label class="field" for="s-date">{{ t('date') }}</label><input type="date" id="s-date" name="event_date" required></div>
+      <div><label class="field" for="s-type">{{ t('type') }}</label>
+        <select id="s-type" name="event_type_id" required>
+          <option value="">{{ t('choose') }}</option>
+          {% for ty in types %}<option value="{{ ty.id }}">{{ tr(ty, 'name') }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <label class="field" for="s-name">{{ t('event') }}</label>
+    <input type="text" id="s-name" name="event_name" maxlength="255" required>
+    <div class="grid-2">
+      <div><label class="field" for="s-city">{{ t('city') }}</label>
+        <select id="s-city" name="city_id" required>
+          <option value="">{{ t('choose') }}</option>
+          {% for c in cities %}<option value="{{ c.id }}">{{ tr(c, 'name') }}</option>{% endfor %}
+        </select></div>
+      <div><label class="field" for="s-venue">{{ t('venue') }}</label><input type="text" id="s-venue" name="venue" maxlength="255" placeholder="{{ t('show_venue_help') }}"></div>
+    </div>
+    <label class="field" for="s-map">{{ t('show_map_url') }}</label>
+    <input type="url" id="s-map" name="map_url" maxlength="500" placeholder="https://maps.app.goo.gl/…">
+    <p class="small muted">{{ t('show_map_url_help') }}</p>
+    <label class="field" for="s-setlist">{{ t('show_setlist') }}</label>
+    <textarea id="s-setlist" name="setlist" rows="8"></textarea>
+    <p class="small muted">{{ t('contribute_setlist_help') }}</p>
+    <label class="field" for="s-source">{{ t('contribute_source') }}</label>
+    <input type="text" id="s-source" name="source" required placeholder="{{ t('contribute_source_help') }}">
+    <label class="field" for="s-msg">{{ t('contribute_message') }}</label>
+    <textarea id="s-msg" name="message" rows="3"></textarea>
+    <button class="btn primary" type="submit" style="margin-top: 12px">{{ t('send') }}</button>
+  </form>
+</div>
+{% endblock %}

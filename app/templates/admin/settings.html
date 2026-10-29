@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}設定{% endblock %}
+{% block head %}{% include "admin/_quill_head.html" %}{% endblock %}
+{% block content %}
+<h1>設定</h1>
+<form class="form" method="post">
+  {% include "admin/_setting_groups.html" %}
+  <div class="form-actions sticky"><button class="btn primary" type="submit">儲存設定</button></div>
+</form>
+{% endblock %}
+{% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card narrow-card wide">
+  <p class="small" style="margin: 0"><a href="{{ link(page_url(kinds.performances)) }}">← {{ tr(kinds.performances, 'title') }}</a></p>
+  <h1>{{ t('contribute_title') }}</h1>
+  <p style="margin: 0"><b>{{ tr(perf, 'event_name') }}</b></p>
+  <p class="muted">{{ perf.event_date | replace('-', '/') }} · {{ tr(perf, 'type_name') }} · {{ tr(perf, 'city_name') }}{% if tr(perf, 'venue') %} · {{ tr(perf, 'venue') }}{% endif %}</p>
+  <p class="muted small">{{ t('contribute_intro') }}</p>
+  {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
+  {% if need_login %}
+    {% include "_need_login.html" %}
+  {% endif %}
+  <form method="post" class="contribute-form" {{ 'inert' if need_login }}>
+    <label class="field" for="c-setlist">{{ t('setlist') }}</label>
+    <textarea id="c-setlist" name="setlist" rows="12">{{ setlist_text }}</textarea>
+    <p class="small muted">{{ t('contribute_setlist_help') }}</p>
+    <label class="field" for="c-source">{{ t('contribute_source') }}</label>
+    <input type="text" id="c-source" name="source" required placeholder="{{ t('contribute_source_help') }}">
+    <label class="field" for="c-msg">{{ t('contribute_message') }}</label>
+    <textarea id="c-msg" name="message" rows="3"></textarea>
+    <button class="btn primary" type="submit" style="margin-top: 12px">{{ t('send') }}</button>
+  </form>
+</div>
+{% endblock %}

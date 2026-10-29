@@ -1,0 +1,39 @@
+{# 共用的小元件 #}
+
+{# 歌詞區塊：blocks 是 sections_json 的一段（不含 part 分隔） #}
+{% macro lyric_blocks(blocks, tr) %}
+  {% for b in blocks %}
+    {% if b.type == 'note' %}
+      <div class="ly-note prose">{{ b.html | safe }}</div>
+    {% elif b.type == 'section' %}
+      <div class="ly-section">
+        {% if b.name or b.name_alt %}<div class="ly-name">{{ b.name }}{% if b.name_alt %} · {{ b.name_alt }}{% endif %}</div>{% endif %}
+        {% for line in b.lines %}
+          <div class="ly-line"><span class="ly-l">{{ line.left }}</span><span class="ly-r">{{ line.right }}</span></div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endmacro %}
+
+{# YouTube 影片：先放縮圖，點了才載入播放器（頁面比較快，也不會先送追蹤 cookie） #}
+{% macro youtube(url, title='') %}
+  {%- set vid = youtube_id(url) %}
+  {% if vid %}
+    <button type="button" class="yt" data-yt="{{ vid }}" aria-label="{{ title or 'YouTube' }}"
+            style="background-image:url('https://i.ytimg.com/vi/{{ vid }}/hqdefault.jpg')"></button>
+  {% elif url %}
+    <a href="{{ url }}" target="_blank" rel="noopener">{{ title or url }}</a>
+  {% endif %}
+{% endmacro %}
+
+{# 演出地點：有場地位置就連到 Google 地圖（另開分頁） #}
+{% macro venue(p, label) -%}
+  {%- set url = venue_url(p) %}
+  {%- if url %}<a class="venue-link" href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% else %}{{ label }}{% endif %}
+{%- endmacro %}
+
+{% macro cover(image_id, width=240, alt='') %}
+  {% if image_id %}<img src="{{ image_url(image_id, width) }}" alt="{{ alt }}" loading="lazy" onerror="this.outerHTML='<span class=&quot;cover-ph&quot;></span>'">
+  {% else %}<span class="cover-ph" aria-hidden="true"></span>{% endif %}
+{% endmacro %}

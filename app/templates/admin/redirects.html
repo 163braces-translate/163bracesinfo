@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% block title %}轉址{% endblock %}
+{% block content %}
+<h1>轉址</h1>
+<p class="muted">有人打開左邊的舊網址時，自動轉到右邊。改頁面或歌詞網址時會自動新增，通常不用手動處理。</p>
+<form class="card filterbar" method="post">
+  <input type="text" name="old_path" placeholder="舊網址，例：/old-page/" required>
+  <input type="text" name="new_path" placeholder="新網址，例：/about/" required>
+  <button class="btn primary small">新增</button>
+</form>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>舊網址</th><th>新網址</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r.old_path }}</td><td><a href="{{ r.new_path }}" target="_blank" rel="noopener">{{ r.new_path }}</a></td>
+        <td><form method="post"><button class="btn small danger" name="delete" value="{{ r.old_path }}" data-confirm="刪除這筆轉址？">刪除</button></form></td></tr>
+    {% else %}<tr><td colspan="3" class="muted">沒有轉址</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

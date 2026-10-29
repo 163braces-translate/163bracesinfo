@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ t('not_found') }} · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 560px; margin: 40px auto; text-align: center; padding: 40px 24px">
+  <div style="font-size: 3rem; font-weight: 700; color: var(--primary)">404</div>
+  <h1>{{ t('not_found') }}</h1>
+  <p class="muted">{{ t('not_found_text') }}</p>
+  <a class="btn primary" href="{{ link('/') }}">{{ t('back_home') }}</a>
+</div>
+{% endblock %}

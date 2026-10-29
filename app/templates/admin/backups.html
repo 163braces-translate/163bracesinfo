@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% block title %}備份{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>備份</h1>
+  <form method="post"><button class="btn primary" type="submit">立刻備份一份</button></form>
+</div>
+<p class="muted small">{% if auto %}每週自動備份一次整個資料庫（演出、歌詞、頁面、設定、粉絲帳號與紀錄都在裡面），{% else %}這裡是本機，不會自動備份，只能按上面的按鈕；正式站上每週會自動備份一次，{% endif %}保留最近 {{ keep }} 份，舊的自動刪掉。
+  圖片不在資料庫裡，不會備份到（Azure 上的圖片放在 /home/media，重新部署不會不見）。</p>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>時間</th><th>大小</th><th></th></tr></thead>
+  <tbody>
+  {% for b in rows %}
+    <tr>
+      <td class="nowrap">{{ b.time }}</td>
+      <td class="nowrap small">{{ (b.size / 1024) | round | int }} KB</td>
+      <td class="nowrap"><a class="btn small" href="/admin/backups/{{ b.name }}">下載</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">還沒有備份</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="card" style="margin-top: 18px">
+  <h2>要還原的話</h2>
+  <ol class="small">
+    <li>下載要還原的那一份，改名成 <code>site.sqlite3</code>。</li>
+    <li>先把現在的資料庫也下載一份留著（或先按「立刻備份一份」再下載）。</li>
+    <li>到 Azure 的 Kudu File Manager，把 <code>site.sqlite3</code> 上傳到 <code>/home/data/</code> 覆蓋。</li>
+    <li>到 Azure 入口網站把網站「重新啟動」，演出頁的快取才會清掉。</li>
+  </ol>
+  <p class="small muted" style="margin: 0">備份存在 <code>{{ folder }}</code>。</p>
+</div>
+{% endblock %}

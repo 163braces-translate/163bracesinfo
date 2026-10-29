@@ -1,0 +1,90 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}{{ row.title if row else '新增歌詞' }}{% endblock %}
+{% block head %}{% include "admin/_quill_head.html" %}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/lyrics/">← 歌詞</a></p>
+<div class="admin-head">
+  <h1>{{ row.title if row else '新增歌詞' }}</h1>
+  {% if row %}<a class="btn small" href="{{ prefix }}{{ row.slug }}/{{ '?preview=1' if row.status != 'live' }}" target="_blank" rel="noopener">{{ '看前台' if row.status == 'live' else '預覽' }} ↗</a>{% endif %}
+</div>
+
+<form class="form" method="post" action="/admin/lyrics/{{ row.id if row else 'new' }}" data-lyrics-form>
+  {% if review %}
+    <div class="card review" id="review">
+      <h2>⚠️ 需要確認</h2>
+      <ul>{% for r in review %}<li>{{ r.message }}</li>{% endfor %}</ul>
+      <p class="help">「中文不同」是舊站的中文頁與英文頁寫法不一樣，目前左欄用的是中文頁的版本。改好（或確認沒問題）後勾下面這格再儲存，提醒就會消失。</p>
+      {{ fx.check('review_done', false, '已確認，清除這些提醒') }}
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>基本資料</h2>
+    <div class="grid-2">
+      {{ fx.text('title', row.title if row else '', '曲名', required=true) }}
+      {{ fx.text('title_en', row.title_en if row else '', '英文曲名') }}
+      {{ fx.text('slug', row.slug if row else '', '網址', help='只用英文小寫、數字和 -；網址會是 ' ~ prefix ~ '這裡/。改了網址舊連結會自動轉過來。') }}
+      {{ fx.text('release_year', row.release_year if row else '', '發行年份', type='number') }}
+      {{ fx.text('artist', row.artist if row else '', '演唱') }}
+      {{ fx.text('lyricist', row.lyricist if row else '', '作詞') }}
+      {{ fx.text('composer', row.composer if row else '', '作曲') }}
+      {{ fx.text('sort_order', row.sort_order if row else 0, '排序', type='number', help='「其他歌詞」方框照這個排序；專輯裡的順序看歌曲的排序') }}
+    </div>
+    {{ fx.status_row(row) }}
+    <div class="form-row">
+      <span class="field">使用這份歌詞的歌曲</span>
+      <div class="song-checks">
+        {% for s in songs %}
+          <label class="check small"><input type="checkbox" name="song_ids" value="{{ s.id }}" {{ 'checked' if s.id in linked }}> {{ s.title }} <span class="muted">· {{ s.album_name }}</span></label>
+        {% endfor %}
+      </div>
+      <p class="help">改編版、日文版可以一起勾，它們都會連到這份歌詞。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>顯示方式</h2>
+    <div class="grid-3">
+      <div class="form-row">
+        <label class="field" for="f-mode">模式</label>
+        <select id="f-mode" name="display_mode" data-mode>
+          {% for v, label in [('bilingual', '中英對照（左中文、右英文，讀者可切換只看一邊）'), ('duet', '對唱（左右兩個聲部，左右對齊）'), ('single', '單欄（只用左欄）')] %}
+            <option value="{{ v }}" {{ 'selected' if row and row.display_mode == v }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {{ fx.text('left_label', row.left_label if row else '中文', '左欄標題', help='例：中文、主唱、Voice A') }}
+      {{ fx.text('right_label', row.right_label if row else 'English', '右欄標題', help='例：English、合音、Voice B') }}
+    </div>
+    {{ fx.rich('intro_html', row.intro_html if row else '', '歌詞上方的說明（選填）', small=true) }}
+    {{ fx.rich('intro_html_en', row.intro_html_en if row else '', '說明（英文版）', small=true) }}
+  </div>
+
+  <div class="card">
+    <h2>歌詞</h2>
+    <p class="help">左右兩欄各自一行一句，第幾行對第幾行。兩欄行數不同時會提醒你。同一句要換行，打 <code>{{ line_break }}</code>（或按「插入換行」）。
+      「另一個方框」以下的內容會放進另一個有標題的方框，適合放補充、舊版本、創作理念。</p>
+    <div class="blocks" data-blocks></div>
+    <div class="row-actions">
+      <button type="button" class="btn small" data-add-block="section">＋ 段落</button>
+      <button type="button" class="btn small" data-add-block="note">＋ 註解文字</button>
+      <button type="button" class="btn small" data-add-block="part">＋ 另一個方框</button>
+    </div>
+    <input type="hidden" name="blocks_json">
+    <script type="application/json" data-blocks-initial>{{ blocks | tojson }}</script>
+  </div>
+
+  <div class="card">
+    <h2>影片</h2>
+    <p class="help">YouTube 網址。第一支也可以設成首頁「隨機聆聽」用的試聽影片（在歌曲的「試聽影片」欄位）。</p>
+    <div class="videos" data-videos></div>
+    <button type="button" class="btn small" data-add-video>＋ 影片</button>
+    <input type="hidden" name="videos_json">
+    <script type="application/json" data-videos-initial>{{ videos | tojson }}</script>
+  </div>
+
+  {{ fx.publish_actions(row) }}
+</form>
+{% endblock %}
+{% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}

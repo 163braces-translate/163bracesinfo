@@ -1,0 +1,96 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}頁面與文章{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>頁面與文章</h1>
+  <div class="quick" style="margin: 0">
+    <a class="btn primary" href="/admin/pages/new?kind=article{% if articles_id %}&parent={{ articles_id }}{% endif %}">＋ 新增文章</a>
+    <a class="btn" href="/admin/pages/new">＋ 新增一般頁面</a>
+  </div>
+</div>
+<p class="muted small">網站是一棵樹：每一頁都在某一頁底下，網址＝上層網址＋自己那一段。有子頁面的按 ▸ 展開。
+  要搬家，在頁面的編輯畫面換「上層頁面」，底下的頁面會一起搬，舊網址自動轉過去。
+  「在頁首／頁尾」表示頁首選單或頁尾有連到這一頁（在「<a href="/admin/navigation">頁首與頁尾</a>」設定）。</p>
+{# 每一列的發佈／取消發佈按鈕都送到這個表單（列在 summary 裡，不能各自包一個 form） #}
+<form id="status-form" method="post" hidden></form>
+
+<div class="status-filter" role="group" aria-label="依狀態篩選" data-status-filter>
+  <button type="button" data-status="" aria-pressed="true">全部 <b>{{ counts.values() | sum }}</b></button>
+  <button type="button" data-status="live" aria-pressed="false">線上 <b>{{ counts.get('live', 0) }}</b></button>
+  <button type="button" data-status="unpublished" aria-pressed="false">取消發佈 <b>{{ counts.get('unpublished', 0) }}</b></button>
+  <button type="button" data-status="draft" aria-pressed="false">草稿 <b>{{ counts.get('draft', 0) }}</b></button>
+</div>
+
+{#- 一列：標題與網址、種類、在不在選單、狀態、動作 #}
+{% macro row(p, n_children=0, collapsible=false) %}
+  <div class="trow" data-status="{{ p.status }}">
+    <span class="tcaret" aria-hidden="true">{{ '▸' if collapsible }}</span>
+    {% if p.thumbnail_id %}<img class="tthumb" src="{{ image_url(p.thumbnail_id, 120) }}" alt="">{% else %}<span class="tthumb ph"></span>{% endif %}
+    <div class="tmain">
+      <a class="ttitle" href="/admin/pages/{{ p.id }}">{{ p.title }}</a>
+      <span class="turl">{{ page_url(p) }}{% if p.published_at %} · {{ p.published_at }}{% endif %}{% if n_children %} · {{ n_children }} 個子項目{% endif %}</span>
+    </div>
+    <span class="tkind">{{ kinds[p.kind] }}</span>
+    <span class="tmenu">{% if p.kind != 'home' and in_menu(p) %}<span class="chip" title="頁首選單或頁尾有這一頁的連結；在「頁首與頁尾」設定">在頁首／頁尾</span>{% endif %}</span>
+    {{ fx.status_chip(p.status) }}
+    <span class="tactions">
+      {#- 固定頁面（首頁、演出、歌詞、文章）下架影響太大，只在編輯畫面裡改 #}
+      {% if p.kind not in fixed_kinds %}
+        {% if p.status == 'live' %}
+          <button class="btn small" type="submit" form="status-form" formaction="/admin/pages/{{ p.id }}/status" name="action" value="unpublish"
+                  data-confirm="取消發佈「{{ p.title }}」？前台就看不到了（隨時可以再發佈）。">取消發佈</button>
+        {% else %}
+          <button class="btn small primary" type="submit" form="status-form" formaction="/admin/pages/{{ p.id }}/status" name="action" value="publish">發佈</button>
+        {% endif %}
+      {% endif %}
+      {% if p.status == 'live' %}<a class="btn small" href="{{ page_url(p) }}" target="_blank" rel="noopener">檢視</a>
+      {% else %}<a class="btn small" href="{{ page_url(p) }}?preview=1" target="_blank" rel="noopener" title="還沒上線，訪客看不到；這個連結只有登入後台的人打得開">預覽</a>{% endif %}
+      <a class="btn small" href="/admin/pages/new?parent={{ p.id }}">＋子頁面</a>
+    </span>
+  </div>
+{% endmacro %}
+
+{#- 一個節點：沒有子項目就是一列；有的話是可以收合的區塊。演出頁的分頁、歌詞索引底下的歌詞也算子項目 #}
+{% macro node(n) %}
+  {%- set p = n.page %}
+  {%- set extra = (tabs | length - 1) if p.kind == 'performances' else ((1 if lyrics else 0) if p.kind == 'lyrics' else 0) %}
+  {%- set total = n.children | length + extra %}
+  {% if total %}
+    <details class="tnode">
+      <summary>{{ row(p, total, true) }}</summary>
+      <div class="tchildren">
+        {% if p.kind == 'performances' %}
+          {% for key, name, url, edit_url in tabs if key != 'list' %}
+            <div class="trow virtual" data-status="{{ tab_status[key] }}">
+              <span class="tcaret"></span><span class="tthumb ph"></span>
+              <div class="tmain"><a class="ttitle" href="{{ edit_url }}">{{ name }}</a><span class="turl">{{ url }}</span></div>
+              <span class="tkind">演出頁的分頁</span>
+              <span class="tmenu">{% if url_in_menu(url) %}<span class="chip" title="頁首選單或頁尾有這一頁的連結">在頁首／頁尾</span>{% endif %}</span>
+              {{ fx.status_chip(tab_status[key]) }}
+              <span class="tactions"><a class="btn small" href="{{ url }}{{ '?preview=1' if tab_status[key] != 'live' }}" target="_blank" rel="noopener">{{ '檢視' if tab_status[key] == 'live' else '預覽' }}</a><a class="btn small" href="{{ edit_url }}">編輯</a></span>
+            </div>
+          {% endfor %}
+        {% elif p.kind == 'lyrics' and lyrics %}
+          <details class="tnode lyrics-node">
+            <summary><div class="trow virtual" data-status="live">
+              <span class="tcaret" aria-hidden="true">▸</span><span class="tthumb ph"></span>
+              <div class="tmain"><span class="ttitle">{{ lyrics | length }} 份歌詞</span><span class="turl">{{ page_url(p) }}…/</span></div>
+              <span class="tkind">歌詞</span><span class="tmenu"></span><span></span>
+              <span class="tactions"><a class="btn small" href="/admin/lyrics/">管理歌詞</a></span>
+            </div></summary>
+            <ul class="lyrics-under">{% for l in lyrics %}<li><a href="/admin/lyrics/{{ l.id }}">{{ l.title }}</a> {{ fx.status_chip(l.status) }}</li>{% endfor %}</ul>
+          </details>
+        {% endif %}
+        {% for c in n.children %}{{ node(c) }}{% endfor %}
+      </div>
+    </details>
+  {% else %}
+    <div class="tnode leaf">{{ row(p) }}</div>
+  {% endif %}
+{% endmacro %}
+
+<div class="page-tree-list">
+  {% for n in nodes %}{{ node(n) }}{% endfor %}
+</div>
+{% endblock %}

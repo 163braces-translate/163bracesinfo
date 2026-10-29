@@ -1,0 +1,14 @@
+{# 樂譜卡片（歌詞頁、歌詞的「樂譜」分頁共用）。sheets 是 community.sheets_for_songs() 的結果；show_song：卡片上要不要寫曲名 #}
+<div class="sheet-cards">
+  {% for s in sheets %}
+    <a class="sheet-card" href="{{ link('/sheets/' ~ s.id ~ '/') }}">
+      {% if s.files %}<img src="/sheets/thumb/{{ s.files[0].id }}.jpg" alt="" loading="lazy">{% endif %}
+      <span class="sheet-card-body">
+        <b>{{ s.title }}</b>
+        {% if show_song %}<span class="small muted">{{ s.song_title }}</span>{% endif %}
+        <span class="small muted">{{ t('sheet_by', name=s.author) }}</span>
+        <span class="small muted"><span class="heart-mini" aria-hidden="true">♥</span> {{ s.likes }}{% if s.files | length > 1 %} · {{ t('sheet_pages', n=s.files | length) }}{% endif %}{% if s.video_url %} · ▶{% endif %}</span>
+      </span>
+    </a>
+  {% endfor %}
+</div>

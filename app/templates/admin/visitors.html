@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}粉絲帳號{% endblock %}
+{% block content %}
+<h1>粉絲帳號</h1>
+<p class="muted">用 Google 登入的粉絲。停權後不能再投稿，他的跑馬燈留言也不再顯示（去過的場次、喜歡的歌不受影響）。</p>
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>名稱</th><th>email</th><th>加入</th><th>去過</th><th>跑馬燈</th><th>補充</th><th>樂譜</th><th></th></tr></thead>
+  <tbody>
+    {% for v in rows %}
+      <tr class="{{ 'warn-row' if v.banned }}">
+        <td>{{ v.nickname or v.google_name }}{% if v.google_sub.startswith('guest:') %} <span class="chip">訪客</span>{% elif v.nickname %} <span class="small muted">{{ v.google_name }}</span>{% endif %}
+          {% if v.profile_public and v.handle %}<div class="small"><a href="/fans/{{ v.handle }}/" target="_blank" rel="noopener">/fans/{{ v.handle }}/</a></div>{% endif %}</td>
+        <td class="small">{{ v.email }}</td>
+        <td class="small nowrap">{{ v.created_at[:10] }}</td>
+        <td>{{ v.n_attend }}</td><td>{{ v.n_marquee }}</td><td>{{ v.n_contrib }}</td><td>{{ v.n_sheets }}</td>
+        <td><form method="post"><input type="hidden" name="id" value="{{ v.id }}">
+          {% if v.banned %}<button class="btn small" name="action" value="unban">恢復</button>
+          {% else %}<button class="btn small danger" name="action" value="ban" data-confirm="停權 {{ v.nickname or v.google_name }}？">停權</button>{% endif %}
+        </form></td>
+      </tr>
+    {% else %}<tr><td colspan="8" class="muted">還沒有粉絲登入過</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

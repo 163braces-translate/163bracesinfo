@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}{{ spec.title }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/m/{{ model }}/">← {{ spec.title }}</a></p>
+<h1>{{ '編輯' if row else '新增' }}{{ spec.title }}{% if row %}：{{ row[spec.fields[0].name] }}{% endif %}</h1>
+<form class="card form" method="post">
+  {% for f in spec.fields %}
+    {%- set v = row[f.name] if row else none %}
+    {% if f.kind == 'image' %}
+      {{ fx.image_field(f.name, v, f.label, f.help) }}
+    {% elif f.kind in ('fk', 'select') %}
+      <div class="form-row">
+        <label class="field" for="f-{{ f.name }}">{{ f.label }}{% if f.required %} <span class="req">*</span>{% endif %}</label>
+        <select id="f-{{ f.name }}" name="{{ f.name }}" {{ 'required' if f.required }}>
+          {% if f.kind == 'fk' and not f.required %}<option value="">（無）</option>{% endif %}
+          {% for value, label in choices[f.name] %}<option value="{{ value }}" {{ 'selected' if value == v }}>{{ label }}</option>{% endfor %}
+        </select>
+        {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+      </div>
+    {% elif f.kind == 'textarea' %}
+      <div class="form-row">
+        <label class="field" for="f-{{ f.name }}">{{ f.label }}</label>
+        <textarea id="f-{{ f.name }}" name="{{ f.name }}">{{ v or '' }}</textarea>
+        {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+      </div>
+    {% else %}
+      {{ fx.text(f.name, v, f.label, f.help, f.required, 'number' if f.kind == 'int' else ('url' if f.kind == 'url' else 'text')) }}
+    {% endif %}
+  {% endfor %}
+  {{ fx.actions(row, save_new=true) }}
+</form>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% import "admin/_fields.html" as fx %}
+{% block title %}{{ name }}{% endblock %}
+{% block head %}{% include "admin/_quill_head.html" %}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/admin/pages/">← 頁面與文章</a>{% if perf %} · <a href="/admin/pages/{{ perf.id }}">演出頁</a>{% endif %}</p>
+<div class="admin-head">
+  <h1>{{ name }} <span class="chip">演出頁的分頁</span></h1>
+  <a class="btn small" href="{{ url }}{{ '?preview=1' if row.status != 'live' }}" target="_blank" rel="noopener">{{ '看前台' if row.status == 'live' else '預覽' }} ↗</a>
+</div>
+<form class="form" method="post" action="/admin/tabs/{{ tab }}">
+  <div class="page-form">
+    <div>{% include "admin/_setting_groups.html" %}</div>
+    <aside class="card side">
+      <h2>網址與發佈</h2>
+      <div class="form-row">
+        <span class="field">網址</span>
+        <p><a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></p>
+        <p class="help">{% if tab == 'replay' %}跟舊站一樣固定是 /replay/。{% else %}跟著演出頁的網址走，要改請改演出頁。{% endif %}
+          頁面標題、選單上的文字是固定的「{{ name }}」。</p>
+      </div>
+      {{ fx.status_row(row) }}
+      {% if perf and perf.status != 'live' %}<p class="help warn-text">演出頁目前沒上線，所以這個分頁訪客也看不到。</p>{% endif %}
+      <p class="help">沒上線時，演出頁上不會出現這個分頁的標籤，頁首選單與頁尾連到這裡的連結也會先隱藏。前台跟訪客看到的一樣；要看沒上線的樣子，按上面的「預覽」。</p>
+    </aside>
+  </div>
+  {{ fx.publish_actions(row, can_delete=false) }}
+</form>
+{% endblock %}
+{% block scripts %}{% include "admin/_quill_scripts.html" %}{% endblock %}
