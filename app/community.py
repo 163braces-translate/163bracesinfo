@@ -13,6 +13,7 @@ import math
 import os
 import re
 import secrets
+import sqlite3
 from collections import Counter, defaultdict
 from urllib.parse import quote, urlparse
 
@@ -20,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import QueryParams
 
-from . import db, i18n, queries as Q, taiwan, visitors as V
+from . import auth, db, i18n, maps, queries as Q, taiwan, visitors as V
 from .admin import same_origin
 from .web import current_visitor, get_con, lang_of, render
 
@@ -63,7 +64,7 @@ def T(request, key, **kw):
 PRIVACY_ZH = """<h2>我們存了什麼</h2>
 <p>用 Google 帳號登入時，我們只會從 Google 取得：帳號 ID、email、名字、大頭貼。email 只用來辨識帳號，不會公開、不會寄信給你。</p>
 <p>你在網站上記錄的「去過的場次」「喜歡的歌」、投稿的跑馬燈、演出補充與樂譜，會跟你的帳號一起存在本站的資料庫。</p>
-<p>「回顧」與「我的足跡」裡選的住的地方（行政區），預設只記在你的瀏覽器；勾選「記在我的帳號」才會存到本站，取消勾選就會刪除。</p>
+<p>「回顧」與「我的足跡」裡選的住的地方（行政區，或你輸入的地點；座標只取到約 1 公里），預設只記在你的瀏覽器；勾選「記在我的帳號」才會存到本站，取消勾選就會刪除。</p>
 <p>網站使用 Google Analytics 統計瀏覽人數與熱門頁面（會在你的瀏覽器存放 Google 的 Cookie），我們只看匿名的整體數字。</p>
 <h2>誰看得到</h2>
 <p>去過的場次與喜歡的歌預設只有你自己看得到；網站只會顯示匿名的加總（例如「12 位粉絲去過這場」）。你可以在「我的 → 設定」開啟公開個人頁。</p>
@@ -76,7 +77,7 @@ PRIVACY_ZH = """<h2>我們存了什麼</h2>
 PRIVACY_EN = """<h2>What we store</h2>
 <p>When you sign in with Google we only receive your account ID, email, name and profile picture. Your email is used to identify your account; it is never shown publicly and we never email you.</p>
 <p>The shows you attended, songs you like, and anything you submit (ticker messages, show details, sheet music) are stored with your account.</p>
-<p>The district you pick as where you live (in Recap and My shows) stays in your browser unless you tick "Remember on my account"; untick it to delete it from the site.</p>
+<p>Where you live as you set it in Recap and My shows (a district, or a place you enter, rounded to about 1 km) stays in your browser unless you tick "Remember on my account"; untick it to delete it from the site.</p>
 <p>We use Google Analytics to count visits and see which pages are popular (it sets Google cookies in your browser); we only look at anonymous totals.</p>
 <h2>Who can see it</h2>
 <p>Your shows and liked songs are private by default; the site only shows anonymous totals (e.g. "12 fans were there"). You can turn on a public profile in My page → Settings.</p>
@@ -172,14 +173,20 @@ async def dev_login(request: Request, con=Depends(get_con)):
     return finish_login(request, con, visitor_id, form.get("next"))
 
 
+def is_admin(request, con):
+    """同一個瀏覽器也登入了後台：取名字不受保留字限制（站方自己可以用「163braces」之類的名字）。"""
+    return bool(auth.current_user(con, request.cookies.get(auth.COOKIE)))
+
+
 @router.post("/auth/guest-login")
 async def guest_login(request: Request, con=Depends(get_con)):
     """訪客登入：自取暱稱，開一個 24 小時的臨時帳號（見 visitors.is_guest）。"""
     check_post(request)
     form = await request.form()
     nickname = " ".join((form.get("nickname") or "").split())[:30]
-    if not nickname:
-        return RedirectResponse("/auth/login?error=" + quote(T(request, "guest_need_nickname")) +
+    problem = "guest_need_nickname" if not nickname else V.nickname_problem(con, nickname, privileged=is_admin(request, con))
+    if problem:
+        return RedirectResponse("/auth/login?error=" + quote(T(request, problem)) +
                                 "&next=" + quote(safe_next(form.get("next"))), status_code=303)
     stamp = db.now()
     visitor_id = con.execute("INSERT INTO visitors (google_sub, google_name, nickname, created_at, last_login) "
@@ -378,9 +385,31 @@ def contribute_performance_pick(request: Request, id: int = 0):
     return RedirectResponse(prefix + ("/contribute/performance/%d/" % id if id else "/me/?tab=submissions"), status_code=303)
 
 
-# 台灣的行政區（static/tw-districts.json）：「記在我的帳號」只收這裡面有的「縣市|行政區」
+# 台灣的行政區（static/tw-districts.json）：「記在我的帳號」只收這裡面有的「縣市|行政區」，
+# 或「其他地點」的「@緯度,經度」（小數最多兩位，約 1 公里，不存精確位置）
+HOME_AT = re.compile(r"@(-?\d{1,2}(?:\.\d{1,2})?),(-?\d{1,3}(?:\.\d{1,2})?)")
+
+
+def valid_home(home):
+    m = HOME_AT.fullmatch(home)
+    return home in DISTRICTS or bool(m and abs(float(m.group(1))) <= 90 and abs(float(m.group(2))) <= 180)
+
+
 with open(os.path.join(os.path.dirname(__file__), "static", "tw-districts.json"), encoding="utf-8") as _f:
     DISTRICTS = {county + "|" + town[0] for county, _, towns in json.load(_f) for town in towns}
+
+
+@router.post("/api/me/maplink")
+async def read_map_link(request: Request, con=Depends(get_con)):
+    """住的地方選「其他地點」時貼的 Google 地圖連結 → 座標（只算給瀏覽器，不存）。要登入，免得被拿來當轉址查詢服務。"""
+    check_post(request)
+    if not current_visitor(request, con):
+        return need_login_json(request)
+    try:
+        url, lat, lng = maps.resolve((await request.form()).get("url") or "")
+    except maps.MapLinkError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return {"lat": lat, "lng": lng}
 
 
 @router.post("/api/me/home")
@@ -393,7 +422,7 @@ async def save_home(request: Request, con=Depends(get_con)):
     if V.is_guest(visitor):
         return JSONResponse({"error": T(request, "guest_cannot_submit")}, status_code=403)
     home = ((await request.form()).get("home") or "").strip()
-    if home and home not in DISTRICTS:
+    if home and not valid_home(home):
         return JSONResponse({"error": "bad district"}, status_code=400)
     con.execute("UPDATE visitors SET home_district = ? WHERE id = ?", (home, visitor["id"]))
     con.commit()
@@ -461,6 +490,11 @@ async def me_settings(request: Request, con=Depends(get_con)):
     nickname = (form.get("nickname") or "").strip()[:30]
     public = 1 if form.get("profile_public") else 0
     handle = (form.get("handle") or "").strip()
+    # 暱稱有改才檢查（跟別人重複、保留字）；以前就重複的舊帳號，不改暱稱照樣可以存其他設定
+    if nickname != visitor["nickname"]:
+        problem = V.nickname_problem(con, nickname, visitor["id"], privileged=is_admin(request, con))
+        if problem:
+            return RedirectResponse(back + "&msg=" + quote(T(request, problem)), status_code=303)
     if V.is_guest(visitor):                            # 訪客不能開公開個人頁，暱稱不能空白
         if not nickname:
             return RedirectResponse(back + "&msg=" + quote(T(request, "guest_need_nickname")), status_code=303)
@@ -468,7 +502,9 @@ async def me_settings(request: Request, con=Depends(get_con)):
         con.commit()
         return RedirectResponse(back + "&msg=" + quote(T(request, "saved")), status_code=303)
     try:
-        handle = V.check_handle(handle) if handle else None
+        # 網址沒改就不再檢查保留字（站方以前取的可以留著）
+        same = handle and handle.lower() == (visitor["handle"] or "")
+        handle = V.check_handle(handle, privileged=same or is_admin(request, con)) if handle else None
         if public and not handle:
             raise V.LoginError("要公開個人頁，請先設定個人頁網址。")
         con.execute("UPDATE visitors SET nickname = ?, handle = ?, profile_public = ? WHERE id = ?",
@@ -476,7 +512,7 @@ async def me_settings(request: Request, con=Depends(get_con)):
         con.commit()
     except V.LoginError as e:
         return RedirectResponse(back + "&msg=" + quote(str(e)), status_code=303)
-    except Exception:
+    except sqlite3.IntegrityError:          # handle 是 UNIQUE：別人已經用了
         return RedirectResponse(back + "&msg=" + quote("這個個人頁網址已經有人用了，換一個試試。"), status_code=303)
     return RedirectResponse(back + "&msg=" + quote(T(request, "saved")), status_code=303)
 

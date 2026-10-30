@@ -303,9 +303,11 @@
         ctx.fillStyle = C.primary; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
       });
       if (home) {
+        if (home.abroad) insetBox(home);           // 住海外：右下角一個框，「家」寫在框的上緣
         ctx.beginPath(); ctx.arc(home.x, home.y, 6, 0, Math.PI * 2);
         ctx.fillStyle = C.home; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
-        mapLabel(T.home, home.x + 9, home.y + 5, "left", true, C.home);
+        if (home.abroad) mapLabel(T.home, home.x, home.inset[1] + 12, "center", true, C.home);
+        else mapLabel(T.home, home.x + 9, home.y + 5, "left", true, C.home);
       }
       ctx.restore();
       if (!home) {
@@ -608,7 +610,7 @@
 
   // 住的行政區（清單另外載入，記在這台裝置；跟「我的足跡」共用）
   HomeRoute.picker({
-    county: document.getElementById("recap-county"), town: document.getElementById("recap-town"),
+    county: document.getElementById("recap-county"), town: document.getElementById("recap-town"), custom: document.getElementById("recap-custom"), resolve: "/api/me/maplink",
     url: D.districts, lang: D.lang, saved: D.home_saved, remember: document.getElementById("recap-remember"),
     onChange: function (ll) { state.home = ll; schedule(); }
   });

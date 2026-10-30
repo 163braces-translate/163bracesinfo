@@ -838,3 +838,12 @@ button.cal-day:hover { background: #f8fafd; }
 /* 從行事曆按「在列表中查看」：那一場閃一下 */
 @keyframes flash-row { from { background: var(--primary-soft); } to { background: transparent; } }
 .perf-table tr.flash td, .perf-card.flash { animation: flash-row 2s ease-out; }
+
+/* 住的地方選「其他地點」：貼地圖連結或輸入座標（home-route.js） */
+.home-custom { margin-top: 8px; }
+.home-hint { margin: 6px 0 0; }
+.home-hint:has(+ .home-custom:not([hidden])) { display: none; }     /* 選了「其他地點」就換成輸入框下面的說明 */
+.home-custom .date-row { display: flex; gap: 8px; }
+.home-custom input { flex: 1; min-width: 0; }
+.home-custom p { margin: 6px 0 0; }
+.date-row:has(> select[hidden]) { grid-template-columns: 1fr; }

@@ -23,6 +23,7 @@ import os
 import re
 import secrets
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 
@@ -223,9 +224,45 @@ def over_daily_limit(con, kind, visitor_id):
 
 HANDLE_RE = re.compile(r"[a-z0-9][a-z0-9_\-]{2,29}")
 
+# 保留的名字：避免有人冒充站方。含有 RESERVED_PARTS 的、或整個等於 RESERVED_NAMES 的都不能用
+# （比對前先經過 name_key：全形半形、大小寫、空白和 - _ . 這類分隔符號都不算差別）。後台管理者自己不受限
+RESERVED_PARTS = ("163braces", "站長", "管理員", "管理者", "版主", "官方", "客服")
+RESERVED_NAMES = {"163", "admin", "administrator", "official", "moderator", "mod", "staff", "support", "system",
+                  "root", "webmaster", "anonymous", "匿名", "系統", "fans", "me", "api", "null", "undefined"}
 
-def check_handle(handle):
+
+def name_key(text):
+    """比對用的名字：「Ｔｅｄｄｙ」「teddy」「T e-d_d.y」都算同一個。"""
+    text = unicodedata.normalize("NFKC", text or "").casefold()
+    return re.sub(r"[\s\-_.·・‧'\"]+", "", text)
+
+
+def reserved(text):
+    key = name_key(text)
+    return key in RESERVED_NAMES or any(part in key for part in RESERVED_PARTS)
+
+
+def check_handle(handle, privileged=False):
     handle = (handle or "").strip().lower()
     if not HANDLE_RE.fullmatch(handle):
         raise LoginError("個人頁網址要 3–30 個字，只能用英文小寫、數字、- 和 _，開頭要是英文或數字。")
+    if reserved(handle) and not privileged:
+        raise LoginError("這個個人頁網址是保留字，換一個試試。")
     return handle
+
+
+def nickname_problem(con, nickname, visitor_id=None, privileged=False):
+    """新的暱稱能不能用：不能用回傳 i18n 的訊息代號（name_reserved／nickname_taken），可以用回傳 None。
+    跟別人重複的判斷用 name_key；不算已經失效的訪客（24 小時後回不到那個帳號，名字不該一直佔著）。
+    已經重複的舊帳號不受影響：只有改暱稱、取新暱稱時才檢查。"""
+    key = name_key(nickname)
+    if not key:
+        return None
+    if reserved(nickname) and not privileged:
+        return "name_reserved"
+    live_guest = (datetime.datetime.now() - datetime.timedelta(hours=GUEST_HOURS)).isoformat(timespec="seconds")
+    rows = con.execute(
+        "SELECT v.id, v.nickname FROM visitors v WHERE v.nickname != '' AND v.id IS NOT ? AND "
+        "(v.google_sub NOT LIKE 'guest:%' OR EXISTS (SELECT 1 FROM visitor_sessions s "
+        "WHERE s.visitor_id = v.id AND s.created_at >= ?))", (visitor_id, live_guest))
+    return "nickname_taken" if any(name_key(r["nickname"]) == key for r in rows) else None

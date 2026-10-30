@@ -76,6 +76,11 @@
           <select id="recap-county" aria-label="{{ t('recap_county') }}"><option value="">{{ t('recap_county') }}</option></select>
           <select id="recap-town" aria-label="{{ t('recap_town') }}" disabled><option value="">{{ t('recap_town') }}</option></select>
         </div>
+        <p class="small muted home-hint">{{ t('home_other_hint') }}</p>
+        <div class="home-custom" id="recap-custom" data-option="{{ t('home_other') }}" hidden>
+          <div class="date-row"><input type="text" aria-label="{{ t('home_other') }}" placeholder="{{ t('home_other_ph') }}"><button type="button" class="btn small">{{ t('home_other_apply') }}</button></div>
+          <p class="small muted" data-home-status data-busy="{{ t('home_other_busy') }}" data-bad="{{ t('home_other_bad') }}" data-done="{{ t('home_other_done') }}">{{ t('home_other_help') }}</p>
+        </div>
         {% if recap.can_save_home %}<label class="check-row small"><input type="checkbox" id="recap-remember"> {{ t('home_remember') }}</label>{% endif %}
         <p class="small muted" style="margin: 6px 0 0">{{ t('recap_home_help') }} <b id="recap-km"></b></p>
       </section>

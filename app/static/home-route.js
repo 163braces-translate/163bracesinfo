@@ -1,5 +1,6 @@
 /* 住的地方與移動路線：回顧（recap.js）和我的足跡（me.js）共用。
- * 住的行政區只記在這台裝置（localStorage），不會送回伺服器。
+ * 住的地方是台灣的行政區，或「其他地點」（海外等：貼 Google 地圖連結或輸入座標，只取到小數兩位，約 1 公里）。
+ * 預設只記在這台裝置（localStorage）；勾了「記在我的帳號」才送回伺服器。
  * 路線的算法：每一天一趟，從家出發，照順序到當天的每個場地，最後回家，每一段算直線距離。 */
 window.HomeRoute = (function () {
   "use strict";
@@ -63,8 +64,14 @@ window.HomeRoute = (function () {
         if (node.inset) return { x: node.x, y: node.y, far: !keyOf[s.c] };
         return ll ? project(ll) : { x: node.x, y: node.y };
       },
+      // 家：台灣本島和澎湖照座標；金門、連江在各自的框；海外在右下角自己一個框（路線畫虛線）
       home: function (ll) {
-        return ll[0] < 119.3 ? map.nodes.kinmen : ll[1] > 25.9 ? map.nodes.lienchiang : project(ll);
+        var lon = ll[0], lat = ll[1];
+        if (lon > 118 && lon < 118.7 && lat > 24.2 && lat < 24.7) return map.nodes.kinmen;
+        if (lon > 119.7 && lon < 120.7 && lat > 25.8 && lat < 26.5) return map.nodes.lienchiang;
+        if (lon > 119.2 && lon < 122.2 && lat > 21.7 && lat < 25.5) return project(ll);
+        var box = [map.width - 62, map.height - 60, 56, 48];
+        return { x: box[0] + box[2] / 2, y: box[1] + box[3] / 2 + 4, inset: box, far: true, abroad: true };
       }
     };
   }
@@ -83,19 +90,42 @@ window.HomeRoute = (function () {
     return out;
   }
 
+  // 「其他地點」的文字 → [經度, 緯度]：座標直接讀；Google 地圖連結交給伺服器讀（短網址要跟著轉址），回傳 Promise
+  var COORDS = /^\s*\(?\s*(-?\d{1,2}(?:\.\d+)?)\s*[,，\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*\)?\s*$/;
+  function round2(v) { return Math.round(v * 100) / 100; }
+  function readPlace(text, resolveUrl) {
+    var m = COORDS.exec(text || "");
+    if (m) {
+      var lat = +m[1], lng = +m[2];
+      return Promise.resolve(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? [round2(lng), round2(lat)] : null);
+    }
+    if (!/^https?:\/\//i.test((text || "").trim()) || !resolveUrl) return Promise.resolve(null);
+    var body = new FormData();
+    body.append("url", text.trim());
+    return fetch(resolveUrl, { method: "POST", body: body, credentials: "same-origin" }).then(function (r) { return r.json(); })
+      .then(function (d) { if (d.error || d.lat == null) throw new Error(d.error || ""); return [round2(d.lng), round2(d.lat)]; });
+  }
+
   // 縣市、行政區兩個選單：載入清單、還原上次選的，選了就記下來並呼叫 o.onChange([經度, 緯度] 或 null)。
-  // o：{county, town, url（行政區清單）, lang, onChange, saved（帳號裡存的「縣市|行政區」）, remember（「記在我的帳號」勾選框，訪客沒有）}
+  // 縣市選單最後一項是「其他地點」：打開 o.custom（輸入框、確定按鈕、狀態文字），貼地圖連結或輸入座標。
+  // o：{county, town, custom, url（行政區清單）, resolve（讀地圖連結的 API）, lang, onChange,
+  //     saved（帳號裡存的「縣市|行政區」或「@緯度,經度」）, remember（「記在我的帳號」勾選框，訪客沒有）}
   // 帳號裡有存的優先；勾著「記在我的帳號」時，改了就一起存到帳號，取消勾選就從帳號刪掉
   function picker(o) {
-    var list = [], county = o.county, town = o.town;
+    var list = [], county = o.county, town = o.town, custom = o.custom, other = null;
+    var input = custom && custom.querySelector("input"), status = custom && custom.querySelector("[data-home-status]");
+    function isOther() { return county.value === "other"; }
     function fillTowns() {
-      var c = list[county.selectedIndex - 1];
+      var c = !isOther() && list[county.selectedIndex - 1];
       town.innerHTML = '<option value="">' + town.options[0].textContent + "</option>" + (c ? c[2].map(function (t, i) {
         return '<option value="' + i + '">' + (o.lang === "en" ? t[1] : t[0]) + "</option>";
       }).join("") : "");
       town.disabled = !c;
+      town.hidden = isOther();
+      if (custom) custom.hidden = !isOther();
     }
     function current() {
+      if (isOther()) return other && { key: "@" + other[1].toFixed(2) + "," + other[0].toFixed(2), ll: other };
       var c = list[county.selectedIndex - 1], t = c && town.value !== "" && c[2][+town.value];
       return t ? { key: c[0] + "|" + t[0], ll: [t[2], t[3]] } : null;
     }
@@ -112,8 +142,23 @@ window.HomeRoute = (function () {
       if (o.remember && o.remember.checked) saveAccount(cur ? cur.key : "");
       o.onChange(cur && cur.ll);
     }
+    function applyCustom() {
+      var text = input.value;
+      status.textContent = status.dataset.busy;
+      readPlace(text, o.resolve).then(function (ll) {
+        if (!ll) { status.textContent = status.dataset.bad; return; }
+        other = ll;
+        input.value = ll[1].toFixed(2) + ", " + ll[0].toFixed(2);
+        status.textContent = status.dataset.done;
+        pick();
+      }).catch(function (e) { status.textContent = e.message || status.dataset.bad; });
+    }
     county.addEventListener("change", function () { fillTowns(); pick(); });
     town.addEventListener("change", pick);
+    if (custom) {
+      custom.querySelector("button").addEventListener("click", applyCustom);
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); applyCustom(); } });
+    }
     if (o.remember) {
       o.remember.checked = !!o.saved;
       o.remember.addEventListener("change", function () {
@@ -123,10 +168,19 @@ window.HomeRoute = (function () {
     }
     fetch(o.url).then(function (r) { return r.json(); }).then(function (data) {
       list = data;
-      county.innerHTML += list.map(function (c) { return "<option>" + (o.lang === "en" ? c[1] : c[0]) + "</option>"; }).join("");
+      county.innerHTML += list.map(function (c) { return "<option>" + (o.lang === "en" ? c[1] : c[0]) + "</option>"; }).join("") +
+        (custom ? '<option value="other">' + custom.dataset.option + "</option>" : "");
       var saved = o.saved || "";
       if (!saved) {
         try { saved = localStorage.getItem(KEY) || ""; } catch (e) { saved = ""; }
+      }
+      var at = /^@(-?[\d.]+),(-?[\d.]+)$/.exec(saved);
+      if (at && custom) {
+        other = [+at[2], +at[1]];
+        county.value = "other"; fillTowns();
+        input.value = at[1] + ", " + at[2];
+        pick();
+        return;
       }
       var parts = saved.split("|");
       list.forEach(function (c, ci) {

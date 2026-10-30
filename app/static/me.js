@@ -73,8 +73,11 @@
     });
     dots.forEach(function (d) { add("circle", { "class": "stop", cx: d[0].x, cy: d[0].y, r: 3 }, d[1]); });
     if (at) {
+      // 住海外：右下角一個框，「家」寫在框的上緣（跟其他框一樣）
+      if (at.abroad) add("rect", { "class": "inset", x: at.inset[0], y: at.inset[1], width: at.inset[2], height: at.inset[3], rx: 8 });
       add("circle", { "class": "home", cx: at.x, cy: at.y, r: 5.5 });
-      add("text", { "class": "home-label", x: at.x + 8, y: at.y + 4 }).textContent = R.home;
+      add("text", at.abroad ? { "class": "home-label", x: at.x, y: at.inset[1] + 11, "text-anchor": "middle" }
+                            : { "class": "home-label", x: at.x + 8, y: at.y + 4 }).textContent = R.home;
       var dist = route.distance(home);
       kmOut.textContent = R.km.replace("{km}", dist.km.toLocaleString(R.lang === "en" ? "en" : "zh-TW"));
     } else {
@@ -83,7 +86,7 @@
   }
   draw(null);
   HomeRoute.picker({
-    county: document.getElementById("fp-county"), town: document.getElementById("fp-town"),
+    county: document.getElementById("fp-county"), town: document.getElementById("fp-town"), custom: document.getElementById("fp-custom"), resolve: "/api/me/maplink",
     url: R.districts, lang: R.lang, saved: R.home_saved, remember: document.getElementById("fp-remember"), onChange: draw
   });
 })();
