@@ -1,0 +1,56 @@
+{% extends "admin/base.html" %}
+{% block title %}國定假日{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>國定假日</h1>
+  <form method="post"><button class="btn primary" type="submit">從人事行政總處更新</button></form>
+</div>
+<p class="muted small">演出頁的行事曆用這裡的資料把放假的日子標成紅字（含補假；補行上班的週六是黑字）。
+  資料是行政院人事行政總處公告的<a href="{{ dataset }}" target="_blank" rel="noopener">「中華民國政府行政機關辦公日曆表」</a>，
+  正式站每天會自動看一次：今年、明年還沒有，或官方更正了今年以後的日曆，就自動重抓。
+  官方抓不到時，今年和明年會改用 GitHub 上 ruyut/TaiwanCalendar 整理的同一份資料。</p>
+
+{% if missing %}
+  <div class="card warn-card"><p class="warn-text" style="margin: 0">⚠️ 還沒有 {{ missing | join('、') }} 年的資料：行事曆那幾年只會把週六日標紅。先按上面的「從人事行政總處更新」；
+    官方還沒公布的話，等公布後再按一次（或用下面的上傳）。</p></div>
+{% endif %}
+
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>年份</th><th>放假天數</th><th>來源</th><th>匯入時間</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a href="?year={{ r.year }}">{{ r.year }}</a></td>
+      <td class="nowrap">{{ r.off_days }} 天</td>
+      <td class="small">{% if r.source == official %}{{ r.source }}{% else %}<span class="chip warn">{{ r.source }}</span>{% endif %}</td>
+      <td class="nowrap small muted">{{ r.fetched_at | replace('T', ' ') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">還沒有任何資料，按右上角「從人事行政總處更新」。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if year %}
+<div class="card" style="margin-top: 18px">
+  <h2>{{ year }} 年有名稱的日子</h2>
+  {% if days %}
+    <ul class="plain small">
+      {% for d in days %}<li><span class="nowrap">{{ d.date | replace('-', '/') }}</span>　<span style="color: {{ 'var(--holiday)' if d.off else 'inherit' }}">{{ d.note }}</span>{% if not d.off %} <span class="muted">（上班）</span>{% endif %}</li>{% endfor %}
+    </ul>
+  {% else %}<p class="muted small">沒有。</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="card" style="margin-top: 18px">
+  <h2>自動抓不到的話：上傳 CSV</h2>
+  <p class="small muted">到<a href="{{ dataset }}" target="_blank" rel="noopener">政府資料開放平台</a>下載那一年的「中華民國政府行政機關辦公日曆表」CSV
+    （不是「Google 行事曆專用」那份），在這裡上傳。會整年覆蓋。</p>
+  <form method="post" enctype="multipart/form-data" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+    <input type="file" name="csv" accept=".csv,text/csv" required>
+    <button class="btn" type="submit">上傳</button>
+  </form>
+</div>
+{% endblock %}

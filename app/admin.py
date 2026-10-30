@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, backup, db, maps, navigation, pagetree, queries as Q, taiwan, visitors as V
+from . import auth, backup, db, holidays, maps, navigation, pagetree, queries as Q, taiwan, visitors as V
 from .web import ASSET_VERSION
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -210,6 +210,7 @@ def dashboard(request: Request, con=Depends(user_required)):
         "unmapped": con.execute("SELECT COUNT(*) FROM songs WHERE lyrics_id IS NULL").fetchone()[0],
         "pending": pending_counts(con),
         "sheet_delete_requests": con.execute("SELECT COUNT(*) FROM sheets WHERE delete_requested_at IS NOT NULL").fetchone()[0],
+        "missing_holidays": holidays.missing_years(con),
         "missing_setlists": con.execute(
             "SELECT COUNT(*) FROM performances p WHERE p.event_date <= ? AND NOT EXISTS "
             "(SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id)", (today,)).fetchone()[0],
@@ -1413,6 +1414,33 @@ def backups_create(request: Request, con=Depends(user_required)):
 def backups_download(name: str, request: Request, con=Depends(user_required)):
     path = backup.path_of(name) or _404()
     return FileResponse(path, filename=name, media_type="application/vnd.sqlite3")
+
+
+# ==================================================================== 國定假日（演出頁行事曆的紅字）
+@router.get("/holidays")
+def holidays_page(request: Request, con=Depends(user_required)):
+    rows = holidays.year_rows(con)
+    shown = as_int(request.query_params.get("year")) or (rows[0]["year"] if rows else None)
+    return page(request, "holidays.html", {
+        "nav": "holidays", "rows": rows, "missing": holidays.missing_years(con), "year": shown,
+        "official": holidays.OFFICIAL, "days": holidays.named_days(con, shown) if shown else [],
+        "dataset": "https://data.gov.tw/dataset/14718",
+    })
+
+
+@router.post("/holidays")
+async def holidays_save(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    upload = form.get("csv")
+    if upload is not None and getattr(upload, "filename", ""):
+        try:
+            year = holidays.save_year(con, holidays.parse_csv(await upload.read()), "上傳（%s）" % upload.filename)
+        except holidays.CalendarError as e:
+            return done("/admin/holidays", "沒有匯入：%s" % e)
+        return done("/admin/holidays?year=%d" % year, "已匯入 %d 年" % year)
+    done_years, errors = holidays.refresh(con)
+    msg = ("已更新：%s 年" % "、".join(map(str, done_years))) if done_years else "沒有更新任何年份"
+    return done("/admin/holidays", msg + ("。有些沒抓到：" + "；".join(errors) if errors else ""))
 
 
 @router.get("/redirects")

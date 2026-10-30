@@ -16,6 +16,7 @@
   --warn-text: #7a5a00;
   --up-text: #c0321f;                 /* 名次上升紅、下降綠（台灣的習慣，跟股市一樣） */
   --down-text: #137a52;
+  --holiday: #c0321f;                 /* 行事曆的放假日（人事行政總處辦公日曆表） */
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 4px 14px rgba(17, 24, 39, .04);
@@ -779,3 +780,61 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 /* 歌詞頁的「樂譜」分頁：每首歌一張卡片 */
 .sheet-group { margin-bottom: 16px; }
 .sheet-group .card-head h2 a { color: inherit; }
+
+/* ==== 演出頁：列表／行事曆切換（site.js 畫行事曆） */
+.results-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.view-switch { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: 999px; }
+.view-switch button { font: inherit; font-size: .85rem; border: 0; background: none; color: var(--muted); padding: 5px 14px; border-radius: 999px; cursor: pointer; }
+.view-switch button:hover { color: var(--text); }
+.view-switch button[aria-pressed=true] { background: var(--surface); color: var(--primary-strong); font-weight: 500; box-shadow: var(--shadow); }
+
+.cal-head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.cal-title { font-size: 1.1rem; margin: 0 6px; min-width: 8.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.cal-nav { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.cal-nav:hover { background: var(--surface-2); }
+.cal-now { margin-left: auto; }
+.cal-now:disabled { opacity: .45; cursor: default; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.cal-wd { padding: 8px 0; text-align: center; font-size: .8rem; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.cal-wd.off { color: var(--holiday); }
+.cal-day { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 96px; padding: 6px; text-align: left;
+  font: inherit; color: var(--text); background: var(--surface); border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.cal-grid > :nth-child(7n) { border-right: 0; }
+.cal-day.blank { background: var(--primary-softer); }
+button.cal-day { cursor: pointer; }
+button.cal-day:hover { background: #f8fafd; }
+.cal-day.sel { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); }
+.cal-top { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.cal-num { font-size: .85rem; font-variant-numeric: tabular-nums; flex: none; width: 1.75em; height: 1.75em; line-height: 1.75em; text-align: center; border-radius: 999px; }
+.cal-day.off .cal-num, .cal-note { color: var(--holiday); }
+.cal-day.today .cal-num { background: var(--primary); color: #fff; font-weight: 700; }
+.cal-note { font-size: .7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-day:not(.off) .cal-note { color: var(--muted); }         /* 補行上班 */
+.cal-evs { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-ev { display: block; font-size: .75rem; line-height: 1.45; padding: 1px 6px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--primary-soft); color: var(--primary-strong); }
+.cal-ev.past { background: var(--surface-2); color: var(--text); }
+.cal-more { font-size: .72rem; color: var(--muted); padding-left: 6px; }
+.cal-dots { display: none; }
+.cal-list { margin-top: 18px; }
+.cal-list .month-head { font-size: 1rem; color: var(--text); }
+.cal-list-note { font-size: .85rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.cal-list-note.off { color: var(--holiday); }
+.cal-list .card-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.cal-list .perf-extra { margin-top: 4px; }
+@media (max-width: 640px) {
+  .cal-day { min-height: 54px; padding: 4px 2px; align-items: center; gap: 4px; }
+  .cal-top { justify-content: center; }
+  .cal-note, .cal-evs { display: none; }
+  .cal-num { font-size: .82rem; }
+  .cal-dots { display: flex; gap: 3px; justify-content: center; }
+  .cal-dots i { width: 6px; height: 6px; border-radius: 999px; background: var(--primary); }
+  .cal-dots i.past { background: var(--faint); }
+  .cal-title { font-size: 1rem; min-width: 0; }
+  .cal-list .card-grid { grid-template-columns: 1fr; }
+}
+/* 從行事曆按「在列表中查看」：那一場閃一下 */
+@keyframes flash-row { from { background: var(--primary-soft); } to { background: transparent; } }
+.perf-table tr.flash td, .perf-card.flash { animation: flash-row 2s ease-out; }

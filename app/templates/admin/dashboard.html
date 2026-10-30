@@ -22,9 +22,10 @@
       {% if pending.shows %}<li class="warn">🎤 <a href="/admin/submissions#pending-shows">{{ pending.shows }} 場新演出等你審核</a></li>{% endif %}
       {% if pending.sheets %}<li class="warn">🎼 <a href="/admin/submissions#pending-sheets">{{ pending.sheets }} 份樂譜等你審核{% if sheet_delete_requests %}（其中 {{ sheet_delete_requests }} 份要求刪除）{% endif %}</a></li>{% endif %}
       {% if pending.marquee %}<li class="warn">💬 <a href="/admin/submissions#pending-marquee">{{ pending.marquee }} 則跑馬燈留言還沒看過</a></li>{% endif %}
+      {% for y in missing_holidays %}<li class="warn">📅 <a href="/admin/holidays">還沒有 {{ y }} 年的國定假日，演出頁行事曆只會把週六日標紅</a></li>{% endfor %}
       {% if unmapped %}<li>🎵 <a href="/admin/mapping">{{ unmapped }} 首歌還沒對應到歌詞</a></li>{% endif %}
       {% if missing_setlists %}<li>📝 <a href="/admin/performances/?missing=1">{{ missing_setlists }} 場已發生的演出還沒有歌單</a></li>{% endif %}
-      {% if not review and not unmapped and not missing_setlists and not (pending.values() | sum) %}<li class="muted">沒有待處理的事 🎉</li>{% endif %}
+      {% if not review and not unmapped and not missing_setlists and not missing_holidays and not (pending.values() | sum) %}<li class="muted">沒有待處理的事 🎉</li>{% endif %}
     </ul>
   </section>
   <section class="card">

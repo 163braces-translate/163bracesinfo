@@ -197,6 +197,153 @@ window.doughnutTopLabels = {
     row.hidden = !open;
   });
 
+  // ---- 演出頁：列表／行事曆切換。行事曆用 #cal-data（篩選後的每一場＋放假日）在這裡畫，
+  // 放假日照人事行政總處的辦公日曆表（後台「國定假日」匯入）：放假的日期紅字，補行上班的週六是黑字。
+  // 那一年還沒有資料就只把週六日標紅。目前的顯示方式和月份記在網址（view、month），重新整理、分享都會停在同一個月。
+  var cal = $("[data-calendar]"), listView = $("[data-list-view]");
+  if (cal && listView) {
+    var calData = JSON.parse($("#cal-data").textContent), cd = cal.dataset, zh = cd.lang !== "en";
+    var hol = calData.holidays.days, calToday = cd.today;
+    var WD = zh ? ["日", "一", "二", "三", "四", "五", "六"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var byDate = {};
+    calData.shows.forEach(function (s) { (byDate[s.d] = byDate[s.d] || []).push(s); });
+    Object.keys(byDate).forEach(function (d) { byDate[d].sort(function (a, b) { return a.id - b.id; }); });
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    var esc = function (s) {
+      return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+    };
+    var dow = function (iso) { return new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)).getDay(); };
+    var dayInfo = function (iso) {      // {off: 放假, note: 國定假日名稱／補假／補行上班}
+      var h = hol[iso], w = dow(iso);
+      return { off: h ? h[0] === 1 : (w === 0 || w === 6), note: h && zh ? h[1] : "" };
+    };
+
+    // 一開始看哪個月：網址指定的；不然今天這個月在結果的範圍內就看這個月，否則看離今天最近的那一場
+    var ym = /^\d{4}-\d{2}$/.test(cd.month) ? cd.month : calToday.slice(0, 7);
+    if (!cd.month && calData.shows.length) {
+      var dates = calData.shows.map(function (s) { return s.d; }).sort();
+      var first = dates[0].slice(0, 7), last = dates[dates.length - 1].slice(0, 7);
+      if (ym < first) ym = first; else if (ym > last) ym = last;
+    }
+    var selected = null;
+
+    var setUrl = function (view) {
+      var url = new URL(location.href);
+      if (view === "calendar") { url.searchParams.set("view", "calendar"); url.searchParams.set("month", ym); }
+      else { url.searchParams.delete("view"); url.searchParams.delete("month"); }
+      history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+      var vi = $("[data-view-input]"), mi = $("[data-month-input]");
+      if (vi) vi.value = view === "calendar" ? "calendar" : "";
+      if (mi) mi.value = view === "calendar" ? ym : "";
+    };
+
+    var showCard = function (s) {
+      var soon = s.d >= calToday;
+      var venue = s.v ? (s.u ? '<a class="venue-link" href="' + esc(s.u) + '" target="_blank" rel="noopener">' + esc(s.v) + "</a>" : esc(s.v)) : "";
+      return '<article class="perf-card' + (soon ? " soon" : "") + '">' +
+        '<div class="perf-card-top"><span class="d">' + s.d.slice(5).replace("-", "/") + " (" + WD[dow(s.d)] + ")</span>" +
+        (s.t ? '<span class="chip">' + esc(s.t) + "</span>" : "") + (soon ? '<span class="chip blue">' + esc(cd.soon) + "</span>" : "") + "</div>" +
+        '<div class="n">' + esc(s.n) + "</div>" +
+        '<div class="m">' + esc(s.c) + (venue ? " · " + venue : "") + "</div>" +
+        '<div class="perf-extra">' + (s.s ? '<span class="chip blue">♪ ' + esc(cd.songs.replace("{n}", s.s)) + "</span>" : "") +
+        '<a class="small" href="#" data-goto="' + s.id + '">' + esc(cd.toList) + " →</a></div></article>";
+    };
+
+    var drawCal = function () {
+      var y = +ym.slice(0, 4), mo = +ym.slice(5, 7), days = new Date(y, mo, 0).getDate(), lead = new Date(y, mo - 1, 1).getDay();
+      var title = zh ? y + " 年 " + mo + " 月" : MON[mo - 1] + " " + y;
+      var html = '<div class="cal-head">' +
+        '<button type="button" class="cal-nav" data-step="-1" aria-label="' + esc(cd.prev) + '">‹</button>' +
+        '<h2 class="cal-title" aria-live="polite">' + title + "</h2>" +
+        '<button type="button" class="cal-nav" data-step="1" aria-label="' + esc(cd.next) + '">›</button>' +
+        '<button type="button" class="btn small cal-now"' + (ym === calToday.slice(0, 7) ? " disabled" : "") + ">" + esc(cd.thisMonth) + "</button></div>";
+      html += '<div class="cal-grid">';
+      WD.forEach(function (w, i) { html += '<div class="cal-wd' + (i === 0 || i === 6 ? " off" : "") + '">' + w + "</div>"; });
+      for (var i = 0; i < lead; i++) html += '<div class="cal-day blank" aria-hidden="true"></div>';
+      var monthShows = [];
+      for (var d = 1; d <= days; d++) {
+        var iso = ym + "-" + pad(d), info = dayInfo(iso), list = byDate[iso] || [];
+        monthShows = monthShows.concat(list);
+        var cls = "cal-day" + (info.off ? " off" : "") + (iso === calToday ? " today" : "") + (list.length ? " has" : "") + (iso === selected ? " sel" : "");
+        var inner = '<span class="cal-top"><span class="cal-num">' + d + "</span>" +
+          (info.note ? '<span class="cal-note" title="' + esc(info.note) + '">' + esc(info.note) + "</span>" : "") + "</span>";
+        if (list.length) {
+          var shown = list.length > 3 ? 2 : list.length;
+          inner += '<span class="cal-evs">' + list.slice(0, shown).map(function (s) {
+            return '<span class="cal-ev' + (s.d < calToday ? " past" : "") + '">' + esc(s.n) + "</span>";
+          }).join("") + (list.length > shown ? '<span class="cal-more">' + esc(cd.more.replace("{n}", list.length - shown)) + "</span>" : "") + "</span>" +
+          '<span class="cal-dots" aria-hidden="true">' + list.slice(0, 3).map(function (s) {
+            return '<i class="' + (s.d < calToday ? "past" : "") + '"></i>';
+          }).join("") + "</span>";
+          html += '<button type="button" class="' + cls + '" data-date="' + iso + '" aria-pressed="' + (iso === selected) + '" aria-label="' +
+            esc(mo + "/" + d + " " + list.map(function (s) { return s.n; }).join("、")) + '">' + inner + "</button>";
+        } else {
+          html += '<div class="' + cls + '">' + inner + "</div>";
+        }
+      }
+      var tail = (7 - (lead + days) % 7) % 7;
+      for (var j = 0; j < tail; j++) html += '<div class="cal-day blank" aria-hidden="true"></div>';
+      html += "</div>";
+
+      // 下面的清單：點了哪天就列那天的，沒點就列整個月
+      var picked = selected && byDate[selected];
+      var head;
+      if (picked) {
+        var si = dayInfo(selected);
+        head = (zh ? +selected.slice(5, 7) + " 月 " + +selected.slice(8) + " 日（" + WD[dow(selected)] + "）"
+                   : WD[dow(selected)] + ", " + MON[+selected.slice(5, 7) - 1] + " " + +selected.slice(8)) +
+          (si.note ? ' <span class="cal-list-note' + (si.off ? " off" : "") + '">' + esc(si.note) + "</span>" : "");
+      } else head = esc(cd.monthAll);
+      var items = picked || monthShows;
+      html += '<div class="cal-list"><h3 class="month-head">' + head + "</h3>" +
+        (items.length ? '<div class="card-grid">' + items.map(showCard).join("") + "</div>" : '<p class="empty">' + esc(cd.none) + "</p>") + "</div>";
+      cal.innerHTML = html;
+    };
+
+    var switchView = function (view) {
+      $$("[data-view]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.view === view ? "true" : "false"); });
+      cal.hidden = view !== "calendar";
+      listView.hidden = view === "calendar";
+      if (view === "calendar") drawCal();
+      setUrl(view);
+    };
+    $$("[data-view]").forEach(function (b) {
+      b.addEventListener("click", function () { switchView(b.dataset.view); });
+    });
+    if (!cal.hidden) drawCal();
+
+    cal.addEventListener("click", function (e) {
+      var nav = e.target.closest(".cal-nav"), now = e.target.closest(".cal-now"), day = e.target.closest(".cal-day[data-date]");
+      var go = e.target.closest("[data-goto]");
+      if (nav || now) {
+        if (now) ym = calToday.slice(0, 7);
+        else {
+          var dt = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + +nav.dataset.step, 1);
+          ym = dt.getFullYear() + "-" + pad(dt.getMonth() + 1);
+        }
+        selected = null;
+        drawCal();
+        setUrl("calendar");
+      } else if (day) {
+        selected = selected === day.dataset.date ? null : day.dataset.date;
+        drawCal();
+        var listHead = $(".cal-list", cal);
+        if (selected && listHead.getBoundingClientRect().top > window.innerHeight - 80) listHead.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (go) {
+        // 在列表中查看：切回列表、捲到那一場（電腦版是表格那一列，手機版是方塊），閃一下
+        e.preventDefault();
+        switchView("list");
+        var target = [document.getElementById("p" + go.dataset.goto), document.getElementById("m" + go.dataset.goto)]
+          .filter(function (el) { return el && el.offsetParent !== null; })[0];
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+        }
+      }
+    });
+  }
+
   // ---- 歌詞索引：全部展開／全部收起（按鈕文字跟著目前狀態）
   var menu = $("[data-lyrics-menu]");
   if (menu) {

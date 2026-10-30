@@ -25,6 +25,9 @@
 <div class="perf-layout">
   <aside class="perf-side">
     <form class="card filters-card {{ 'open' if filtered }}" id="filters" method="get" action="{{ link(page_url(page)) }}">
+      {#- 換篩選條件時留在行事曆、停在同一個月（site.js 隨切換更新；列表模式是空的，送出時不會帶） #}
+      <input type="hidden" name="view" value="{{ 'calendar' if view == 'calendar' }}" data-view-input>
+      <input type="hidden" name="month" value="{{ request.query_params.get('month', '') if view == 'calendar' }}" data-month-input>
       <button type="button" class="btn filters-toggle" aria-expanded="{{ 'true' if filtered else 'false' }}">
         {{ t('filters_map') }}{% if filtered %} · {{ t('results', n=total) }}{% endif %}
       </button>
@@ -83,7 +86,13 @@
 
   <section aria-label="{{ tr(page, 'title') }}">
     <div class="results-head" data-attend-bar>
-      <span class="muted">{{ t('results', n=total) }}</span>
+      <span class="results-left">
+        <span class="view-switch" role="group" aria-label="{{ t('view_as') }}">
+          <button type="button" data-view="list" aria-pressed="{{ 'true' if view == 'list' else 'false' }}">{{ t('view_list') }}</button>
+          <button type="button" data-view="calendar" aria-pressed="{{ 'true' if view == 'calendar' else 'false' }}">{{ t('view_calendar') }}</button>
+        </span>
+        <span class="muted">{{ t('results', n=total) }}</span>
+      </span>
       {% if visitor and total %}
         <span class="attend-save">
           <span class="small muted" data-attend-status data-hint="{{ t('attend_hint') }}" data-dirty="{{ t('attend_unsaved', n='{n}') }}"
@@ -92,6 +101,15 @@
         </span>
       {% endif %}
     </div>
+    {#- 行事曆：site.js 依 #cal-data 畫；第一次切過去才畫 #}
+    <div class="cal" data-calendar data-lang="{{ lang }}" data-today="{{ today }}" data-month="{{ request.query_params.get('month', '') }}"
+         data-prev="{{ t('cal_prev') }}" data-next="{{ t('cal_next') }}" data-this-month="{{ t('cal_this_month') }}"
+         data-month-all="{{ t('cal_month_all') }}" data-none="{{ t('cal_none') }}" data-more="{{ t('cal_more', n='{n}') }}"
+         data-to-list="{{ t('cal_to_list') }}" data-songs="{{ t('cal_songs', n='{n}') }}" data-soon="{{ t('soon') }}"
+         {{ 'hidden' if view != 'calendar' }}></div>
+    <script type="application/json" id="cal-data">{{ calendar | tojson }}</script>
+
+    <div data-list-view {{ 'hidden' if view == 'calendar' }}>
     {% if not total %}
       <p class="empty">{{ t('no_results') }}</p>
     {% else %}
@@ -189,6 +207,7 @@
       {% endfor %}
     </div>
     {% endif %}
+    </div>
   </section>
 </div>
 

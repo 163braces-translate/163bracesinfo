@@ -307,3 +307,16 @@ CREATE TABLE IF NOT EXISTS sheet_files (
     width     INTEGER,
     height    INTEGER
 );
+
+-- 行事曆的放假日（app/holidays.py）：人事行政總處「政府行政機關辦公日曆表」，一天一列
+CREATE TABLE IF NOT EXISTS calendar_days (
+    date  TEXT PRIMARY KEY,        -- YYYY-MM-DD
+    off   INTEGER NOT NULL,        -- 1＝放假（含週末），0＝上班（含補行上班的週六）
+    note  TEXT NOT NULL DEFAULT '' -- 國定假日名稱、補假、補行上班……
+);
+CREATE TABLE IF NOT EXISTS calendar_years (
+    year        INTEGER PRIMARY KEY,
+    source      TEXT NOT NULL,     -- 人事行政總處／ruyut/TaiwanCalendar／上傳
+    url         TEXT NOT NULL DEFAULT '',
+    fetched_at  TEXT NOT NULL
+);

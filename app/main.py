@@ -17,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import admin, auth, backup, community, db, i18n, navigation, pagecache, queries as Q, taiwan
-from .web import HERE, as_id, get_con, lang_of, render
+from . import admin, auth, backup, community, db, holidays, i18n, navigation, pagecache, queries as Q, taiwan
+from .web import HERE, as_id, get_con, lang_of, render, venue_url
 
 
 class LanguagePrefix:
@@ -89,6 +89,7 @@ async def clear_cache_after_admin_save(request, call_next):
     if request.method == "POST" and request.url.path.startswith("/admin/") and response.status_code < 400:
         pagecache.invalidate()
     backup.maybe_weekly()           # 正式站每週自動備份（每小時才真的檢查一次）
+    holidays.maybe_daily()          # 正式站每天看一次人事行政總處有沒有新的辦公日曆表
     return response
 app.include_router(admin.router)          # 這兩個都要在下面的萬用路由之前
 app.include_router(community.router)
@@ -270,10 +271,24 @@ def performances_page(request, con, page, tab="list"):
         "map": taiwan.map_data(),
         "map_cities": map_cities,
         "filtered": any([f["q"], f["city"], f["event_type"], f["date_from"], f["date_to"]]),
+        "view": "calendar" if request.query_params.get("view") == "calendar" else "list",
+        "calendar": calendar_data(con, lang_of(request), rows),
         "attended": community.attended_ids(con, community.current_visitor(request, con)),
         "attend_counts": community.attendance_counts(con),
         "tab_shown": shown, "tab_status": status, "previewing": preview,
     }), page=page)
+
+
+def calendar_data(con, lang, rows):
+    """列表旁邊的行事曆（site.js 畫）：篩選後的每一場，加上這幾年的放假日（紅字）。"""
+    this_year = int(Q.today()[:4])
+    years = {int(r["event_date"][:4]) for r in rows} | {this_year, this_year + 1}
+    return {
+        "shows": [{"id": r["id"], "d": r["event_date"], "n": i18n.tr(lang, r, "event_name"),
+                   "t": i18n.tr(lang, r, "type_name"), "c": i18n.tr(lang, r, "city_name"),
+                   "v": i18n.tr(lang, r, "venue"), "u": venue_url(r), "s": len(r["setlist"])} for r in rows],
+        "holidays": holidays.marks(con, set(range(min(years), max(years) + 1))),
+    }
 
 
 TAB_TITLES = {"charts": "tab_charts", "setlist": "tab_setlist", "replay": "tab_replay"}
