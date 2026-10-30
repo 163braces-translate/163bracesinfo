@@ -109,6 +109,14 @@ main.wrap { padding-top: 24px; padding-bottom: 56px; }
 .page-head h1 { margin-bottom: 6px; }
 .page-head .intro { color: var(--muted); max-width: 760px; }
 .page-head .intro p { margin: 0 0 .4em; }
+/* 演出頁上方的說明：手機版只露出第一行（高度剛好一行，字照常排），按「顯示更多」展開 */
+.perf-intro { margin-bottom: 16px; }
+.intro-more { font: inherit; font-size: .875rem; color: var(--primary); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+@media (max-width: 960px) {
+  .perf-intro:not(.expanded) .intro { max-height: 1.65em; overflow: hidden; }
+  .perf-intro:not(.expanded) .intro > * { margin: 0; }
+  .perf-intro:not(.expanded) .intro > :first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -339,6 +347,7 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
   .filters-toggle { display: inline-flex; }
   .filters-card:not(.open) .filters { display: none; }
   .filters-card.open .filters { margin-top: 14px; }
+  .filters-card:not(.open) ~ .map-card { display: none; }      /* 演出頁：地圖收在篩選裡 */
 }
 
 .tw-map { width: 100%; height: auto; display: block; max-height: 460px; }

@@ -17,12 +17,16 @@
 
 <section class="tab-panel" id="panel-list" role="tabpanel" aria-labelledby="tab-list" {{ 'hidden' if tab != 'list' }}>
 {% set body = tr(page, 'body_html') %}
-{% if body %}<div class="intro muted prose" style="margin-bottom: 16px">{{ body | safe }}</div>{% endif %}
+{#- 手機版只露出第一行，按「顯示更多」才展開，一進來就看得到下面的列表（site.js） #}
+{% if body %}<div class="perf-intro" data-intro>
+  <div class="intro muted prose">{{ body | safe }}</div>
+  <button type="button" class="intro-more" data-more="{{ t('show_more') }}" data-less="{{ t('show_less') }}" aria-expanded="false" hidden>{{ t('show_more') }}</button>
+</div>{% endif %}
 <div class="perf-layout">
   <aside class="perf-side">
     <form class="card filters-card {{ 'open' if filtered }}" id="filters" method="get" action="{{ link(page_url(page)) }}">
       <button type="button" class="btn filters-toggle" aria-expanded="{{ 'true' if filtered else 'false' }}">
-        {{ t('filters') }}{% if filtered %} · {{ t('results', n=total) }}{% endif %}
+        {{ t('filters_map') }}{% if filtered %} · {{ t('results', n=total) }}{% endif %}
       </button>
       <div class="filters">
         <div>
@@ -70,7 +74,8 @@
       </div>
     </form>
 
-    <section class="card" aria-labelledby="h-map">
+    {#- 手機版：地圖跟著篩選一起收起來（.filters-card 沒有 open 就不顯示） #}
+    <section class="card map-card" aria-labelledby="h-map">
       <div class="card-head" style="margin-bottom: 4px"><h2 id="h-map">{{ t('map') }}</h2><span class="small muted">{{ t('map_hint') }}</span></div>
       {{ mp.tw_map(map, map_cities, f.city) }}
     </section>

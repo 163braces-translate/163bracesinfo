@@ -101,6 +101,24 @@ window.doughnutTopLabels = {
       .catch(function () { btn.disabled = false; });
   });
 
+  // ---- 演出頁上方的說明：手機版只露出第一行。超過一行才出現「顯示更多」
+  var intro = $("[data-intro]");
+  if (intro) {
+    var more = $(".intro-more", intro), text = $(".intro", intro);
+    var fitIntro = function () {
+      if (intro.classList.contains("expanded")) return;
+      var first = text.firstElementChild || text;      // 只有一段很長的話：被「…」截掉也算超過一行
+      more.hidden = text.scrollHeight <= text.clientHeight + 2 && first.scrollWidth <= first.clientWidth + 1;
+    };
+    more.addEventListener("click", function () {
+      var open = intro.classList.toggle("expanded");
+      more.textContent = open ? more.dataset.less : more.dataset.more;
+      more.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    fitIntro();
+    window.addEventListener("resize", fitIntro);
+  }
+
   // ---- 演出頁：篩選
   var form = $("#filters");
   if (form) {
