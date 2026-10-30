@@ -44,6 +44,7 @@ async def lifespan(app):
     try:
         db.init(con)
         community.ensure_default_pages(con)
+        navigation.add_sheets_link(con)
     finally:
         con.close()
     yield

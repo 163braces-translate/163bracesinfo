@@ -84,7 +84,11 @@ def tab_statuses(con):
 def hidden_tab_urls(con):
     """訪客看不到的分頁網址：分頁本身沒上線，或演出頁沒上線（分頁都在演出頁底下）。選單、sitemap 用。"""
     status, urls = tab_statuses(con), tab_urls(con)
-    return {urls[t] for t in TAB_TITLES_KEYS if status[t] != "live" or status["list"] != "live"}
+    hidden = {urls[t] for t in TAB_TITLES_KEYS if status[t] != "live" or status["list"] != "live"}
+    lyr = con.execute("SELECT status FROM pages WHERE kind = 'lyrics'").fetchone()
+    if lyr and lyr["status"] != "live":        # 樂譜分頁跟著歌詞頁
+        hidden.add(sheets_url(con))
+    return hidden
 
 
 TAB_TITLES_KEYS = ("charts", "setlist", "replay")      # 有自己狀態的分頁（演出列表跟著演出頁）

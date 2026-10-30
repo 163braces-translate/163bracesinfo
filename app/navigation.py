@@ -40,7 +40,13 @@ def default_header(con):
             {"label": "歌單統計", "label_en": "Setlists", "page_id": None, "url": tabs["setlist"]},
             {"label": "年度回顧", "label_en": "Replay", "page_id": None, "url": tabs["replay"]},
         ]})
-    for p in (pages.get("lyrics"), pages.get("articles"), about):
+    lyr = pages.get("lyrics")
+    if lyr:
+        items.append({"label": "", "label_en": "", "page_id": lyr["id"], "url": "", "children": [
+            {"label": "歌詞列表", "label_en": "Lyrics", "page_id": lyr["id"], "url": ""},
+            {"label": "樂譜", "label_en": "Sheet music", "page_id": None, "url": Q.sheets_url(con)},
+        ]})
+    for p in (pages.get("articles"), about):
         if p:
             items.append({"label": "", "label_en": "", "page_id": p["id"], "url": "", "children": []})
     return items
@@ -68,6 +74,27 @@ def default_footer(con):
         "note": "© %s · 非官方粉絲網站" % site,
         "note_en": "© %s · Unofficial fan site" % site_en,
     }
+
+
+def add_sheets_link(con):
+    """一次性：已經存過的選單（例如轉檔時存的）在「歌詞」底下補上「歌詞列表」「樂譜」。
+    只做一次（記在 settings），之後在後台拿掉也不會再加回來；選單裡沒有歌詞頁就不動。"""
+    if db.get_setting(con, "nav_sheets_added") == "1":
+        return
+    lyr = con.execute("SELECT id FROM pages WHERE kind = 'lyrics'").fetchone()
+    raw = con.execute("SELECT value FROM settings WHERE key = ?", (HEADER_KEY,)).fetchone()
+    if lyr and raw:
+        items = json.loads(raw["value"])
+        sheets = Q.sheets_url(con)
+        for item in items:
+            if item.get("page_id") != lyr["id"] or any(c.get("url") == sheets for c in item.get("children") or []):
+                continue
+            if not item.get("children"):         # 本來沒有下拉：跟演出一樣，第一項是歌詞頁本身
+                item["children"] = [{"label": "歌詞列表", "label_en": "Lyrics", "page_id": lyr["id"], "url": ""}]
+            item["children"].append({"label": "樂譜", "label_en": "Sheet music", "page_id": None, "url": sheets})
+        db.set_setting(con, HEADER_KEY, json.dumps(items, ensure_ascii=False))
+    db.set_setting(con, "nav_sheets_added", "1")
+    con.commit()
 
 
 def load_header(con):
