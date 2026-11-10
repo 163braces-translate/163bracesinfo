@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "_album.html" as al with context %}
+{% block content %}
+<p class="crumbs small"><a href="{{ link('/album/') }}">← {{ t('albums') }}</a></p>
+<div class="page-head album-head">
+  <div>
+    <h1>{{ heading }}</h1>
+    {% if kind == 'show' %}
+      <p class="muted album-meta">{{ perf.event_date | replace('-', '/') }} ({{ weekday(perf.event_date) }}) · {{ tr(perf, 'city_name') }}{% if tr(perf, 'venue') %} · {{ tr(perf, 'venue') }}{% endif %}
+        {% if kinds.performances %} · <a href="{{ link(page_url(kinds.performances)) }}#p{{ perf.id }}">{{ t('album_in_list') }}</a>{% endif %}</p>
+    {% elif kind == 'group' %}
+      <p class="intro">{{ t('album_group_intro') }}</p>
+    {% else %}
+      {% if album.description %}<p class="intro album-desc">{{ album.description }}</p>{% endif %}
+      <p class="small muted album-meta">
+        {% if card.by %}{{ t('album_by', name=card.by) }}{% endif %}
+        {% if perf %} · 🎤 <a href="{{ link('/album/show/' ~ perf.id ~ '/') }}">{{ perf.event_date | replace('-', '/') }} {{ tr(perf, 'event_name') }}</a>{% endif %}
+        {% if edit_url %} · <a href="{{ edit_url }}">{{ t('album_edit') }}</a>{% endif %}
+      </p>
+    {% endif %}
+  </div>
+  <span class="album-actions">
+    {% if kind == 'show' %}<a class="btn" href="{{ group_upload_url }}">{{ t('album_upload_group') }}</a>{% endif %}
+    <a class="btn primary" href="{{ upload_url }}">{{ t('album_upload_here') }}</a>
+  </span>
+</div>
+{% if msg %}<p class="flash-ok" role="status">{{ msg }}</p>{% endif %}
+
+{% for s in sections %}
+  <section class="ph-section" id="s-{{ s.key }}">
+    {% if s.title %}
+      <div class="card-head"><h2>{{ s.title }} <small class="muted">{{ s['items'] | length }}</small></h2>
+        {% if s.more %}<a class="more" href="{{ s.more }}">{{ t('album_show_all') if kind == 'group' else t('album_see_all') }} →</a>{% endif %}</div>
+    {% endif %}
+    {{ al.grid(s['items']) }}
+  </section>
+{% endfor %}
+
+{% if linked_albums %}
+  <section class="ph-section">
+    <div class="card-head"><h2>{{ t('album_linked') }}</h2></div>
+    {{ al.album_cards(linked_albums) }}
+  </section>
+{% endif %}
+
+{% if not sections and not linked_albums %}
+  <p class="empty">{{ t('album_empty_show') if kind == 'show' else t('album_empty') }}</p>
+{% endif %}
+
+{{ al.lightbox() }}
+<script type="application/json" id="photo-data">{{ sections | map(attribute='items') | sum(start=[]) | tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="/static/album.js?v={{ asset_version }}"></script>{% endblock %}

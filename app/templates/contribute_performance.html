@@ -5,7 +5,7 @@
   <h1>{{ t('contribute_title') }}</h1>
   <p style="margin: 0"><b>{{ tr(perf, 'event_name') }}</b></p>
   <p class="muted">{{ perf.event_date | replace('-', '/') }} · {{ tr(perf, 'type_name') }} · {{ tr(perf, 'city_name') }}{% if tr(perf, 'venue') %} · {{ tr(perf, 'venue') }}{% endif %}</p>
-  <p class="muted small">{{ t('contribute_intro') }}</p>
+  <p class="muted small">{{ t('contribute_intro' if needs_review('setlist') else 'contribute_intro_live') }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
   {% if need_login %}
     {% include "_need_login.html" %}

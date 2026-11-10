@@ -2,7 +2,7 @@
    「設定」頁與演出頁分頁的編輯畫面共用。欄位定義的格式見 admin.py 的 SETTING_FIELDS。 #}
 {% import "admin/_fields.html" as fx %}
   {% for title, fields in groups %}
-    <div class="card">
+    <div class="card" {% if title.startswith('粉絲投稿') %}id="review"{% endif %}>
       <h2>{{ title }}</h2>
       {% for field in fields %}
         {%- set key, label, kind = field[0], field[1], field[2] %}
@@ -15,7 +15,7 @@
             </select>
           </div>
         {% elif kind == 'rich' %}{{ fx.rich(key, values[key], label, small=true) }}
-        {% elif kind == 'bool' %}{{ fx.check(key, values[key] == '1', label) }}
+        {% elif kind == 'bool' %}{{ fx.check(key, values[key] == '1', label, help) }}
         {% elif kind == 'image' %}{{ fx.image_field(key, values[key] | int if values[key] else none, label, help) }}
         {% elif kind == 'facts' %}
           <div class="form-row">

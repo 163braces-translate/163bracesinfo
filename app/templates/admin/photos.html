@@ -1,0 +1,78 @@
+{% extends "admin/base.html" %}
+{% block title %}相簿{% endblock %}
+{% block content %}
+<div class="admin-head">
+  <h1>相簿</h1>
+  <a class="btn" href="/album/" target="_blank" rel="noopener">看前台相簿 ↗</a>
+</div>
+<p class="muted small">{% if review %}目前設定成<b>要先審核</b>：「還沒看過」的照片只有上傳的人看得到，你按「沒問題」才公開。{% else %}目前設定成<b>上傳就公開</b>。{% endif %}
+  （<a href="/admin/settings#review">到設定改</a>）不適合的照片按「下架」：前台就看不到了，上傳的人自己還看得到（附上你寫的原因），他可以自己刪掉。
+  管理者不能直接刪照片。整本不適合的自訂相簿可以到「相簿」分頁整本下架。一再亂傳的人可以到「粉絲帳號」停權（停權後不能再上傳）。</p>
+
+<div class="status-filter" role="group" aria-label="篩選">
+  {% for key, name in views.items() %}
+    <a href="?show={{ key }}" {% if show == key %}aria-current="page"{% endif %}>{{ name }}{% if key == 'new' %} <b>{{ unseen }}</b>{% endif %}</a>
+  {% endfor %}
+</div>
+
+{% if show == 'albums' %}
+<div class="table-card">
+<table class="admin-table">
+  <thead><tr><th>相簿</th><th>種類</th><th>建立的人</th><th>張數</th><th>最後上傳</th><th></th></tr></thead>
+  <tbody>
+  {% for a in albums %}
+    <tr class="{{ 'warn-row' if a.hidden }}">
+      <td><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title_shown }}</a>{% if a.hidden %} <span class="chip">已下架</span>{% endif %}
+        {% if a.kind == 'custom' and a.event_date %}<div class="small muted">🎤 {{ a.event_date | replace('-', '/') }} {{ a.event_name }}</div>{% endif %}</td>
+      <td class="small nowrap">{{ '演出相簿' if a.kind == 'show' else '自訂相簿' }}</td>
+      <td class="small">{{ a.creator }}</td>
+      <td class="nowrap">{{ a.n }}</td>
+      <td class="small nowrap muted">{{ a.updated_at | replace('T', ' ') }}</td>
+      <td class="nowrap">
+        <form method="post" style="display: inline"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="back" value="/admin/photos?show=albums">
+          {% if a.hidden %}<button class="btn small" name="action" value="album_show">恢復公開</button>
+          {% else %}<button class="btn small danger" name="action" value="album_hide" data-confirm="整本下架？裡面的照片前台都看不到了（可以再恢復）。">整本下架</button>{% endif %}
+        </form>
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="6" class="muted">還沒有相簿</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+  {% if show == 'new' and rows %}
+    <form method="post" style="margin-bottom: 12px"><input type="hidden" name="back" value="/admin/photos?show=new">
+      <button class="btn" name="action" value="all_ok">這些都沒問題，全部標成看過</button></form>
+  {% endif %}
+  <div class="photo-admin-grid">
+  {% for r in rows %}
+    <div class="card photo-admin {{ 'warn-row' if r.status == 'removed' or r.album_hidden }}">
+      <a class="pa-thumb" href="{{ r.album_link }}#p{{ r.id }}" target="_blank" rel="noopener">
+        {% if r.media == 'image' %}<img src="/album/img/{{ r.id }}/s.jpg" alt="" loading="lazy">
+        {% elif r.media == 'video' %}<video src="/album/video/{{ r.id }}#t=0.1" preload="metadata" muted></video>
+        {% else %}<img src="https://i.ytimg.com/vi/{{ r.youtube_id }}/hqdefault.jpg" alt="" loading="lazy">{% endif %}
+        {% if r.media != 'image' %}<span class="chip">{{ '影片檔' if r.media == 'video' else 'YouTube' }}</span>{% endif %}
+      </a>
+      <div class="small">
+        <b>{{ r.album_shown }}</b>{% if r.album_hidden %} <span class="chip">相簿已下架</span>{% endif %}
+        {% if r.event_date and r.album_kind != 'show' %}<div class="muted">🎤 {{ r.event_date | replace('-', '/') }} {{ r.event_name }}</div>{% endif %}
+        {% if r.caption %}<div>「{{ r.caption }}」</div>{% endif %}
+        <div class="muted">{{ label(r) }} · {{ {'google': 'Google 名', 'nickname': '暱稱', 'anonymous': '匿名'}[r.name_mode] }} · {{ r.created_at | replace('T', ' ') }}</div>
+        {% if r.status == 'removed' %}<div><span class="chip warn">已下架</span> {{ r.admin_note }}</div>{% endif %}
+      </div>
+      <form method="post" class="pa-actions"><input type="hidden" name="id" value="{{ r.id }}"><input type="hidden" name="back" value="/admin/photos?show={{ show }}">
+        {% if r.status == 'removed' %}
+          <button class="btn small" name="action" value="restore">恢復公開</button>
+        {% else %}
+          {% if not r.reviewed_at %}<button class="btn small" name="action" value="ok">沒問題</button>{% endif %}
+          <input type="text" name="admin_note" placeholder="下架原因（上傳的人看得到）" maxlength="300">
+          <button class="btn small danger" name="action" value="remove">下架</button>
+        {% endif %}
+      </form>
+    </div>
+  {% else %}
+    <p class="muted">{{ '沒有新照片' if show == 'new' else '沒有照片' }}</p>
+  {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

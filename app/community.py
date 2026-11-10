@@ -21,8 +21,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import QueryParams
 
-from . import auth, db, i18n, maps, queries as Q, taiwan, visitors as V
-from .admin import same_origin
+from . import auth, db, i18n, maps, pagecache, queries as Q, taiwan, visitors as V
+from .admin import apply_contribution, create_show, publish_sheet_revision, same_origin
 from .web import current_visitor, get_con, lang_of, render
 
 router = APIRouter()
@@ -63,12 +63,13 @@ def T(request, key, **kw):
 # ==================================================================== 預設頁面
 PRIVACY_ZH = """<h2>我們存了什麼</h2>
 <p>用 Google 帳號登入時，我們只會從 Google 取得：帳號 ID、email、名字、大頭貼。email 只用來辨識帳號，不會公開、不會寄信給你。</p>
-<p>你在網站上記錄的「去過的場次」「喜歡的歌」、投稿的跑馬燈、演出補充與樂譜，會跟你的帳號一起存在本站的資料庫。</p>
+<p>你在網站上記錄的「去過的場次」「喜歡的歌」、投稿的跑馬燈、演出補充、樂譜與相簿照片，會跟你的帳號一起存在本站的資料庫。</p>
+<p>上傳到相簿的照片會重新存檔，去掉 GPS 位置等拍攝資訊；影片檔則是原檔保存，可能含有拍攝地點，介意的話請改貼 YouTube 連結。</p>
 <p>「回顧」與「我的足跡」裡選的住的地方（行政區，或你輸入的地點；座標只取到約 1 公里），預設只記在你的瀏覽器；勾選「記在我的帳號」才會存到本站，取消勾選就會刪除。</p>
 <p>網站使用 Google Analytics 統計瀏覽人數與熱門頁面（會在你的瀏覽器存放 Google 的 Cookie），我們只看匿名的整體數字。</p>
 <h2>誰看得到</h2>
 <p>去過的場次與喜歡的歌預設只有你自己看得到；網站只會顯示匿名的加總（例如「12 位粉絲去過這場」）。你可以在「我的 → 設定」開啟公開個人頁。</p>
-<p>跑馬燈與樂譜的署名由你每次投稿時選擇：Google 帳號名、自選暱稱或匿名。</p>
+<p>跑馬燈、樂譜與相簿的署名由你每次投稿時選擇：Google 帳號名、自選暱稱或匿名。相簿照片上傳後馬上公開。</p>
 <h2>刪除帳號</h2>
 <p>在「我的 → 設定」可以刪除帳號，所有紀錄與投稿會一起刪除（已經被核准、套用到演出資料的補充除外）。</p>
 <h2>樂譜</h2>
@@ -76,12 +77,13 @@ PRIVACY_ZH = """<h2>我們存了什麼</h2>
 
 PRIVACY_EN = """<h2>What we store</h2>
 <p>When you sign in with Google we only receive your account ID, email, name and profile picture. Your email is used to identify your account; it is never shown publicly and we never email you.</p>
-<p>The shows you attended, songs you like, and anything you submit (ticker messages, show details, sheet music) are stored with your account.</p>
+<p>The shows you attended, songs you like, and anything you submit (ticker messages, show details, sheet music, album photos) are stored with your account.</p>
+<p>Photos uploaded to the albums are re-saved without GPS location or camera data. Video files are stored as uploaded and may contain where they were filmed; if that matters to you, paste a YouTube link instead.</p>
 <p>Where you live as you set it in Recap and My shows (a district, or a place you enter, rounded to about 1 km) stays in your browser unless you tick "Remember on my account"; untick it to delete it from the site.</p>
 <p>We use Google Analytics to count visits and see which pages are popular (it sets Google cookies in your browser); we only look at anonymous totals.</p>
 <h2>Who can see it</h2>
 <p>Your shows and liked songs are private by default; the site only shows anonymous totals (e.g. "12 fans were there"). You can turn on a public profile in My page → Settings.</p>
-<p>For ticker messages and sheet music you choose the name each time: your Google name, your nickname, or anonymous.</p>
+<p>For ticker messages, sheet music and album photos you choose the name each time: your Google name, your nickname, or anonymous. Album photos are public as soon as you upload them.</p>
 <h2>Deleting your account</h2>
 <p>You can delete your account in My page → Settings. All your records and submissions are deleted with it (except corrections already applied to show data).</p>
 <h2>Sheet music</h2>
@@ -432,6 +434,11 @@ async def save_home(request: Request, con=Depends(get_con)):
 ME_TABS = ("footprint", "likes", "recap", "submissions", "settings")
 
 
+def photos_module():
+    from . import photos            # photos.py 用到這裡的函式，放在函式裡 import 免得循環
+    return photos
+
+
 @router.get("/me/")
 def me_page(request: Request, con=Depends(get_con)):
     visitor = current_visitor(request, con)
@@ -445,6 +452,7 @@ def me_page(request: Request, con=Depends(get_con)):
         "likes": liked_songs(con, visitor["id"]),
         "subs": my_submissions(con, visitor["id"]), "map": taiwan.map_data(), "msg": request.query_params.get("msg"),
         "choices": contribute_choices(con) if tab == "submissions" else None,
+        "my_albums": photos_module().my_photo_albums(con, lang, visitor["id"]) if tab == "submissions" else [],
         "recap": recap_data(con, lang, visitor) if tab == "recap" else None,
         "tabs": tabs, "guest_until": V.guest_expires(visitor).strftime("%Y/%m/%d %H:%M") if V.is_guest(visitor) else None,
     }, page={"title": "我的", "title_en": "My page"})
@@ -672,7 +680,9 @@ def like_state(con, visitor, song_id):
 # ==================================================================== 跑馬燈
 def marquee_items(con, lang, limit=30):
     rows = con.execute("SELECT m.*, v.google_name, v.nickname FROM marquee_posts m JOIN visitors v ON v.id = m.visitor_id "
-                       "WHERE m.hidden = 0 AND v.banned = 0 ORDER BY m.created_at DESC LIMIT ?", (limit,)).fetchall()
+                       "WHERE m.hidden = 0 AND v.banned = 0" +
+                       (" AND m.reviewed_at IS NOT NULL" if db.review_required(con, "marquee") else "") +   # 要先審：看過的才顯示
+                       " ORDER BY m.created_at DESC LIMIT ?", (limit,)).fetchall()
     anon = i18n.t(lang, "anonymous")
     return [{"text": r["text"], "name": V.display_name(r, r["name_mode"], anon)} for r in rows]
 
@@ -699,7 +709,7 @@ async def post_marquee(request: Request, con=Depends(get_con)):
         con.execute("INSERT INTO marquee_posts (visitor_id, text, name_mode, created_at) VALUES (?, ?, ?, ?)",
                     (visitor["id"], text, mode, db.now()))
         con.commit()
-        return {"ok": True}
+        return {"ok": True, "pending": db.review_required(con, "marquee")}
     return JSONResponse({"ok": False, "error": error}, status_code=400)
 
 
@@ -771,10 +781,17 @@ async def contribute_performance(performance_id: int, request: Request, con=Depe
                                 status_code=303)
     payload["source"] = source
     payload["message"] = (form.get("message") or "").strip()[:1000]
-    con.execute("INSERT INTO contributions (visitor_id, performance_id, payload_json, created_at) VALUES (?, ?, ?, ?)",
-                (visitor["id"], performance_id, json.dumps(payload, ensure_ascii=False), db.now()))
+    cid = con.execute("INSERT INTO contributions (visitor_id, performance_id, payload_json, created_at) VALUES (?, ?, ?, ?)",
+                      (visitor["id"], performance_id, json.dumps(payload, ensure_ascii=False), db.now())).lastrowid
+    live = not db.review_required(con, "setlist")       # 後台設定成不用審核：送出就換掉那場的歌單
+    if live:
+        apply_contribution(con, con.execute("SELECT * FROM contributions WHERE id = ?", (cid,)).fetchone())
+        con.execute("UPDATE contributions SET status = 'approved', reviewed_at = ? WHERE id = ?", (db.now(), cid))
     con.commit()
-    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + quote(T(request, "contribute_thanks"))
+    if live:
+        pagecache.invalidate()
+    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + \
+        quote(T(request, "contribute_thanks_live" if live else "contribute_thanks"))
     return RedirectResponse(me, status_code=303)
 
 
@@ -826,10 +843,18 @@ async def contribute_show(request: Request, con=Depends(get_con)):
     payload["message"] = (form.get("message") or "").strip()[:1000]
     if V.over_daily_limit(con, "show", visitor["id"]):
         return fail("daily_limit", n=V.DAILY_LIMITS["show"])
-    con.execute("INSERT INTO show_submissions (visitor_id, payload_json, created_at) VALUES (?, ?, ?)",
-                (visitor["id"], json.dumps(payload, ensure_ascii=False), db.now()))
+    sid = con.execute("INSERT INTO show_submissions (visitor_id, payload_json, created_at) VALUES (?, ?, ?)",
+                      (visitor["id"], json.dumps(payload, ensure_ascii=False), db.now())).lastrowid
+    live = not db.review_required(con, "show")          # 不用審核：送出就加進演出列表
+    if live:
+        create_show(con, con.execute("SELECT * FROM show_submissions WHERE id = ?", (sid,)).fetchone(),
+                    {"event_date": date, "event_name": payload["event_name"], "venue": payload["venue"],
+                     "event_type_id": payload["event_type_id"], "city_id": payload["city_id"]}, payload["map_url"])
     con.commit()
-    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + quote(T(request, "show_thanks"))
+    if live:
+        pagecache.invalidate()
+    me = ("/en" if lang_of(request) == "en" else "") + "/me/?tab=submissions&msg=" + \
+        quote(T(request, "show_thanks_live" if live else "show_thanks"))
     return RedirectResponse(me, status_code=303)
 
 
@@ -1074,19 +1099,29 @@ async def save_sheet(request, con, visitor, song_id, original, current=None):
     mode = form.get("name_mode") if form.get("name_mode") in V.NAME_MODES else "nickname"
     files = arrange_sheet_files(order, kept, stored)
     dropped = []
+    # 不用審核：新投稿直接公開；改還沒公開的那筆也直接公開；公開中的修改版存好後馬上套用到原本那份
+    live = not db.review_required(con, "sheet")
+    status, reviewed = ("approved", db.now()) if live else ("pending", None)
     if new_row:
         sheet_id = con.execute("INSERT INTO sheets (visitor_id, song_id, title, text_body, video_url, name_mode, created_at, "
-                               "replaces_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               "replaces_id, status, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                (visitor["id"], song_id, title, text_body, video, mode, db.now(),
-                                original["id"] if original else None)).lastrowid
+                                original["id"] if original else None,
+                                "pending" if original else status, None if original else reviewed)).lastrowid
     else:
         sheet_id = current["id"]
-        con.execute("UPDATE sheets SET title = ?, text_body = ?, video_url = ?, name_mode = ?, status = 'pending', "
-                    "admin_note = '', reviewed_at = NULL WHERE id = ?", (title, text_body, video, mode, sheet_id))
+        con.execute("UPDATE sheets SET title = ?, text_body = ?, video_url = ?, name_mode = ?, status = ?, "
+                    "admin_note = '', reviewed_at = ? WHERE id = ?",
+                    (title, text_body, video, mode, "pending" if current["replaces_id"] else status,
+                     None if current["replaces_id"] else reviewed, sheet_id))
         dropped = [f["file"] for f in old_files if f["id"] not in keep_ids]
         con.execute("DELETE FROM sheet_files WHERE sheet_id = ?", (sheet_id,))
     con.executemany("INSERT INTO sheet_files (sheet_id, position, file, width, height) VALUES (?, ?, ?, ?, ?)",
                     [(sheet_id, i, name, w, h) for i, (name, w, h) in enumerate(files)])
     con.commit()
     V.remove_unused_media(con, dropped)                 # 修改版還在用原本那份的圖檔時不會刪
-    return RedirectResponse(me_url(request, "sheet_edit_thanks" if original else "sheet_thanks"), status_code=303)
+    revision = con.execute("SELECT * FROM sheets WHERE id = ? AND replaces_id IS NOT NULL", (sheet_id,)).fetchone()
+    if live and revision:
+        publish_sheet_revision(con, revision)
+    key = ("sheet_edit_thanks" if original else "sheet_thanks") + ("_live" if live else "")
+    return RedirectResponse(me_url(request, key), status_code=303)

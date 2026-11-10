@@ -3,7 +3,7 @@
 <div class="card narrow-card wide">
   {% if song.lyrics_slug %}<p class="small" style="margin: 0"><a href="{{ link(lyrics_prefix ~ song.lyrics_slug ~ '/') }}">← {{ tr(song, 'title') }}</a></p>{% endif %}
   <h1>{{ t('sheet_edit') if sheet else t('sheet_submit') }}：{{ tr(song, 'title') }}</h1>
-  {% if sheet %}<p class="flash-front">{{ t('sheet_edit_live_notice') if live else t('sheet_edit_notice') }}</p>{% endif %}
+  {% if sheet and needs_review('sheet') %}<p class="flash-front">{{ t('sheet_edit_live_notice') if live else t('sheet_edit_notice') }}</p>{% endif %}
   <p class="muted small">{{ t('sheets_notice', email=contact_email) }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
   {% if need_login %}

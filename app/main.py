@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import admin, auth, backup, community, db, holidays, i18n, navigation, pagecache, queries as Q, taiwan
+from . import admin, auth, backup, community, db, holidays, i18n, navigation, pagecache, photos, queries as Q, taiwan
 from .web import HERE, as_id, get_con, lang_of, render, venue_url
 
 
@@ -45,6 +45,7 @@ async def lifespan(app):
         db.init(con)
         community.ensure_default_pages(con)
         navigation.add_sheets_link(con)
+        photos.ensure_group_album(con)
     finally:
         con.close()
     yield
@@ -53,7 +54,7 @@ async def lifespan(app):
 class CompressText:
     """網頁、CSS、JS 先壓縮（gzip）再傳，演出頁從 600 多 KB 變成 50KB 左右；瀏覽器收到會自己解開。
     圖片本來就是壓縮過的格式，再壓只是浪費時間，跳過。已經壓好的回應（演出頁快取）也不會再壓一次。"""
-    SKIP = ("/media/", "/images/", "/sheets/thumb/", "/site-icon/", "/favicon")
+    SKIP = ("/media/", "/images/", "/sheets/thumb/", "/site-icon/", "/favicon", "/album/img/", "/album/video/")
 
     def __init__(self, app):
         self.app = app
@@ -93,6 +94,7 @@ async def clear_cache_after_admin_save(request, call_next):
     return response
 app.include_router(admin.router)          # 這兩個都要在下面的萬用路由之前
 app.include_router(community.router)
+app.include_router(photos.router)
 app.add_exception_handler(admin.LoginRequired, admin.login_redirect)
 
 
@@ -154,6 +156,7 @@ def sitemap(request: Request, con=Depends(get_con)):
     lyr = Q.pages_by_kind(con).get("lyrics")
     if lyr and lyr["published"]:
         urls.append(Q.sheets_url(con))
+    urls += photos.sitemap_urls(con)
     body = "".join("<url><loc>%s%s</loc></url><url><loc>%s/en%s</loc></url>" % (base, u, base, u) for u in urls)
     return Response('<?xml version="1.0" encoding="UTF-8"?>'
                     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">%s</urlset>' % body,
@@ -262,6 +265,7 @@ def performances_page(request, con, page, tab="list"):
     rows = Q.performances(con, f)
     cities = Q.cities(con)
     map_cities = map_points(cities, Q.city_counts(con, f))
+    pics = photos.show_photo_counts(con)           # 有照片的場次：列表、行事曆上標 📷
     return render(request, con, "performances.html", dict(stats_context(request, con, tab), **{
         "f": f,
         "groups": month_groups(rows),
@@ -272,21 +276,23 @@ def performances_page(request, con, page, tab="list"):
         "map_cities": map_cities,
         "filtered": any([f["q"], f["city"], f["event_type"], f["date_from"], f["date_to"]]),
         "view": "calendar" if request.query_params.get("view") == "calendar" else "list",
-        "calendar": calendar_data(con, lang_of(request), rows),
+        "calendar": calendar_data(con, lang_of(request), rows, pics),
         "attended": community.attended_ids(con, community.current_visitor(request, con)),
         "attend_counts": community.attendance_counts(con),
+        "photo_counts": pics,
         "tab_shown": shown, "tab_status": status, "previewing": preview,
     }), page=page)
 
 
-def calendar_data(con, lang, rows):
+def calendar_data(con, lang, rows, pics):
     """列表旁邊的行事曆（site.js 畫）：篩選後的每一場，加上這幾年的放假日（紅字）。"""
     this_year = int(Q.today()[:4])
     years = {int(r["event_date"][:4]) for r in rows} | {this_year, this_year + 1}
     return {
         "shows": [{"id": r["id"], "d": r["event_date"], "n": i18n.tr(lang, r, "event_name"),
                    "t": i18n.tr(lang, r, "type_name"), "c": i18n.tr(lang, r, "city_name"),
-                   "v": i18n.tr(lang, r, "venue"), "u": venue_url(r), "s": len(r["setlist"])} for r in rows],
+                   "v": i18n.tr(lang, r, "venue"), "u": venue_url(r), "s": len(r["setlist"]),
+                   "ph": pics.get(r["id"])} for r in rows],
         "holidays": holidays.marks(con, set(range(min(years), max(years) + 1))),
     }
 

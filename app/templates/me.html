@@ -124,12 +124,12 @@
   <div class="contrib-grid">
     <section class="card contrib-card">
       <h2>{{ t('marquee') }}</h2>
-      <p class="small muted">{{ t('contrib_marquee_desc') }}</p>
+      <p class="small muted">{{ t('contrib_marquee_desc_review' if needs_review('marquee') else 'contrib_marquee_desc') }}</p>
       <a class="btn small primary" href="{{ link('/') }}#marquee">{{ t('contrib_marquee_go') }}</a>
     </section>
     <section class="card contrib-card">
       <h2>{{ t('sheets') }}</h2>
-      <p class="small muted">{{ t('contrib_sheet_desc') }}</p>
+      <p class="small muted">{{ t('contrib_sheet_desc' if needs_review('sheet') else 'contrib_sheet_desc_live') }}</p>
       <form class="contrib-pick" method="get" action="{{ link('/contribute/sheet/') }}">
         <select name="song" required aria-label="{{ t('contrib_pick_song') }}">
           <option value="">{{ t('contrib_pick_song') }}</option>
@@ -140,7 +140,7 @@
     </section>
     <section class="card contrib-card">
       <h2>{{ t('contrib_setlist') }}</h2>
-      <p class="small muted">{{ t('contrib_setlist_desc') }}</p>
+      <p class="small muted">{{ t('contrib_setlist_desc' if needs_review('setlist') else 'contrib_setlist_desc_live') }}</p>
       <form class="contrib-pick" method="get" action="{{ link('/contribute/performance/') }}">
         <select name="id" required aria-label="{{ t('contrib_pick_show') }}">
           <option value="">{{ t('contrib_pick_show') }}</option>
@@ -152,8 +152,13 @@
     </section>
     <section class="card contrib-card">
       <h2>{{ t('contrib_show') }}</h2>
-      <p class="small muted">{{ t('contrib_show_desc') }}</p>
+      <p class="small muted">{{ t('contrib_show_desc' if needs_review('show') else 'contrib_show_desc_live') }}</p>
       <a class="btn small primary" href="{{ link('/contribute/show/') }}">{{ t('contrib_show_go') }}</a>
+    </section>
+    <section class="card contrib-card">
+      <h2>{{ t('albums') }}</h2>
+      <p class="small muted">{{ t('album_target_show_hint') }}；{{ t('album_target_group_hint') }}</p>
+      <a class="btn small primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
     </section>
   </div>
 
@@ -162,7 +167,7 @@
   <div class="subs-grid">
     <section class="card"><div class="card-head"><h2>{{ t('marquee') }}</h2></div>
       {% if subs.marquee %}<ul class="plain-list">{% for m in subs.marquee %}
-        <li class="sub-row"><span>{{ status('hidden' if m.hidden else 'visible') }} {{ m.text }} <span class="small muted">· {{ m.created_at[:10] }}</span></span>
+        <li class="sub-row"><span>{{ status('hidden' if m.hidden else ('pending' if needs_review('marquee') and not m.reviewed_at else 'visible')) }} {{ m.text }} <span class="small muted">· {{ m.created_at[:10] }}</span></span>
           <form method="post" action="/me/marquee/{{ m.id }}/delete"><button class="btn small" type="submit" data-confirm="{{ t('marquee_delete_confirm') }}">{{ t('delete') }}</button></form></li>
       {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
     <section class="card"><div class="card-head"><h2>{{ t('sheets') }}</h2></div>
@@ -182,6 +187,12 @@
       {% if subs.setlists %}<ul class="plain-list">{% for c in subs.setlists %}
         <li>{{ status(c.status) }} {{ c.event_date | replace('-', '/') }} {{ c.event_name }} <span class="small muted">· {{ t('contrib_songs_n', n=c.songs) }} · {{ c.created_at[:10] }}</span>
           {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
+    <section class="card"><div class="card-head"><h2>{{ t('album_my_photos') }}</h2></div>
+      {#- 照片在相簿頁點開來就能編輯、刪除 #}
+      {% if my_albums %}<ul class="plain-list">{% for a in my_albums %}
+        <li><a href="{{ a.url }}">{{ a.title }}</a> <span class="small muted">· {{ t('album_my_count', n=a.mine) }}</span>
+          {% if a.hidden %}<span class="chip warn">{{ t('album_my_hidden') }}</span>{% elif a.removed %}<span class="chip warn">{{ t('album_my_removed', n=a.removed) }}</span>{% endif %}</li>
       {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
     <section class="card"><div class="card-head"><h2>{{ t('contrib_show') }}</h2></div>
       {% if subs.shows %}<ul class="plain-list">{% for c in subs.shows %}

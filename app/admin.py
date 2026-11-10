@@ -211,6 +211,7 @@ def dashboard(request: Request, con=Depends(user_required)):
         "pending": pending_counts(con),
         "sheet_delete_requests": con.execute("SELECT COUNT(*) FROM sheets WHERE delete_requested_at IS NOT NULL").fetchone()[0],
         "missing_holidays": holidays.missing_years(con),
+        "unseen_photos": con.execute("SELECT COUNT(*) FROM photos WHERE reviewed_at IS NULL").fetchone()[0],
         "missing_setlists": con.execute(
             "SELECT COUNT(*) FROM performances p WHERE p.event_date <= ? AND NOT EXISTS "
             "(SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id)", (today,)).fetchone()[0],
@@ -1009,6 +1010,17 @@ SETTING_FIELDS = [
               ("home_top_songs_count", "「最近常唱」顯示幾首", "int"),
               ("home_top_songs_window", "「最近常唱」統計最近幾場有歌單的演出", "int"),
               ("home_facts_json", "數字卡片", "facts")]),
+    ("粉絲投稿：要先審核才公開", [
+        ("review_setlist", "補歌單", "bool",
+         "勾選＝送出後先進「投稿審核」，你核准才更新。不勾＝送出就直接換掉那場的歌單（原本的歌單記在那筆投稿裡，可以在「投稿審核」看到）。"),
+        ("review_show", "新增演出", "bool",
+         "不勾＝送出就直接加進演出列表（英文名稱、場地座標之後到「演出與歌單」補）。"),
+        ("review_sheet", "樂譜", "bool", "包括修改已經公開的樂譜。不勾＝送出就公開；不適合的到「投稿審核」下架。"),
+        ("review_marquee", "首頁跑馬燈留言", "bool",
+         "勾選＝留言要你在「投稿審核」按「沒問題」才會出現在首頁。勾選的瞬間，還沒看過的留言也會先從首頁消失。"),
+        ("review_photo", "相簿照片", "bool",
+         "勾選＝照片要你在「相簿」按「沒問題」才公開（上傳的人自己看得到，標著「等待審核」）。勾選的瞬間，還沒看過的照片也會先藏起來。"),
+    ]),
 ]
 
 # 演出頁三個分頁各自的設定：在各分頁的編輯畫面（/admin/tabs/<分頁>）改，跟分頁的狀態一起存
@@ -1113,6 +1125,7 @@ def pending_counts(con):
 def submissions(request: Request, con=Depends(user_required)):
     return page(request, "submissions.html", {
         "nav": "submissions", "kinds": REVIEW_KINDS, "label": _visitor_label,
+        "review": {k: db.review_required(con, k) for k in db.REVIEW_KINDS},
         "pending": {k: review_rows(con, k, True, 500) for k, _ in REVIEW_KINDS},
         "reviewed": {k: review_rows(con, k, False, 50) for k, _ in REVIEW_KINDS},
     })
@@ -1152,9 +1165,30 @@ def contribution_detail(item_id: int, request: Request, con=Depends(user_require
                           (perf["id"],)).fetchall()
     return page(request, "contribution_detail.html", {
         "nav": "submissions", "c": c, "perf": perf, "payload": payload, "fields": fields, "label": _visitor_label(c),
-        "setlist_old": _setlist_lines(con, current),
+        # 已經套用的（核准，或直接公開）：左邊是套用前的歌單，萬一被亂改可以照著改回去
+        "setlist_old": _setlist_lines(con, payload["previous_setlist"] if "previous_setlist" in payload else current),
+        "applied": "previous_setlist" in payload,
         "setlist_new": _setlist_lines(con, payload["setlist"]) if "setlist" in payload else None,
     })
+
+
+def apply_contribution(con, c):
+    """補充的內容套用到演出資料（核准，或設定成不用審核時送出就套用）。有問題回傳原因，呼叫的人負責 commit。
+    套用前把原本的歌單記進那筆投稿（previous_setlist），直接公開時被亂改也找得回來。"""
+    payload = json.loads(c["payload_json"])
+    cols = [f for f in ("event_name", "event_name_en", "venue", "venue_en") if f in payload]
+    if "event_name" in cols and not payload["event_name"].strip():
+        return "活動名稱不能是空白，不能直接套用"
+    if cols:
+        con.execute("UPDATE performances SET %s WHERE id = ?" % ", ".join("%s = ?" % f for f in cols),
+                    [payload[f] for f in cols] + [c["performance_id"]])
+    if "setlist" in payload:
+        payload["previous_setlist"] = [dict(r) for r in con.execute(
+            "SELECT song_id, custom_title, note FROM setlist_items WHERE performance_id = ? ORDER BY position",
+            (c["performance_id"],))]
+        con.execute("UPDATE contributions SET payload_json = ? WHERE id = ?", (json.dumps(payload, ensure_ascii=False), c["id"]))
+        _apply_setlist(con, c["performance_id"], payload["setlist"])
+    return None
 
 
 @router.post("/submissions/contribution/{item_id:int}")
@@ -1165,15 +1199,9 @@ async def contribution_review(item_id: int, request: Request, con=Depends(user_r
     if c["status"] != "pending":
         return done("/admin/submissions/contribution/%d" % item_id, "這筆已經處理過了")
     if form.get("action") == "approve":
-        payload = json.loads(c["payload_json"])
-        cols = [f for f in ("event_name", "event_name_en", "venue", "venue_en") if f in payload]
-        if "event_name" in cols and not payload["event_name"].strip():
-            return done("/admin/submissions/contribution/%d" % item_id, "活動名稱不能是空白，不能直接套用")
-        if cols:
-            con.execute("UPDATE performances SET %s WHERE id = ?" % ", ".join("%s = ?" % f for f in cols),
-                        [payload[f] for f in cols] + [c["performance_id"]])
-        if "setlist" in payload:
-            _apply_setlist(con, c["performance_id"], payload["setlist"])
+        error = apply_contribution(con, c)
+        if error:
+            return done("/admin/submissions/contribution/%d" % item_id, error)
         status, msg = "approved", "已套用到演出資料"
     elif form.get("action") == "reject":
         status, msg = "rejected", "已退回"
@@ -1199,6 +1227,22 @@ def show_submission_detail(item_id: int, request: Request, con=Depends(user_requ
     })
 
 
+def create_show(con, s, data, map_text, note=""):
+    """新演出的投稿 → 一場演出（含附上的歌單），投稿標成已採用。data 是日期、名稱、場地、類型、城市。
+    回傳 (演出 id, 場地位置要提醒的話)。呼叫的人負責 commit。"""
+    data = dict(data)
+    data["map_url"], data["lat"], data["lng"], map_msg = performance_location(con, None, data, map_text)
+    cols = list(data)
+    perf_id = con.execute("INSERT INTO performances (%s) VALUES (%s)" % (", ".join(cols), ", ".join("?" * len(cols))),
+                          [data[c] for c in cols]).lastrowid
+    payload = json.loads(s["payload_json"])
+    if payload.get("setlist"):
+        _apply_setlist(con, perf_id, payload["setlist"])
+    con.execute("UPDATE show_submissions SET status = 'approved', admin_note = ?, performance_id = ?, reviewed_at = ? "
+                "WHERE id = ?", (note, perf_id, db.now(), s["id"]))
+    return perf_id, map_msg
+
+
 @router.post("/submissions/show/{item_id:int}")
 async def show_submission_review(item_id: int, request: Request, con=Depends(user_required)):
     """核准：用管理者在審核畫面改過的內容新增一場演出；退回：只記錄原因。"""
@@ -1222,15 +1266,7 @@ async def show_submission_review(item_id: int, request: Request, con=Depends(use
     if not con.execute("SELECT 1 FROM event_types WHERE id = ?", (data["event_type_id"],)).fetchone() \
             or not con.execute("SELECT 1 FROM cities WHERE id = ?", (data["city_id"],)).fetchone():
         return done(back, "請選類型與城市")
-    data["map_url"], data["lat"], data["lng"], map_msg = performance_location(con, None, data, form.get("map_url"))
-    cols = list(data)
-    perf_id = con.execute("INSERT INTO performances (%s) VALUES (%s)" % (", ".join(cols), ", ".join("?" * len(cols))),
-                          [data[c] for c in cols]).lastrowid
-    payload = json.loads(s["payload_json"])
-    if payload.get("setlist"):
-        _apply_setlist(con, perf_id, payload["setlist"])
-    con.execute("UPDATE show_submissions SET status = 'approved', admin_note = ?, performance_id = ?, reviewed_at = ? "
-                "WHERE id = ?", (note, perf_id, db.now(), item_id))
+    perf_id, map_msg = create_show(con, s, data, form.get("map_url"), note)
     con.commit()
     return done("/admin/performances/%d" % perf_id, "已加入演出列表，可以在這裡繼續補資料"
                 + ("。" + map_msg.replace("已儲存，", "") if map_msg else ""))
@@ -1243,6 +1279,22 @@ def sheet_detail(item_id: int, request: Request, con=Depends(user_required)):
                     (item_id,)).fetchone() or _404()
     files = con.execute("SELECT * FROM sheet_files WHERE sheet_id = ? ORDER BY position", (item_id,)).fetchall()
     return page(request, "sheet_detail.html", {"nav": "submissions", "s": s, "files": files, "label": _visitor_label(s)})
+
+
+def publish_sheet_revision(con, row, note=""):
+    """公開中樂譜的修改版通過（核准，或不用審核時送出就套用）：內容搬進原本那份（網址 /sheets/<id>/ 和讚數不變），
+    修改版那筆刪掉。回傳原本那份的 id。會 commit。"""
+    orig = row["replaces_id"]
+    old_files = [r["file"] for r in con.execute("SELECT file FROM sheet_files WHERE sheet_id = ?", (orig,))]
+    con.execute("UPDATE sheets SET title = ?, text_body = ?, video_url = ?, name_mode = ?, status = 'approved', "
+                "admin_note = ?, reviewed_at = ? WHERE id = ?",
+                (row["title"], row["text_body"], row["video_url"], row["name_mode"], note, db.now(), orig))
+    con.execute("DELETE FROM sheet_files WHERE sheet_id = ?", (orig,))
+    con.execute("UPDATE sheet_files SET sheet_id = ? WHERE sheet_id = ?", (orig, row["id"]))
+    con.execute("DELETE FROM sheets WHERE id = ?", (row["id"],))
+    con.commit()
+    V.remove_unused_media(con, old_files)
+    return orig
 
 
 @router.post("/submissions/sheet/{item_id:int}")
@@ -1263,18 +1315,7 @@ async def sheet_review(item_id: int, request: Request, con=Depends(user_required
         return done("/admin/submissions/sheet/%d" % item_id, "沒有變更")
     row = con.execute("SELECT * FROM sheets WHERE id = ?", (item_id,)).fetchone()
     if status == "approved" and row["replaces_id"]:
-        # 修改版通過：內容搬進原本那份（網址 /sheets/<id>/ 和讚數不變），修改版那筆刪掉
-        orig = row["replaces_id"]
-        old_files = [r["file"] for r in con.execute("SELECT file FROM sheet_files WHERE sheet_id = ?", (orig,))]
-        con.execute("UPDATE sheets SET title = ?, text_body = ?, video_url = ?, name_mode = ?, status = 'approved', "
-                    "admin_note = ?, reviewed_at = ? WHERE id = ?",
-                    (row["title"], row["text_body"], row["video_url"], row["name_mode"],
-                     (form.get("admin_note") or "").strip()[:500], db.now(), orig))
-        con.execute("DELETE FROM sheet_files WHERE sheet_id = ?", (orig,))
-        con.execute("UPDATE sheet_files SET sheet_id = ? WHERE sheet_id = ?", (orig, item_id))
-        con.execute("DELETE FROM sheets WHERE id = ?", (item_id,))
-        con.commit()
-        V.remove_unused_media(con, old_files)
+        orig = publish_sheet_revision(con, row, (form.get("admin_note") or "").strip()[:500])
         return done("/admin/submissions/sheet/%d" % orig, "修改版已套用到公開的樂譜")
     con.execute("UPDATE sheets SET status = ?, admin_note = ?, reviewed_at = ? WHERE id = ?",
                 (status, (form.get("admin_note") or "").strip()[:500], db.now(), item_id))
@@ -1304,6 +1345,66 @@ async def marquee_action(request: Request, con=Depends(user_required)):
     con.commit()
     back = form.get("back") or ""
     return done(back if back.startswith("/admin/") else "/admin/marquee")
+
+
+# ==================================================================== 相簿：只能下架（不能刪；照片只有上傳的人自己能刪）
+PHOTO_VIEWS = {"new": "還沒看過", "all": "全部", "removed": "已下架", "albums": "相簿"}
+
+
+@router.get("/photos")
+def photos_admin(request: Request, con=Depends(user_required)):
+    from . import photos as P
+    unseen = con.execute("SELECT COUNT(*) FROM photos WHERE reviewed_at IS NULL").fetchone()[0]
+    show = request.query_params.get("show")
+    show = show if show in PHOTO_VIEWS else ("new" if unseen else "all")
+    rows, albums = [], []
+    if show == "albums":
+        albums = [dict(a, title_shown=P.album_title("zh", a), url=P.album_url(a), creator=_visitor_label(dict(a, banned=0))
+                       if a["google_name"] is not None else "（站方或已刪除的帳號）")
+                  for a in con.execute(P.album_select(con) + " WHERE a.kind != 'group' ORDER BY a.updated_at DESC LIMIT 500")]
+    else:
+        where = {"new": "ph.reviewed_at IS NULL", "all": "1", "removed": "ph.status = 'removed'"}[show]
+        rows = [dict(r, album_shown=P.album_title("zh", dict(r, kind=r["album_kind"], event_name=r["a_event_name"],
+                                                              event_name_en=r["a_event_name_en"], title=r["album_title"],
+                                                              title_en=r["album_title_en"])),
+                     album_link=P.album_url(dict(kind=r["album_kind"], performance_id=r["album_performance_id"], id=r["album_id"])))
+                for r in con.execute("""
+            SELECT ph.*, v.google_name, v.nickname, v.banned, a.kind AS album_kind, a.title AS album_title,
+                   a.title_en AS album_title_en, a.performance_id AS album_performance_id, a.hidden AS album_hidden,
+                   ap.event_name AS a_event_name, ap.event_name_en AS a_event_name_en, p.event_date, p.event_name
+            FROM photos ph JOIN photo_albums a ON a.id = ph.album_id LEFT JOIN visitors v ON v.id = ph.visitor_id
+            LEFT JOIN performances p ON p.id = ph.performance_id LEFT JOIN performances ap ON ap.id = a.performance_id
+            WHERE %s ORDER BY ph.created_at DESC, ph.id DESC LIMIT 300""" % where)]
+    return page(request, "photos.html", {"nav": "photos", "show": show, "views": PHOTO_VIEWS, "unseen": unseen,
+                                         "rows": rows, "albums": albums, "label": _visitor_label,
+                                         "review": db.review_required(con, "photo")})
+
+
+@router.post("/photos")
+async def photos_action(request: Request, con=Depends(user_required)):
+    form = await request.form()
+    action, item = form.get("action"), as_int(form.get("id"))
+    now = db.now()
+    msg = "已儲存"
+    if action == "ok":
+        con.execute("UPDATE photos SET reviewed_at = ? WHERE id = ?", (now, item))
+    elif action == "all_ok":
+        con.execute("UPDATE photos SET reviewed_at = ? WHERE reviewed_at IS NULL", (now,))
+        msg = "全部標成看過了"
+    elif action == "remove":
+        con.execute("UPDATE photos SET status = 'removed', admin_note = ?, reviewed_at = COALESCE(reviewed_at, ?) WHERE id = ?",
+                    ((form.get("admin_note") or "").strip()[:300], now, item))
+        msg = "已下架（上傳的人自己還看得到，也可以自己刪掉）"
+    elif action == "restore":
+        con.execute("UPDATE photos SET status = 'live', admin_note = '', reviewed_at = COALESCE(reviewed_at, ?) WHERE id = ?",
+                    (now, item))
+        msg = "已恢復公開"
+    elif action in ("album_hide", "album_show"):
+        con.execute("UPDATE photo_albums SET hidden = ? WHERE id = ? AND kind != 'group'", (1 if action == "album_hide" else 0, item))
+        msg = "整本相簿已下架" if action == "album_hide" else "相簿已恢復公開"
+    con.commit()
+    back = form.get("back") or ""
+    return done(back if back.startswith("/admin/") else "/admin/photos", msg)
 
 
 @router.get("/visitors")

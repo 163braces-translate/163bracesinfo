@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_album.html" as al with context %}
+{% block content %}
+<div class="page-head album-head">
+  <div>
+    <h1>{{ t('albums') }}</h1>
+    <p class="intro">{{ t('album_intro') }}</p>
+  </div>
+  <a class="btn primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+</div>
+{% if msg %}<p class="flash-ok" role="status">{{ msg }}</p>{% endif %}
+
+{#- 合照：置頂 #}
+<section class="card group-card" aria-labelledby="h-group">
+  <div class="card-head">
+    <h2 id="h-group"><span class="pin" aria-hidden="true">📌</span> <a href="{{ group.url }}">{{ group.title }}</a> <small class="muted">{{ t('album_count', n=group.n) }}</small></h2>
+    <span class="group-actions">
+      <a class="btn small" href="{{ link('/album/upload/?to=group') }}">{{ t('album_upload_group') }}</a>
+      <a class="more" href="{{ group.url }}">{{ t('album_see_all') }} →</a>
+    </span>
+  </div>
+  <p class="small muted" style="margin-top: -6px">{{ t('album_group_intro') }}</p>
+  {% if recent_group %}
+    <ul class="group-strip">
+      {% for p in recent_group %}
+        <li><a href="{{ group.url }}#p{{ p.id }}"><img src="{{ p.thumb }}" alt="{{ p.caption }}" loading="lazy">{% if p.media != 'image' %}<span class="ph-play" aria-hidden="true"></span>{% endif %}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+
+<section class="album-section" aria-labelledby="h-shows">
+  <div class="card-head"><h2 id="h-shows">{{ t('album_show_albums') }}</h2><span class="small muted">{{ t('album_show_albums_hint') }}</span></div>
+  {% if show_albums %}
+    {% for year, cards in show_albums | groupby('year') | reverse %}
+      <h3 class="month-head">{{ year }}</h3>
+      {{ al.album_cards(cards) }}
+    {% endfor %}
+  {% else %}<p class="empty">{{ t('album_none_yet') }}</p>{% endif %}
+</section>
+
+<section class="album-section" aria-labelledby="h-custom">
+  <div class="card-head"><h2 id="h-custom">{{ t('album_custom_albums') }}</h2><span class="small muted">{{ t('album_custom_hint') }}</span></div>
+  {% if custom_albums %}{{ al.album_cards(custom_albums) }}{% else %}<p class="empty">{{ t('album_none_yet') }}</p>{% endif %}
+</section>
+{% endblock %}

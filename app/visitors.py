@@ -42,7 +42,7 @@ STATE_COOKIE = "oauth_state"
 SESSION_DAYS = 60
 
 # 每個人 24 小時內最多投幾次，避免洗版
-DAILY_LIMITS = {"marquee": 3, "contribution": 10, "sheet": 5, "show": 5}
+DAILY_LIMITS = {"marquee": 3, "contribution": 10, "sheet": 5, "show": 5, "photo": 60, "album": 5}
 MARQUEE_MAX_UNITS = 30
 MARQUEE_MAX_CHARS = 120        # 單位怎麼算都不能超過的總字元數（擋掉一堆符號、表情）
 
@@ -164,9 +164,13 @@ def delete_visitor(con, visitor_id):
     """刪除帳號：連同去過的場次、喜歡的歌、跑馬燈、投稿、樂譜圖檔一起刪掉。已經被核准套用的演出資料不會回復。"""
     files = [r["file"] for r in con.execute(
         "SELECT f.file FROM sheet_files f JOIN sheets s ON s.id = f.sheet_id WHERE s.visitor_id = ?", (visitor_id,))]
+    from . import photos
+    own_photos = con.execute("SELECT id, file FROM photos WHERE visitor_id = ?", (visitor_id,)).fetchall()
     con.execute("DELETE FROM visitors WHERE id = ?", (visitor_id,))      # 其他表都是 ON DELETE CASCADE
+    photos.drop_empty_albums(con)                                       # 他建的相簿裡只有他的照片：整本一起刪
     con.commit()
     remove_media(files)
+    photos.remove_files(own_photos)
 
 
 def delete_sheet(con, sheet_id):
@@ -215,7 +219,8 @@ def text_units(text):
 
 
 def over_daily_limit(con, kind, visitor_id):
-    table = {"marquee": "marquee_posts", "contribution": "contributions", "sheet": "sheets", "show": "show_submissions"}[kind]
+    table = {"marquee": "marquee_posts", "contribution": "contributions", "sheet": "sheets", "show": "show_submissions",
+             "photo": "photos", "album": "photo_albums"}[kind]
     since = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat(timespec="seconds")
     n = con.execute("SELECT COUNT(*) FROM %s WHERE visitor_id = ? AND created_at >= ?" % table,
                     (visitor_id, since)).fetchone()[0]

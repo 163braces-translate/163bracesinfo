@@ -319,3 +319,16 @@ a.ttitle:hover { color: var(--primary); }
 .venue-table .venue-link-cell { min-width: 280px; width: 50%; }
 .venue-table .venue-link-cell input[type=text] { width: 100%; }
 .sticky-actions { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 35%); text-align: right; }
+
+/* ---- 相簿（/admin/photos） */
+.status-filter a { font-size: .85rem; padding: 6px 14px; border-radius: 999px; color: var(--muted); text-decoration: none; }
+.status-filter a b { font-weight: 500; margin-left: 2px; }
+.status-filter a[aria-current=page] { background: var(--surface); color: var(--primary-strong); box-shadow: var(--shadow); }
+.photo-admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.photo-admin { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.photo-admin .pa-thumb { position: relative; display: block; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.photo-admin .pa-thumb img, .photo-admin .pa-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-admin .pa-thumb .chip { position: absolute; left: 6px; top: 6px; }
+.photo-admin.warn-row .pa-thumb { opacity: .5; }
+.pa-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.pa-actions input[type=text] { flex: 1 1 100%; font-size: .85rem; padding: 6px 8px; }

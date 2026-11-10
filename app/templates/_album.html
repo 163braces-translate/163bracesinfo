@@ -1,0 +1,70 @@
+{#- 相簿共用的小元件（photos.py 的頁面） -#}
+
+{#- 照片格子：點了用燈箱看（album.js 讀 #photo-data）；沒有 JavaScript 就直接開大圖 #}
+{% macro grid(items) %}
+<ul class="ph-grid">
+  {% for p in items %}
+    <li class="ph-tile {{ 'removed' if p.removed or p.pending }}" id="p{{ p.id }}">
+      <a href="{{ p.full or p.video or ('https://youtu.be/' ~ p.yt) }}" data-photo="{{ p.id }}"
+         aria-label="{{ p.caption or (t('album_video') if p.media != 'image' else t('album_photo')) }}">
+        {% if p.media == 'video' %}<video src="{{ p.video }}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video>
+        {% else %}<img src="{{ p.thumb }}" alt="" loading="lazy">{% endif %}
+        {% if p.media != 'image' %}<span class="ph-play" aria-hidden="true"></span>{% endif %}
+        {% if p.removed %}<span class="ph-flag">{{ t('album_removed') }}</span>{% elif p.pending %}<span class="ph-flag">{{ t('album_pending') }}</span>{% endif %}
+      </a>
+    </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro album_cards(cards) %}
+<div class="album-grid">
+  {% for a in cards %}
+    <a class="album-card" href="{{ a.url }}">
+      <span class="album-cover">{% if a.cover %}<img src="{{ a.cover }}" alt="" loading="lazy">{% endif %}</span>
+      <span class="album-body">
+        <b>{{ a.title }}</b>
+        <span class="small muted">{% if a.kind == 'show' %}{{ a.date }} · {% endif %}{{ t('album_count', n=a.n) }}</span>
+        {% if a.show %}<span class="small muted album-show">🎤 {{ a.show }}</span>{% endif %}
+        {% if a.kind == 'custom' and a.by %}<span class="small muted">{{ t('album_by', name=a.by) }}</span>{% endif %}
+      </span>
+    </a>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{#- 挑場次：跟演出列表一樣的篩選（關鍵字、類型、城市、日期），album.js 畫在下拉選單的位置。
+    沒有 JavaScript 時就是一般的下拉選單。資料放在頁面上的 #picker-data（picker_data()）。 #}
+{% macro picker(name, selected=None, required=False, id='') %}
+<div class="show-picker" data-show-picker data-required="{{ '1' if required }}"
+     data-none="{{ t('album_pick_none') }}" data-change="{{ t('album_pick_change') }}" data-clear="{{ t('album_pick_clear') }}"
+     data-search="{{ t('search_placeholder') }}" data-type="{{ t('type') }}" data-city="{{ t('city') }}"
+     data-from="{{ t('from') }}" data-to="{{ t('to') }}" data-count="{{ t('results', n='{n}') }}"
+     data-more="{{ t('album_pick_more', n='{n}') }}" data-empty="{{ t('no_results') }}" data-lang="{{ lang }}">
+  <select name="{{ name }}" {% if id %}id="{{ id }}"{% endif %} data-picker-select {{ 'required' if required }}>
+    <option value="">{{ t('album_pick_none') }}</option>
+    {% for s in shows %}<option value="{{ s.id }}" {{ 'selected' if s.id == selected }}>{{ s.d | replace('-', '/') }} {{ s.n }}</option>{% endfor %}
+  </select>
+</div>
+{% endmacro %}
+
+{% macro picker_data() %}
+<script type="application/json" id="picker-data">{{ {'shows': shows, 'types': picker_types, 'cities': picker_cities} | tojson }}</script>
+{% endmacro %}
+
+{% macro sign_as(mode) %}
+<div class="radio-row">
+  {% if visitor and visitor.nickname %}<label><input type="radio" name="name_mode" value="nickname" {{ 'checked' if mode == 'nickname' }}> {{ t('name_nickname') }}（{{ visitor.nickname }}）</label>{% endif %}
+  <label><input type="radio" name="name_mode" value="google" {{ 'checked' if mode == 'google' or (mode == 'nickname' and not (visitor and visitor.nickname)) }}> {{ t('name_google') }}{% if visitor %}（{{ visitor.google_name }}）{% endif %}</label>
+  <label><input type="radio" name="name_mode" value="anonymous" {{ 'checked' if mode == 'anonymous' }}> {{ t('name_anonymous') }}</label>
+</div>
+{% endmacro %}
+
+{#- 燈箱的文字（album.js） #}
+{% macro lightbox() %}
+<div class="lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="{{ t('album_photo') }}"
+     data-close="{{ t('close') }}" data-prev="{{ t('cal_prev') }}" data-next="{{ t('cal_next') }}"
+     data-by="{{ t('album_uploaded_by', name='{name}') }}" data-original="{{ t('album_original') }}"
+     data-edit="{{ t('edit') }}" data-delete="{{ t('delete') }}" data-confirm="{{ t('album_delete_confirm') }}"
+     data-removed="{{ t('album_removed_note', note='{note}') }}" data-removed-plain="{{ t('album_removed_plain') }}" data-pending="{{ t('album_pending_note') }}"></div>
+{% endmacro %}

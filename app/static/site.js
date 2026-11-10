@@ -247,6 +247,7 @@ window.doughnutTopLabels = {
         '<div class="n">' + esc(s.n) + "</div>" +
         '<div class="m">' + esc(s.c) + (venue ? " · " + venue : "") + "</div>" +
         '<div class="perf-extra">' + (s.s ? '<span class="chip blue">♪ ' + esc(cd.songs.replace("{n}", s.s)) + "</span>" : "") +
+        (s.ph != null ? '<a class="chip photo-chip" href="' + esc(cd.photoUrl + s.id + "/") + '">📷 ' + (s.ph ? s.ph : esc(cd.photos)) + "</a>" : "") +
         '<a class="small" href="#" data-goto="' + s.id + '">' + esc(cd.toList) + " →</a></div></article>";
     };
 
@@ -647,7 +648,9 @@ window.doughnutTopLabels = {
     mform.addEventListener("submit", function (e) {
       e.preventDefault();
       status.textContent = "";
-      postJSON("/api/marquee", new FormData(mform)).then(function () {
+      postJSON("/api/marquee", new FormData(mform)).then(function (data) {
+        // 後台設定成要先審核：首頁還不會出現，不用重新整理
+        if (data.pending) { status.textContent = mform.dataset.pending; input.value = ""; update(); return; }
         status.textContent = mform.dataset.sent;
         setTimeout(function () { location.reload(); }, 700);
       }).catch(function (err) { if (err.message !== "login") status.textContent = err.message; });

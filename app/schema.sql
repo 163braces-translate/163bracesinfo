@@ -320,3 +320,47 @@ CREATE TABLE IF NOT EXISTS calendar_years (
     url         TEXT NOT NULL DEFAULT '',
     fetched_at  TEXT NOT NULL
 );
+
+-- ==================================================================== 相簿（app/photos.py）
+-- 跟曲庫的 albums（音樂專輯）無關。粉絲上傳就公開（不用先審），管理者事後可以「下架」，不能刪；
+-- 照片只有上傳的人自己能刪。
+-- kind：show   演出相簿：一場演出一本，第一次有人選那場上傳時自動建立（標題就是演出名稱）
+--       custom 自訂相簿：粉絲自己取名，整本可以選連結到某一場；裡面每張照片也可以各自連到某一場
+--       group  合照：全站只有一本，在相簿首頁置頂；照片一律要選是哪一場，只有這裡能傳影片、貼 YouTube
+CREATE TABLE IF NOT EXISTS photo_albums (
+    id              INTEGER PRIMARY KEY,
+    kind            TEXT NOT NULL CHECK (kind IN ('show', 'custom', 'group')),
+    title           TEXT NOT NULL DEFAULT '',     -- 演出相簿留空（顯示演出名稱）
+    title_en        TEXT NOT NULL DEFAULT '',
+    description     TEXT NOT NULL DEFAULT '',
+    performance_id  INTEGER REFERENCES performances(id) ON DELETE SET NULL,
+    visitor_id      INTEGER REFERENCES visitors(id) ON DELETE SET NULL,   -- 建立的人：空白＝站方建立或帳號已刪除
+    name_mode       TEXT NOT NULL DEFAULT 'nickname' CHECK (name_mode IN ('google', 'nickname', 'anonymous')),
+    hidden          INTEGER NOT NULL DEFAULT 0,   -- 1＝管理者下架整本
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL                 -- 最後一次有人上傳；自訂相簿照這個排序
+);
+CREATE UNIQUE INDEX IF NOT EXISTS photo_albums_show ON photo_albums(performance_id) WHERE kind = 'show';
+
+-- media：image 照片（重新編碼成 JPEG，去掉 GPS 等拍攝資訊）、video 影片檔（原檔）、youtube 嵌入
+-- status：live 公開、removed 管理者下架（上傳的人自己還看得到，附上 admin_note 原因）
+CREATE TABLE IF NOT EXISTS photos (
+    id              INTEGER PRIMARY KEY,
+    album_id        INTEGER NOT NULL REFERENCES photo_albums(id) ON DELETE CASCADE,
+    visitor_id      INTEGER REFERENCES visitors(id) ON DELETE CASCADE,
+    performance_id  INTEGER REFERENCES performances(id) ON DELETE SET NULL,
+    media           TEXT NOT NULL DEFAULT 'image' CHECK (media IN ('image', 'video', 'youtube')),
+    file            TEXT NOT NULL DEFAULT '',     -- 相對 MEDIA_ROOT，例：photos/ab12cd.jpg
+    youtube_id      TEXT NOT NULL DEFAULT '',
+    width           INTEGER,
+    height          INTEGER,
+    caption         TEXT NOT NULL DEFAULT '',
+    name_mode       TEXT NOT NULL DEFAULT 'nickname' CHECK (name_mode IN ('google', 'nickname', 'anonymous')),
+    status          TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'removed')),
+    admin_note      TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    reviewed_at     TEXT                          -- 管理者在後台「相簿」看過；空白＝還沒看過
+);
+CREATE INDEX IF NOT EXISTS photos_album ON photos(album_id, status, created_at);
+CREATE INDEX IF NOT EXISTS photos_performance ON photos(performance_id, status);
+CREATE INDEX IF NOT EXISTS photos_visitor ON photos(visitor_id, created_at);

@@ -105,7 +105,7 @@
     <div class="cal" data-calendar data-lang="{{ lang }}" data-today="{{ today }}" data-month="{{ request.query_params.get('month', '') }}"
          data-prev="{{ t('cal_prev') }}" data-next="{{ t('cal_next') }}" data-this-month="{{ t('cal_this_month') }}"
          data-month-all="{{ t('cal_month_all') }}" data-none="{{ t('cal_none') }}" data-more="{{ t('cal_more', n='{n}') }}"
-         data-to-list="{{ t('cal_to_list') }}" data-songs="{{ t('cal_songs', n='{n}') }}" data-soon="{{ t('soon') }}"
+         data-to-list="{{ t('cal_to_list') }}" data-photos="{{ t('album_photos_of_show') }}" data-photo-url="{{ link('/album/show/') }}" data-songs="{{ t('cal_songs', n='{n}') }}" data-soon="{{ t('soon') }}"
          {{ 'hidden' if view != 'calendar' }}></div>
     <script type="application/json" id="cal-data">{{ calendar | tojson }}</script>
 
@@ -125,9 +125,14 @@
       <div class="perf-extra">
         {% if login_available %}{{ attend_button(p) }}{% endif %}
         <span class="muted small" data-attend-count="{{ p.id }}" data-label="{{ t('fans_attended', n='{n}') }}">{% if attend_counts.get(p.id) %}{{ t('fans_attended', n=attend_counts[p.id]) }}{% endif %}</span>
-        {% if p.event_date < today %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>{% endif %}
+        {% if p.event_date < today %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>
+          <a class="small" href="{{ link('/album/upload/?to=show&show=' ~ p.id) }}">{{ t('album_add_photos') }}</a>{% endif %}
       </div>
     {% endmacro %}
+    {#- 有照片（或有自訂相簿連到這場）：跟歌單的 ♪ 一樣標一個 📷，連到這場的照片 #}
+    {% macro photo_chip(p) -%}
+      {% if p.id in photo_counts %}<a class="chip photo-chip" href="{{ link('/album/show/' ~ p.id ~ '/') }}" title="{{ t('album_photos_of_show') }}" aria-label="{{ t('album_photos_of_show') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13.5" r="3.5"/></svg>{% if photo_counts[p.id] %}{{ photo_counts[p.id] }}{% endif %}</a>{% endif %}
+    {%- endmacro %}
     {% macro setlist_block(p) %}
       <div class="setlist-content">
         {% if p.setlist_order_uncertain %}<p class="uncertain">⚠️ {{ t('order_uncertain') }}</p>{% endif %}
@@ -161,6 +166,7 @@
               {% else %}{{ tr(p, 'event_name') }}
                 {% if not soon %}<a class="add-setlist" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('add_setlist') }}</a>{% endif %}
               {% endif %}
+              {{ photo_chip(p) }}
               {% if soon %} <span class="chip blue">{{ t('soon') }}</span>{% endif %}
             </td>
             <td><span class="chip">{{ tr(p, 'type_name') }}</span></td>
@@ -191,6 +197,7 @@
                 <span class="d">{{ p.event_date[5:] | replace('-', '/') }} ({{ weekday(p.event_date) }})</span>
                 <span class="chip">{{ tr(p, 'type_name') }}</span>
                 {% if soon %}<span class="chip blue">{{ t('soon') }}</span>{% endif %}
+                {{ photo_chip(p) }}
               </div>
               <div class="n">{{ tr(p, 'event_name') }}</div>
               <div class="m">{{ tr(p, 'city_name') }}{% if tr(p, 'venue') %} · {{ m.venue(p, tr(p, 'venue')) }}{% endif %}</div>

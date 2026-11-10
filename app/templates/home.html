@@ -50,7 +50,7 @@
   <details class="marquee-compose" id="marquee">
     <summary class="btn small">✎ {{ t('marquee_post') }}</summary>
     {% if visitor and not guest %}
-      <form class="marquee-form" data-marquee-form data-max="{{ marquee_max }}" data-sent="{{ t('marquee_sent') }}">
+      <form class="marquee-form" data-marquee-form data-max="{{ marquee_max }}" data-sent="{{ t('marquee_sent') }}" data-pending="{{ t('marquee_sent_pending') }}">
         <input type="text" name="text" maxlength="120" required placeholder="{{ t('marquee_placeholder', n=marquee_max) }}" aria-label="{{ t('marquee_post') }}">
         <div class="marquee-form-row">
           <span class="small muted" data-units data-label="{{ t('units_left', n='{n}') }}" data-over="{{ t('units_over', n='{n}') }}"></span>
