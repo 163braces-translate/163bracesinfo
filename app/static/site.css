@@ -963,3 +963,4 @@ body.lb-open { overflow: hidden; }
 /* 暫停投稿：投稿按鈕變灰（_macros.html 的 closed_button） */
 .closed-submit { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; pointer-events: none; }
+[data-upload-note]:empty { display: none; }   /* 還沒選檔案時不佔位置 */

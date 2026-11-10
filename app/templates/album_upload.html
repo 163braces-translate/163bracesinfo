@@ -52,6 +52,7 @@
     <label class="field" for="u-files">{{ t('album_files', n=max_items) }}</label>
     <input type="file" id="u-files" name="files" multiple accept="image/*" data-files
            data-accept-photo="image/*" data-accept-group="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">
+    <p class="small muted" style="margin: 2px 0 0">{{ t('album_compress_note') }}</p>
     <p class="small muted" data-for="group">{{ t('album_video_help', mb=video_mb) }}</p>
     <ul class="upload-previews" data-previews hidden></ul>
     <p class="small muted" data-upload-note role="status"></p>
