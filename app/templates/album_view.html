@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_album.html" as al with context %}
+{% import "_macros.html" as m %}
 {% block content %}
 <p class="crumbs small"><a href="{{ link('/album/') }}">← {{ t('albums') }}</a></p>
 <div class="page-head album-head">
@@ -20,8 +21,10 @@
     {% endif %}
   </div>
   <span class="album-actions">
-    {% if kind == 'show' %}<a class="btn" href="{{ group_upload_url }}">{{ t('album_upload_group') }}</a>{% endif %}
-    <a class="btn primary" href="{{ upload_url }}">{{ t('album_upload_here') }}</a>
+    {% if can_submit('photo') %}
+      {% if kind == 'show' %}<a class="btn" href="{{ group_upload_url }}">{{ t('album_upload_group') }}</a>{% endif %}
+      <a class="btn primary" href="{{ upload_url }}">{{ t('album_upload_here') }}</a>
+    {% else %}{{ m.closed_button(t('album_upload_here'), t('submit_closed'), 'btn') }}{% endif %}
   </span>
 </div>
 {% if msg %}<p class="flash-ok" role="status">{{ msg }}</p>{% endif %}
@@ -44,7 +47,7 @@
 {% endif %}
 
 {% if not sections and not linked_albums %}
-  <p class="empty">{{ t('album_empty_show') if kind == 'show' else t('album_empty') }}</p>
+  <p class="empty">{{ t('album_empty_show') if kind == 'show' and can_submit('photo') else t('album_empty') }}</p>
 {% endif %}
 
 {{ al.lightbox() }}

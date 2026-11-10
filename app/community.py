@@ -210,6 +210,11 @@ def submit_block(request, visitor):
     return None
 
 
+def closed(request, con, kind):
+    """後台把這種投稿暫停了（設定 → 粉絲投稿：開放投稿）：回傳要給使用者看的話，開放中回傳 None。"""
+    return None if db.submissions_open(con, kind) else T(request, "submit_closed_long")
+
+
 @router.post("/auth/logout")
 def logout(request: Request, con=Depends(get_con)):
     check_post(request)
@@ -697,7 +702,9 @@ async def post_marquee(request: Request, con=Depends(get_con)):
     text = " ".join((form.get("text") or "").split())         # 換行、連續空白收成一個空白
     mode = form.get("name_mode") if form.get("name_mode") in V.NAME_MODES else "nickname"
     units = V.text_units(text)
-    if submit_block(request, visitor):
+    if closed(request, con, "marquee"):
+        error = closed(request, con, "marquee")
+    elif submit_block(request, visitor):
         error = submit_block(request, visitor)
     elif not text or not units:
         error = T(request, "marquee_empty")
@@ -764,8 +771,9 @@ async def contribute_performance(performance_id: int, request: Request, con=Depe
 
     def fail(key):
         return RedirectResponse(back + "?error=" + quote(T(request, key)), status_code=303)
-    if submit_block(request, visitor):
-        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
+    blocked = submit_block(request, visitor) or closed(request, con, "setlist")
+    if blocked:
+        return RedirectResponse(back + "?error=" + quote(blocked), status_code=303)
     # 現有的演出只收歌單；名稱、地點有錯請寫在「給管理者的話」
     payload = {}
     new_setlist = (form.get("setlist") or "").strip()
@@ -818,8 +826,9 @@ async def contribute_show(request: Request, con=Depends(get_con)):
 
     def fail(key, **kw):
         return RedirectResponse(back + "?error=" + quote(T(request, key, **kw)), status_code=303)
-    if submit_block(request, visitor):
-        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
+    blocked = submit_block(request, visitor) or closed(request, con, "show")
+    if blocked:
+        return RedirectResponse(back + "?error=" + quote(blocked), status_code=303)
     date = (form.get("event_date") or "").strip()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         return fail("show_need_date")
@@ -1057,8 +1066,9 @@ async def save_sheet(request, con, visitor, song_id, original, current=None):
 
     def fail(key, **kw):
         return RedirectResponse(back + "?error=" + quote(T(request, key, **kw)), status_code=303)
-    if submit_block(request, visitor):
-        return RedirectResponse(back + "?error=" + quote(submit_block(request, visitor)), status_code=303)
+    blocked = submit_block(request, visitor) or closed(request, con, "sheet")
+    if blocked:
+        return RedirectResponse(back + "?error=" + quote(blocked), status_code=303)
     title = (form.get("title") or "").strip()[:80]
     text_body = (form.get("text_body") or "").strip()[:20000]
     video = (form.get("video_url") or "").strip()[:500]

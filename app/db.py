@@ -60,6 +60,12 @@ SETTINGS = {
     "home_show_facts": "0",
     "home_show_articles": "0",
     "lyrics_other_position": "",        # 歌詞索引「其他歌詞」排在第幾張專輯後面；空白＝最後
+    # 開放哪些投稿（後台「設定 → 粉絲投稿」）。0＝暫停：已經有的照樣顯示，只是不能再投（按鈕變灰）
+    "submit_setlist": "1",
+    "submit_show": "1",
+    "submit_sheet": "1",
+    "submit_marquee": "1",
+    "submit_photo": "1",
     # 粉絲投稿要不要先審核才公開（後台「設定 → 粉絲投稿」）。1＝先審、0＝送出就公開
     "review_setlist": "1",              # 補歌單：0＝送出就直接換掉那場的歌單
     "review_show": "1",                 # 新增演出：0＝送出就直接加進演出列表
@@ -144,6 +150,11 @@ def status_after(action, current, is_new):
 def get_setting(con, key):
     row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else SETTINGS.get(key, "")
+
+
+def submissions_open(con, kind):
+    """這種投稿目前開放嗎（kind 見 REVIEW_KINDS）。"""
+    return get_setting(con, "submit_" + kind) != "0"
 
 
 def review_required(con, kind):

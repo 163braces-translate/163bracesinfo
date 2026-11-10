@@ -81,7 +81,8 @@ def render(request, con, name, ctx=None, status=200, page=None):
         "alt_url": alt,
         "page": page,
         "today": Q.today(),
-        "needs_review": partial(db.review_required, con),   # 投稿要不要先審核（後台「設定 → 粉絲投稿」），說明文字跟著變
+        "needs_review": partial(db.review_required, con),
+        "can_submit": partial(db.submissions_open, con),     # 暫停投稿的：投稿按鈕變灰、表單鎖住   # 投稿要不要先審核（後台「設定 → 粉絲投稿」），說明文字跟著變
     }
     context.update(ctx or {})
     return templates.TemplateResponse(request, name, context, status_code=status)

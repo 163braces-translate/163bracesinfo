@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
 <div class="page-head me-head">
   {% if visitor.avatar_url %}<img class="avatar" src="{{ visitor.avatar_url }}" alt="" referrerpolicy="no-referrer">{% endif %}
@@ -125,22 +126,25 @@
     <section class="card contrib-card">
       <h2>{{ t('marquee') }}</h2>
       <p class="small muted">{{ t('contrib_marquee_desc_review' if needs_review('marquee') else 'contrib_marquee_desc') }}</p>
-      <a class="btn small primary" href="{{ link('/') }}#marquee">{{ t('contrib_marquee_go') }}</a>
+      {% if can_submit('marquee') %}<a class="btn small primary" href="{{ link('/') }}#marquee">{{ t('contrib_marquee_go') }}</a>
+      {% else %}{{ m.closed_button(t('contrib_marquee_go'), t('submit_closed')) }}{% endif %}
     </section>
     <section class="card contrib-card">
       <h2>{{ t('sheets') }}</h2>
       <p class="small muted">{{ t('contrib_sheet_desc' if needs_review('sheet') else 'contrib_sheet_desc_live') }}</p>
+      {% if not can_submit('sheet') %}{{ m.closed_button(t('contrib_next'), t('submit_closed')) }}{% else %}
       <form class="contrib-pick" method="get" action="{{ link('/contribute/sheet/') }}">
         <select name="song" required aria-label="{{ t('contrib_pick_song') }}">
           <option value="">{{ t('contrib_pick_song') }}</option>
           {% for a in choices.albums %}<optgroup label="{{ tr(a, 'name') }}">{% for g in a.songs %}<option value="{{ g.id }}">{{ tr(g, 'title') }}</option>{% endfor %}</optgroup>{% endfor %}
         </select>
         <button class="btn small primary" type="submit">{{ t('contrib_next') }}</button>
-      </form>
+      </form>{% endif %}
     </section>
     <section class="card contrib-card">
       <h2>{{ t('contrib_setlist') }}</h2>
       <p class="small muted">{{ t('contrib_setlist_desc' if needs_review('setlist') else 'contrib_setlist_desc_live') }}</p>
+      {% if not can_submit('setlist') %}{{ m.closed_button(t('contrib_next'), t('submit_closed')) }}{% else %}
       <form class="contrib-pick" method="get" action="{{ link('/contribute/performance/') }}">
         <select name="id" required aria-label="{{ t('contrib_pick_show') }}">
           <option value="">{{ t('contrib_pick_show') }}</option>
@@ -148,17 +152,19 @@
           {% if choices.with_setlist %}<optgroup label="{{ t('contrib_has_setlist') }}">{% for s in choices.with_setlist %}{{ show_option(s) }}{% endfor %}</optgroup>{% endif %}
         </select>
         <button class="btn small primary" type="submit">{{ t('contrib_next') }}</button>
-      </form>
+      </form>{% endif %}
     </section>
     <section class="card contrib-card">
       <h2>{{ t('contrib_show') }}</h2>
       <p class="small muted">{{ t('contrib_show_desc' if needs_review('show') else 'contrib_show_desc_live') }}</p>
-      <a class="btn small primary" href="{{ link('/contribute/show/') }}">{{ t('contrib_show_go') }}</a>
+      {% if can_submit('show') %}<a class="btn small primary" href="{{ link('/contribute/show/') }}">{{ t('contrib_show_go') }}</a>
+      {% else %}{{ m.closed_button(t('contrib_show_go'), t('submit_closed')) }}{% endif %}
     </section>
     <section class="card contrib-card">
       <h2>{{ t('albums') }}</h2>
       <p class="small muted">{{ t('album_target_show_hint') }}；{{ t('album_target_group_hint') }}</p>
-      <a class="btn small primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+      {% if can_submit('photo') %}<a class="btn small primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+      {% else %}{{ m.closed_button(t('album_upload'), t('submit_closed')) }}{% endif %}
     </section>
   </div>
 
@@ -178,7 +184,7 @@
           {% if s.delete_requested_at %}<span class="chip warn">{{ t('status_delete_requested') }}</span>
           {% elif not s.replaces_id and s.status != 'removed' %}
             <span class="sub-actions">
-              <a class="btn small" href="{{ link('/contribute/sheet/edit/' ~ s.id ~ '/') }}">{{ t('edit') }}</a>
+              {% if can_submit('sheet') %}<a class="btn small" href="{{ link('/contribute/sheet/edit/' ~ s.id ~ '/') }}">{{ t('edit') }}</a>{% endif %}
               <form method="post" action="/me/sheets/{{ s.id }}/delete-request"><button class="btn small" type="submit" data-confirm="{{ t('sheet_delete_confirm') }}">{{ t('sheet_delete_request') }}</button></form>
             </span>
           {% endif %}</li>

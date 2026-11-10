@@ -6,10 +6,11 @@
   {% if sheet and needs_review('sheet') %}<p class="flash-front">{{ t('sheet_edit_live_notice') if live else t('sheet_edit_notice') }}</p>{% endif %}
   <p class="muted small">{{ t('sheets_notice', email=contact_email) }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
-  {% if need_login %}
+  {% if not can_submit('sheet') %}<p class="flash-front">{{ t('submit_closed_long') }}</p>
+  {% elif need_login %}
     {% include "_need_login.html" %}
   {% endif %}
-  <form method="post" enctype="multipart/form-data" class="contribute-form" {{ 'inert' if need_login }}>
+  <form method="post" enctype="multipart/form-data" class="contribute-form" {{ 'inert' if need_login or not can_submit('sheet') }}>
     <label class="field" for="s-title">{{ t('sheet_title') }}</label>
     <input type="text" id="s-title" name="title" maxlength="80" required placeholder="{{ t('sheet_title_help') }}" value="{{ sheet.title if sheet }}">
     {#- 有 JavaScript 時：上面的縮圖格可以預覽、拖曳排序、移除，下面的選檔按鈕一直往裡面加。

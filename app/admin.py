@@ -1010,6 +1010,14 @@ SETTING_FIELDS = [
               ("home_top_songs_count", "「最近常唱」顯示幾首", "int"),
               ("home_top_songs_window", "「最近常唱」統計最近幾場有歌單的演出", "int"),
               ("home_facts_json", "數字卡片", "facts")]),
+    ("粉絲投稿：開放投稿", [
+        ("submit_setlist", "補歌單", "bool",
+         "不勾＝暫停：已經有的照樣顯示，只是不能再投；投稿按鈕變灰、寫「目前暫停投稿」（演出列表每一場的「＋補歌單」直接不顯示）。"),
+        ("submit_show", "新增演出", "bool"),
+        ("submit_sheet", "樂譜", "bool", "暫停時也不能修改已經投的樂譜（要求刪除還是可以）。"),
+        ("submit_marquee", "首頁跑馬燈留言", "bool"),
+        ("submit_photo", "相簿照片", "bool", "暫停時不能上傳，也不能建新相簿；已經上傳的照片還是可以改說明、刪除。"),
+    ]),
     ("粉絲投稿：要先審核才公開", [
         ("review_setlist", "補歌單", "bool",
          "勾選＝送出後先進「投稿審核」，你核准才更新。不勾＝送出就直接換掉那場的歌單（原本的歌單記在那筆投稿裡，可以在「投稿審核」看到）。"),
@@ -1126,6 +1134,7 @@ def submissions(request: Request, con=Depends(user_required)):
     return page(request, "submissions.html", {
         "nav": "submissions", "kinds": REVIEW_KINDS, "label": _visitor_label,
         "review": {k: db.review_required(con, k) for k in db.REVIEW_KINDS},
+        "open": {k: db.submissions_open(con, k) for k in db.REVIEW_KINDS},
         "pending": {k: review_rows(con, k, True, 500) for k, _ in REVIEW_KINDS},
         "reviewed": {k: review_rows(con, k, False, 50) for k, _ in REVIEW_KINDS},
     })

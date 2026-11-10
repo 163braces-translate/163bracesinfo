@@ -5,10 +5,11 @@
   <h1>{{ t('contrib_show') }}</h1>
   <p class="muted small">{{ t('show_intro' if needs_review('show') else 'show_intro_live') }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
-  {% if need_login %}
+  {% if not can_submit('show') %}<p class="flash-front">{{ t('submit_closed_long') }}</p>
+  {% elif need_login %}
     {% include "_need_login.html" %}
   {% endif %}
-  <form method="post" class="contribute-form" {{ 'inert' if need_login }}>
+  <form method="post" class="contribute-form" {{ 'inert' if need_login or not can_submit('show') }}>
     <div class="grid-2">
       <div><label class="field" for="s-date">{{ t('date') }}</label><input type="date" id="s-date" name="event_date" required></div>
       <div><label class="field" for="s-type">{{ t('type') }}</label>

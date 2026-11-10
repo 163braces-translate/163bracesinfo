@@ -1,5 +1,10 @@
 {# 共用的小元件 #}
 
+{# 暫停投稿時取代投稿按鈕：灰色、不能按，旁邊寫「目前暫停投稿」（note 是那句話） #}
+{% macro closed_button(label, note, cls='btn small') -%}
+  <span class="closed-submit"><span class="{{ cls }}" aria-disabled="true" title="{{ note }}">{{ label }}</span><span class="small muted">{{ note }}</span></span>
+{%- endmacro %}
+
 {# 歌詞區塊：blocks 是 sections_json 的一段（不含 part 分隔） #}
 {% macro lyric_blocks(blocks, tr) %}
   {% for b in blocks %}

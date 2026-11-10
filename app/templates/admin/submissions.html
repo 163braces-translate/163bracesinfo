@@ -5,9 +5,9 @@
 <p class="muted small">上面是等你處理的，下面是處理過的（每種最近 50 筆；設定成直接公開的投稿，送出就會出現在「已審核」）。樂譜的「要求刪除」也算待審核；跑馬燈在這裡看過一遍、按「沒問題」或「隱藏」。</p>
 <p class="small review-modes">目前：
   {% for key, name in [('setlist', '補歌單'), ('show', '新增演出'), ('sheet', '樂譜'), ('marquee', '跑馬燈'), ('photo', '相簿照片')] %}
-    {{ name }} <span class="chip {{ 'warn' if review[key] else 'status-live' }}">{{ '先審核' if review[key] else '直接公開' }}</span>{{ '、' if not loop.last }}
+    {{ name }} {% if not open[key] %}<span class="chip">暫停投稿</span>{% else %}<span class="chip {{ 'warn' if review[key] else 'status-live' }}">{{ '先審核' if review[key] else '直接公開' }}</span>{% endif %}{{ '、' if not loop.last }}
   {% endfor %}
-  · <a href="/admin/settings#review">到設定改</a></p>
+  · <a href="/admin/settings#submit-open">到設定改</a></p>
 
 {#- 一種投稿的表格。pending：待審核（跑馬燈直接在這裡處理）；否則是已審核 #}
 {% macro table(kind, rows, pending) %}

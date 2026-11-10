@@ -490,6 +490,8 @@ T = {
                                    "Uploads appear once an admin has checked them. Please only share photos you took. We re-save photos and strip GPS and camera data. Questions go to {email}."),
     "album_uploaded_review": ("上傳了 {n} 個，管理者看過後就會公開，謝謝分享！", "Uploaded {n}. They'll be public once an admin has checked them. Thanks!"),
     "album_pending": ("等待審核", "Awaiting review"),
+    "submit_closed": ("目前暫停投稿", "Submissions are paused"),
+    "submit_closed_long": ("這項投稿目前暫停，已經有的內容照常顯示。", "Submissions of this kind are paused for now. Everything already shared stays up."),
     "album_pending_note": ("這張等管理者看過才會公開，現在只有你自己看得到。", "This is waiting for an admin; only you can see it for now."),
 }
 

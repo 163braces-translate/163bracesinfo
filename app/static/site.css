@@ -959,3 +959,7 @@ body.lb-open { overflow: hidden; }
 .chip.photo-chip { background: #eef6f0; color: #1d6b43; display: inline-flex; align-items: center; gap: 3px; }
 .chip.photo-chip:hover { text-decoration: none; background: #dcefe2; color: #1d6b43; }
 .chip.photo-chip svg { width: 13px; height: 13px; }
+
+/* 暫停投稿：投稿按鈕變灰（_macros.html 的 closed_button） */
+.closed-submit { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; pointer-events: none; }

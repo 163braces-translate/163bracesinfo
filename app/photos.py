@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
 from . import auth, db, i18n, pagecache, queries as Q, visitors as V
-from .community import T, check_post, is_admin, login_url, submit_block
+from .community import T, check_post, closed, is_admin, login_url, submit_block
 from .web import as_id, current_visitor, get_con, lang_of, render
 
 router = APIRouter()
@@ -481,6 +481,7 @@ def upload_form(request: Request, con=Depends(get_con)):
         "albums": custom_choices(con, lang), "error": qp.get("error"),
         "need_login": not visitor or V.is_guest(visitor),
         "blocked": submit_block(request, visitor) if visitor and not V.is_guest(visitor) else None,
+        "closed": closed(request, con, "photo"),
         "max_items": MAX_ITEMS, "video_mb": VIDEO_MAX_BYTES // 1024 // 1024,
         "contact_email": db.get_setting(con, "contact_email"),
     }), page=page_meta("上傳照片", "Upload photos"))
@@ -501,7 +502,7 @@ async def upload(request: Request, con=Depends(get_con)):
 
     def fail(key, **kw):
         return RedirectResponse(back + "&error=" + quote(T(request, key, **kw)), status_code=303)
-    blocked = submit_block(request, visitor)
+    blocked = submit_block(request, visitor) or closed(request, con, "photo")
     if blocked:
         return RedirectResponse(back + "&error=" + quote(blocked), status_code=303)
     perf = performance(con, pid)

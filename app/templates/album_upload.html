@@ -6,7 +6,8 @@
   <h1>{{ t('album_upload') }}</h1>
   <p class="muted small">{{ t('album_upload_notice_review' if needs_review('photo') else 'album_upload_notice', email=contact_email) }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
-  {% if need_login %}{% include "_need_login.html" %}{% elif blocked %}<p class="flash-front">{{ blocked }}</p>{% endif %}
+  {% if closed %}<p class="flash-front">{{ closed }}</p>
+  {% elif need_login %}{% include "_need_login.html" %}{% elif blocked %}<p class="flash-front">{{ blocked }}</p>{% endif %}
 
   {#- data-for：只在選了那幾種「放到哪裡」時顯示（album.js）；沒有 JavaScript 全部顯示，伺服器只看用得到的欄位 #}
   <form method="post" action="{{ link('/album/upload/') }}" enctype="multipart/form-data" class="contribute-form upload-form"
@@ -16,7 +17,7 @@
         data-sending="{{ t('album_sending', p='{p}') }}" data-processing="{{ t('album_processing') }}"
         data-failed="{{ t('album_send_failed') }}" data-remove="{{ t('remove') }}"
         data-need-show="{{ t('album_need_show') }}" data-need-files="{{ t('album_need_files') }}"
-        {{ 'inert' if need_login or blocked }}>
+        {{ 'inert' if need_login or blocked or closed }}>
     <span class="field">{{ t('album_where') }}</span>
     <div class="target-opts">
       {% for key in ['show', 'custom', 'group'] %}

@@ -47,6 +47,9 @@
   {% else %}
     <p class="marquee-empty muted">{{ t('marquee') }}</p>
   {% endif %}
+  {% if not can_submit('marquee') %}
+    <div class="marquee-compose" id="marquee">{{ m.closed_button('✎ ' ~ t('marquee_post'), t('submit_closed')) }}</div>
+  {% else %}
   <details class="marquee-compose" id="marquee">
     <summary class="btn small">✎ {{ t('marquee_post') }}</summary>
     {% if visitor and not guest %}
@@ -73,6 +76,7 @@
       <p class="small muted">{{ t('login_unavailable') }}</p>
     {% endif %}
   </details>
+  {% endif %}
 </section>
 {% endif %}
 

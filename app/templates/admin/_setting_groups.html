@@ -2,7 +2,7 @@
    「設定」頁與演出頁分頁的編輯畫面共用。欄位定義的格式見 admin.py 的 SETTING_FIELDS。 #}
 {% import "admin/_fields.html" as fx %}
   {% for title, fields in groups %}
-    <div class="card" {% if title.startswith('粉絲投稿') %}id="review"{% endif %}>
+    <div class="card" {% if title.startswith('粉絲投稿：要先') %}id="review"{% elif title.startswith('粉絲投稿：開放') %}id="submit-open"{% endif %}>
       <h2>{{ title }}</h2>
       {% for field in fields %}
         {%- set key, label, kind = field[0], field[1], field[2] %}

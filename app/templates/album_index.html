@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% import "_album.html" as al with context %}
+{% import "_macros.html" as m %}
 {% block content %}
 <div class="page-head album-head">
   <div>
     <h1>{{ t('albums') }}</h1>
     <p class="intro">{{ t('album_intro') }}</p>
   </div>
-  <a class="btn primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+  {% if can_submit('photo') %}<a class="btn primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+  {% else %}{{ m.closed_button(t('album_upload'), t('submit_closed'), 'btn') }}{% endif %}
 </div>
 {% if msg %}<p class="flash-ok" role="status">{{ msg }}</p>{% endif %}
 
@@ -15,7 +17,7 @@
   <div class="card-head">
     <h2 id="h-group"><span class="pin" aria-hidden="true">📌</span> <a href="{{ group.url }}">{{ group.title }}</a> <small class="muted">{{ t('album_count', n=group.n) }}</small></h2>
     <span class="group-actions">
-      <a class="btn small" href="{{ link('/album/upload/?to=group') }}">{{ t('album_upload_group') }}</a>
+      {% if can_submit('photo') %}<a class="btn small" href="{{ link('/album/upload/?to=group') }}">{{ t('album_upload_group') }}</a>{% endif %}
       <a class="more" href="{{ group.url }}">{{ t('album_see_all') }} →</a>
     </span>
   </div>

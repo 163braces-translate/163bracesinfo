@@ -20,6 +20,7 @@ import json
 from . import db, i18n, queries as Q
 
 HEADER_KEY = "header_menu_json"
+ALBUM_ITEM = {"label": "相簿", "label_en": "Albums", "page_id": None, "url": "/album/"}
 FOOTER_KEY = "footer_json"
 
 
@@ -46,6 +47,7 @@ def default_header(con):
             {"label": "歌詞列表", "label_en": "Lyrics", "page_id": lyr["id"], "url": ""},
             {"label": "樂譜", "label_en": "Sheet music", "page_id": None, "url": Q.sheets_url(con)},
         ]})
+    items.append(dict(ALBUM_ITEM, children=[]))
     for p in (pages.get("articles"), about):
         if p:
             items.append({"label": "", "label_en": "", "page_id": p["id"], "url": "", "children": []})
@@ -94,6 +96,24 @@ def add_sheets_link(con):
             item["children"].append({"label": "樂譜", "label_en": "Sheet music", "page_id": None, "url": sheets})
         db.set_setting(con, HEADER_KEY, json.dumps(items, ensure_ascii=False))
     db.set_setting(con, "nav_sheets_added", "1")
+    con.commit()
+
+
+def add_album_link(con):
+    """一次性：已經存過的選單在「歌詞」後面補上「相簿」（沒有歌詞就放最後）。
+    只做一次（記在 settings），之後在後台拿掉也不會再加回來；還沒存過選單的話，預設選單本來就有。"""
+    if db.get_setting(con, "nav_album_added") == "1":
+        return
+    raw = con.execute("SELECT value FROM settings WHERE key = ?", (HEADER_KEY,)).fetchone()
+    if raw:
+        items = json.loads(raw["value"])
+        urls = [i.get("url") for i in items] + [c.get("url") for i in items for c in i.get("children") or []]
+        if "/album/" not in urls:
+            lyr = con.execute("SELECT id FROM pages WHERE kind = 'lyrics'").fetchone()
+            at = next((n + 1 for n, i in enumerate(items) if lyr and i.get("page_id") == lyr["id"]), len(items))
+            items.insert(at, dict(ALBUM_ITEM, children=[]))
+            db.set_setting(con, HEADER_KEY, json.dumps(items, ensure_ascii=False))
+    db.set_setting(con, "nav_album_added", "1")
     con.commit()
 
 

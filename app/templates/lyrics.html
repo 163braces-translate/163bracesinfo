@@ -58,7 +58,8 @@
       <section class="card sheets" aria-labelledby="h-sheets">
         <div class="card-head">
           <h2 id="h-sheets">{{ t('sheets') }}</h2>
-          <a class="btn small" href="{{ link('/contribute/sheet/' ~ songs[0].id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
+          {% if can_submit('sheet') %}<a class="btn small" href="{{ link('/contribute/sheet/' ~ songs[0].id ~ '/') }}">＋ {{ t('sheet_submit') }}</a>
+          {% else %}{{ m.closed_button('＋ ' ~ t('sheet_submit'), t('submit_closed')) }}{% endif %}
         </div>
         {#- 只列卡片（縮圖、標題、作者、讚數），點進去才看整份 #}
         {% if sheets %}

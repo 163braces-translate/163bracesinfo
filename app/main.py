@@ -46,6 +46,7 @@ async def lifespan(app):
         community.ensure_default_pages(con)
         navigation.add_sheets_link(con)
         photos.ensure_group_album(con)
+        navigation.add_album_link(con)
     finally:
         con.close()
     yield

@@ -125,8 +125,10 @@
       <div class="perf-extra">
         {% if login_available %}{{ attend_button(p) }}{% endif %}
         <span class="muted small" data-attend-count="{{ p.id }}" data-label="{{ t('fans_attended', n='{n}') }}">{% if attend_counts.get(p.id) %}{{ t('fans_attended', n=attend_counts[p.id]) }}{% endif %}</span>
-        {% if p.event_date < today %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>
-          <a class="small" href="{{ link('/album/upload/?to=show&show=' ~ p.id) }}">{{ t('album_add_photos') }}</a>{% endif %}
+        {% if p.event_date < today %}
+          {% if can_submit('setlist') %}<a class="small" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('fix_setlist') if p.setlist else t('add_setlist') }}</a>{% endif %}
+          {% if can_submit('photo') %}<a class="small" href="{{ link('/album/upload/?to=show&show=' ~ p.id) }}">{{ t('album_add_photos') }}</a>{% endif %}
+        {% endif %}
       </div>
     {% endmacro %}
     {#- 有照片（或有自訂相簿連到這場）：跟歌單的 ♪ 一樣標一個 📷，連到這場的照片 #}
@@ -164,7 +166,7 @@
                   <span class="t">{{ tr(p, 'event_name') }}</span><span class="chip badge-songs {{ 'warn' if p.setlist_order_uncertain else 'blue' }}">♪ {{ p.setlist | length }}</span>
                 </button>
               {% else %}{{ tr(p, 'event_name') }}
-                {% if not soon %}<a class="add-setlist" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('add_setlist') }}</a>{% endif %}
+                {% if not soon and can_submit('setlist') %}<a class="add-setlist" href="{{ link('/contribute/performance/' ~ p.id ~ '/') }}">{{ t('add_setlist') }}</a>{% endif %}
               {% endif %}
               {{ photo_chip(p) }}
               {% if soon %} <span class="chip blue">{{ t('soon') }}</span>{% endif %}

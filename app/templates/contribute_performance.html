@@ -7,10 +7,11 @@
   <p class="muted">{{ perf.event_date | replace('-', '/') }} · {{ tr(perf, 'type_name') }} · {{ tr(perf, 'city_name') }}{% if tr(perf, 'venue') %} · {{ tr(perf, 'venue') }}{% endif %}</p>
   <p class="muted small">{{ t('contribute_intro' if needs_review('setlist') else 'contribute_intro_live') }}</p>
   {% if error %}<p class="flash-front" role="alert">{{ error }}</p>{% endif %}
-  {% if need_login %}
+  {% if not can_submit('setlist') %}<p class="flash-front">{{ t('submit_closed_long') }}</p>
+  {% elif need_login %}
     {% include "_need_login.html" %}
   {% endif %}
-  <form method="post" class="contribute-form" {{ 'inert' if need_login }}>
+  <form method="post" class="contribute-form" {{ 'inert' if need_login or not can_submit('setlist') }}>
     <label class="field" for="c-setlist">{{ t('setlist') }}</label>
     <textarea id="c-setlist" name="setlist" rows="12">{{ setlist_text }}</textarea>
     <p class="small muted">{{ t('contribute_setlist_help') }}</p>
