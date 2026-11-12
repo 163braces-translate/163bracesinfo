@@ -83,12 +83,7 @@ ALBUM_SLUG = "photos"       # 相簿頁的網址固定是 /photos/（底下的�
 def ensure_album_page(con):
     """相簿頁（pages 表 kind='album'）：後台「頁面與文章」裡的固定頁面，可以改標題、介紹、摘要、縮圖、發佈狀態。
     啟動時沒有就建立，掛在首頁底下，內容用原本寫在程式裡的文字。"""
-    row = con.execute("SELECT id, slug FROM pages WHERE kind = 'album'").fetchone()
-    if row:
-        if row["slug"] != ALBUM_SLUG and not con.execute("SELECT 1 FROM pages WHERE slug = ?", (ALBUM_SLUG,)).fetchone():
-            # 開發時建的相簿頁網址是 /album/（還沒上線過，不用留轉址）
-            con.execute("UPDATE pages SET slug = ? WHERE id = ?", (ALBUM_SLUG, row["id"]))
-            con.commit()
+    if con.execute("SELECT 1 FROM pages WHERE kind = 'album'").fetchone():
         return
     home = con.execute("SELECT id FROM pages WHERE kind = 'home'").fetchone()
     if con.execute("SELECT 1 FROM pages WHERE slug = ?", (ALBUM_SLUG,)).fetchone():
@@ -539,7 +534,7 @@ def group_photos(request: Request, con=Depends(get_con)):
     return view(request, con, {
         "kind": "group", "album": album, "sections": sections, "heading": i18n.tr(lang, album, "title"),
         "upload_url": i18n.link(lang, "/photos/upload/?to=group"),
-    }, "合照 · 相簿", "Group photos · Albums", "粉絲跟 163braces 的合照與影片，依演出場次整理。")
+    }, "合照 · 相簿", "Group photos · Photos", "粉絲跟 163braces 的合照與影片，依演出場次整理。")
 
 
 @router.get("/photos/{album_id:int}/")
@@ -558,7 +553,7 @@ def custom_album(album_id: int, request: Request, con=Depends(get_con)):
         "perf": performance(con, album["performance_id"]),
         "upload_url": i18n.link(lang, "/photos/upload/?to=custom&album=%d" % album_id),
         "edit_url": i18n.link(lang, "/photos/%d/edit/" % album_id) if card["mine"] else "",
-    }, "%s · 相簿" % album["title"], "%s · Albums" % album["title"], album["description"][:150])
+    }, "%s · 相簿" % album["title"], "%s · Photos" % album["title"], album["description"][:150])
 
 
 # ==================================================================== 圖檔
