@@ -212,6 +212,7 @@ def dashboard(request: Request, con=Depends(user_required)):
         "sheet_delete_requests": con.execute("SELECT COUNT(*) FROM sheets WHERE delete_requested_at IS NOT NULL").fetchone()[0],
         "missing_holidays": holidays.missing_years(con),
         "unseen_photos": con.execute("SELECT COUNT(*) FROM photos WHERE reviewed_at IS NULL").fetchone()[0],
+        "storage_low": photos_storage()["low"],
         "missing_setlists": con.execute(
             "SELECT COUNT(*) FROM performances p WHERE p.event_date <= ? AND NOT EXISTS "
             "(SELECT 1 FROM setlist_items s WHERE s.performance_id = p.id)", (today,)).fetchone()[0],
@@ -425,9 +426,11 @@ def performance_form(item_id: str, request: Request, con=Depends(user_required))
 async def performance_save(item_id: str, request: Request, con=Depends(user_required)):
     form = await request.form()
     if form.get("action") == "delete":
+        from . import photos                    # 放這裡：photos → community → admin，放檔案開頭會循環 import
+        kept = photos.keep_show_album(con, as_int(item_id))
         con.execute("DELETE FROM performances WHERE id = ?", (as_int(item_id),))
         con.commit()
-        return done("/admin/performances/", "已刪除")
+        return done("/admin/performances/", "已刪除" + ("；這場的照片改放在自訂相簿「%s」" % kept if kept else ""))
     data = {k: (form.get(k) or "").strip() for k in
             ("event_date", "event_name", "event_name_en", "venue", "venue_en")}
     data["event_type_id"] = as_int(form.get("event_type_id"))
@@ -731,8 +734,10 @@ async def lyrics_order_save(request: Request, con=Depends(user_required)):
 
 # ==================================================================== 頁面
 KIND_LABELS = {"home": "首頁", "performances": "演出（列表、統計、歌單、年度回顧）", "lyrics": "歌詞索引",
-               "articles": "文章列表", "article": "文章", "page": "一般頁面"}
-FIXED_KINDS = ("home", "performances", "lyrics", "articles")
+               "album": "相簿（演出相簿、合照、自訂相簿）", "articles": "文章列表", "article": "文章", "page": "一般頁面"}
+FIXED_KINDS = ("home", "performances", "lyrics", "album", "articles")
+# 相簿頁：網址固定 /photos/（底下的演出相簿、合照、上傳頁都是程式裡的路由，不能跟著搬），也不能有子頁面
+FIXED_URL_KINDS = ("home", "album")
 
 
 def performance_tabs(con):
@@ -784,7 +789,7 @@ def page_form(item_id: str, request: Request, con=Depends(user_required)):
         kind = "article" if parent and parent["kind"] in ("articles", "article") else "page"
     # 可以選的上層：除了自己和自己底下的頁面以外都可以
     blocked = {row["id"]} | {d["id"] for d in pagetree.descendants(con, row["id"])} if row else set()
-    parents = [(p, depth) for p, depth in pagetree.tree(con) if p["id"] not in blocked]
+    parents = [(p, depth) for p, depth in pagetree.tree(con) if p["id"] not in blocked and p["kind"] != "album"]
     return page(request, "page_form.html", {
         "nav": "pages", "row": row, "kind": kind, "kind_label": KIND_LABELS[kind], "fixed": kind in FIXED_KINDS,
         "parent": parent, "parents": parents, "segment": pagetree.segment_of(row, parent) if row else "",
@@ -809,13 +814,17 @@ async def page_save(item_id: str, request: Request, con=Depends(user_required)):
         con.execute("DELETE FROM pages WHERE id = ?", (row["id"],))
         con.commit()
         return done("/admin/pages/", "已刪除")
-    # 網址＝上層頁面的網址＋這一段。首頁固定是 /，沒有上層
+    # 網址＝上層頁面的網址＋這一段。首頁固定是 /，沒有上層；相簿頁固定是 /photos/，掛在首頁底下
     if kind == "home":
         parent, segment = None, ""
+    elif kind == "album":
+        parent, segment = con.execute("SELECT * FROM pages WHERE kind = 'home'").fetchone(), row["slug"]
     else:
         parent = con.execute("SELECT * FROM pages WHERE id = ?", (as_int(form.get("parent_id")),)).fetchone()
         if not parent:
             return done(back, "請選上層頁面")
+        if parent["kind"] == "album":
+            return done(back, "相簿頁底下不能放其他頁面")
         try:
             segment = check_slug(form.get("segment"), allow_slash=False)
         except ValueError as e:
@@ -850,7 +859,7 @@ async def page_save(item_id: str, request: Request, con=Depends(user_required)):
             item_id = row["id"]
             con.execute("UPDATE pages SET %s WHERE id = ?" % ", ".join("%s = ?" % c for c in cols),
                         [data[c] for c in cols] + [item_id])
-            if kind != "home" and (row["parent_id"] != parent["id"] or row["slug"] != slug):
+            if kind not in FIXED_URL_KINDS and (row["parent_id"] != parent["id"] or row["slug"] != slug):
                 # 搬家或改網址：底下的頁面一起改，舊網址都轉到新網址
                 pagetree.move(con, row, parent, segment, add_redirects)
     except pagetree.MoveError as e:
@@ -1360,6 +1369,11 @@ async def marquee_action(request: Request, con=Depends(user_required)):
 PHOTO_VIEWS = {"new": "還沒看過", "all": "全部", "removed": "已下架", "albums": "相簿"}
 
 
+def photos_storage(refresh=False):
+    from . import photos                    # 放這裡：photos → community → admin，放檔案開頭會循環 import
+    return photos.storage(refresh)
+
+
 @router.get("/photos")
 def photos_admin(request: Request, con=Depends(user_required)):
     from . import photos as P
@@ -1386,7 +1400,8 @@ def photos_admin(request: Request, con=Depends(user_required)):
             WHERE %s ORDER BY ph.created_at DESC, ph.id DESC LIMIT 300""" % where)]
     return page(request, "photos.html", {"nav": "photos", "show": show, "views": PHOTO_VIEWS, "unseen": unseen,
                                          "rows": rows, "albums": albums, "label": _visitor_label,
-                                         "review": db.review_required(con, "photo")})
+                                         "review": db.review_required(con, "photo"),
+                                         "space": P.storage(refresh=True), "reserve": P.STORAGE_RESERVE})
 
 
 @router.post("/photos")
@@ -1482,7 +1497,7 @@ async def hero_save(request: Request, con=Depends(user_required)):
 def navigation_page(request: Request, con=Depends(user_required)):
     pages = [{"id": r["id"], "title": r["title"], "url": Q.page_url(r), "published": r["published"]}
              for r in con.execute("SELECT * FROM pages ORDER BY kind NOT IN ('home', 'performances', 'lyrics', "
-                                  "'articles'), kind = 'article', sort_order, id")]
+                                  "'album', 'articles'), kind = 'article', sort_order, id")]
     # 演出頁的分頁不是 pages 表裡的頁面，另外列出來讓選單可以直接選
     targets = [{"label": name, "url": url} for key, name, url, _ in performance_tabs(con) if key != "list"]
     return page(request, "navigation.html", {"nav": "navigation", "pages": pages, "targets": targets,

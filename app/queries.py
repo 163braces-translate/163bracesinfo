@@ -50,7 +50,7 @@ def song_cover_id(song):
 # ==================================================================== 頁面
 def pages_by_kind(con):
     return {r["kind"]: r for r in con.execute(
-        "SELECT * FROM pages WHERE kind IN ('home', 'performances', 'lyrics', 'articles')")}
+        "SELECT * FROM pages WHERE kind IN ('home', 'performances', 'lyrics', 'articles', 'album')")}
 
 
 def page_url(page):

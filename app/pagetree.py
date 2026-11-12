@@ -9,7 +9,7 @@ pages.slug 仍然存完整路徑（前台照 slug 找頁面，不用每次往上
 from . import navigation, queries as Q
 
 # 樹狀列表裡兄弟頁面的順序：固定頁面在前，再照後台填的排序、文章照發佈日期新到舊
-KIND_ORDER = {"home": 0, "performances": 1, "lyrics": 2, "articles": 3, "page": 4, "article": 5}
+KIND_ORDER = {"home": 0, "performances": 1, "lyrics": 2, "album": 3, "articles": 4, "page": 5, "article": 6}
 
 
 def join(parent_slug, segment):

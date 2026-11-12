@@ -135,11 +135,14 @@
     };
 
     var SHRINK_SIDE = 2400, SMALL_ENOUGH = 2.5 * 1024 * 1024;
+    var isHeic = function (f) { return /^image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name); };
+    // HEIC：Safari 讀得懂，這裡一律轉成 JPG；其他瀏覽器讀不了（createImageBitmap 失敗）就傳原檔，由伺服器轉
     var shrink = function (file) {
-      if (!window.createImageBitmap || !/^image\/(jpeg|png|webp)$/.test(file.type)) return Promise.resolve(file);
+      var heic = isHeic(file);
+      if (!window.createImageBitmap || !(heic || /^image\/(jpeg|png|webp)$/.test(file.type))) return Promise.resolve(file);
       return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
         var scale = Math.min(1, SHRINK_SIDE / Math.max(bmp.width, bmp.height));
-        if (scale === 1 && file.size <= SMALL_ENOUGH) return file;
+        if (scale === 1 && file.size <= SMALL_ENOUGH && !heic) return file;
         var canvas = document.createElement("canvas");
         canvas.width = Math.round(bmp.width * scale);
         canvas.height = Math.round(bmp.height * scale);
@@ -149,27 +152,48 @@
         ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
         return new Promise(function (resolve) {
           canvas.toBlob(function (blob) {
-            resolve(blob && blob.size < file.size
+            resolve(blob && (heic || blob.size < file.size)
               ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file);
           }, "image/jpeg", 0.86);
         });
       }).catch(function () { return file; });
     };
     var isVideo = function (f) { return /^video\//.test(f.type) || /\.(mp4|mov|webm)$/i.test(f.name); };
-    var max = Number(fd.max), videoMax = Number(fd.videoMb) * 1024 * 1024;
+    var max = Number(fd.max), videoMax = Number(fd.videoMb) * 1024 * 1024, photoMax = Number(fd.photoMb) * 1024 * 1024;
+    var tooBig = function (mb) { return fd.badBig.replace("{mb}", mb); };
+
+    // 選檔時先擋伺服器不收的（不然要整批傳完才被退回）：不支援的格式、縮完還太大的。
+    // 有問題的格子標紅、寫原因，拿掉之前不能送出。
+    var check = function (f) {
+      var heic = isHeic(f);
+      if (!heic && !/^image\/(jpeg|png|webp|gif)$/.test(f.type) && !(!f.type && /\.(jpe?g|png|webp|gif)$/i.test(f.name)))
+        return Promise.resolve({ file: f, bad: fd.badType });
+      return shrink(f).then(function (out) {     // 縮完還超過，通常是瀏覽器讀不了的圖，預覽也畫不出來 → 只寫檔名
+        var big = out.size > photoMax;
+        // 太大的、瀏覽器沒轉成的 HEIC：預覽畫不出來，格子只寫檔名
+        return { file: out, bad: big ? tooBig(fd.photoMb) : "", show: !big && !(heic && out === f) };
+      });
+    };
 
     var renderItems = function () {
       previews.hidden = !items.length;
       previews.innerHTML = items.map(function (it, i) {
-        return '<li><' + (it.video ? 'video muted preload="metadata"' : 'img alt=""') + ' src="' + it.src + '">' + (it.video ? "</video>" : "") +
-          (it.video ? '<span class="ph-play" aria-hidden="true"></span>' : "") +
+        var media = it.video ? '<video muted preload="metadata" src="' + it.src + '"></video><span class="ph-play" aria-hidden="true"></span>'
+          : it.src ? '<img alt="" src="' + it.src + '">' : '<span class="ph-name">' + esc(it.file.name) + "</span>";
+        return "<li" + (it.bad ? ' class="bad"' : "") + ">" + media +
           '<button type="button" data-rm="' + i + '" aria-label="' + esc(fd.remove) + '">✕</button>' +
-          (it.big ? '<span class="ph-flag">' + esc(fd.videoBig) + "</span>" : "") + "</li>";
+          (it.bad ? '<span class="ph-flag">' + esc(it.bad) + "</span>" : "") + "</li>";
       }).join("");
-      var over = items.length > max, big = items.some(function (it) { return it.big; });
-      note.textContent = over ? fd.tooMany : big ? fd.videoBig : items.length ? fd.count.replace("{n}", items.length) : "";
-      note.classList.toggle("over", over || big);
-      submit.disabled = over || big;
+      // 一次的總大小也有上限（totalMb）：手機網路傳太多容易中途斷掉，要整批重來
+      var mb = items.reduce(function (n, it) { return n + it.file.size; }, 0) / 1024 / 1024;
+      var size = mb < 10 ? mb.toFixed(1) : String(Math.round(mb));
+      var over = items.length > max, heavy = mb > Number(fd.totalMb), bad = items.filter(function (it) { return it.bad; });
+      note.textContent = over ? fd.tooMany
+        : bad.length ? fd.badNote.replace("{n}", bad.length)
+        : heavy ? fd.tooHeavy.replace("{size}", size)
+        : items.length ? fd.count.replace("{n}", items.length).replace("{size}", size) : "";
+      note.classList.toggle("over", over || heavy || bad.length > 0);
+      submit.disabled = over || heavy || bad.length > 0;
     };
 
     input.addEventListener("change", function () {
@@ -179,12 +203,12 @@
       submit.disabled = true;
       note.textContent = fd.shrinking;
       Promise.all(files.map(function (f) {
-        if (isVideo(f)) return Promise.resolve(target() === "group" ? { file: f, video: true, big: f.size > videoMax } : null);
-        return shrink(f).then(function (out) { return { file: out }; });
+        if (isVideo(f)) return Promise.resolve(target() === "group" ? { file: f, video: true, bad: f.size > videoMax ? tooBig(fd.videoMb) : "" } : null);
+        return check(f);
       })).then(function (out) {
         out.forEach(function (it) {
           if (!it) return;
-          it.src = URL.createObjectURL(it.file);
+          it.src = it.video || it.show ? URL.createObjectURL(it.file) : "";     // HEIC 等瀏覽器畫不出來的只寫檔名
           items.push(it);
         });
         renderItems();
@@ -194,7 +218,7 @@
       var b = e.target.closest("[data-rm]");
       if (!b) return;
       var it = items.splice(Number(b.dataset.rm), 1)[0];
-      URL.revokeObjectURL(it.src);
+      if (it.src) URL.revokeObjectURL(it.src);
       renderItems();
     });
     $$("input[name=target]", form).forEach(function (r) { r.addEventListener("change", applyTarget); });

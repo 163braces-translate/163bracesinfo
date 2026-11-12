@@ -457,7 +457,10 @@ def me_page(request: Request, con=Depends(get_con)):
         "likes": liked_songs(con, visitor["id"]),
         "subs": my_submissions(con, visitor["id"]), "map": taiwan.map_data(), "msg": request.query_params.get("msg"),
         "choices": contribute_choices(con) if tab == "submissions" else None,
-        "my_albums": photos_module().my_photo_albums(con, lang, visitor["id"]) if tab == "submissions" else [],
+        # 相簿開放時列出我上傳過的相簿（點進去編輯、刪除）；關閉時相簿頁看不到，改成直接列出每一張，可以在這裡刪
+        "album_closed": not db.album_published(con),
+        "my_albums": photos_module().my_photo_albums(con, lang, visitor["id"]) if tab == "submissions" and db.album_published(con) else [],
+        "my_photos": photos_module().my_photos(con, lang, visitor) if tab == "submissions" and not db.album_published(con) else [],
         "recap": recap_data(con, lang, visitor) if tab == "recap" else None,
         "tabs": tabs, "guest_until": V.guest_expires(visitor).strftime("%Y/%m/%d %H:%M") if V.is_guest(visitor) else None,
     }, page={"title": "我的", "title_en": "My page"})

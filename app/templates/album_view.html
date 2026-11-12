@@ -2,7 +2,7 @@
 {% import "_album.html" as al with context %}
 {% import "_macros.html" as m %}
 {% block content %}
-<p class="crumbs small"><a href="{{ link('/album/') }}">← {{ t('albums') }}</a></p>
+<p class="crumbs small"><a href="{{ link('/photos/') }}">← {{ tr(kinds.album, 'title') if kinds.album else t('albums') }}</a></p>
 <div class="page-head album-head">
   <div>
     <h1>{{ heading }}</h1>
@@ -15,7 +15,7 @@
       {% if album.description %}<p class="intro album-desc">{{ album.description }}</p>{% endif %}
       <p class="small muted album-meta">
         {% if card.by %}{{ t('album_by', name=card.by) }}{% endif %}
-        {% if perf %} · 🎤 <a href="{{ link('/album/show/' ~ perf.id ~ '/') }}">{{ perf.event_date | replace('-', '/') }} {{ tr(perf, 'event_name') }}</a>{% endif %}
+        {% if perf %} · 🎤 <a href="{{ link('/photos/show/' ~ perf.id ~ '/') }}">{{ perf.event_date | replace('-', '/') }} {{ tr(perf, 'event_name') }}</a>{% endif %}
         {% if edit_url %} · <a href="{{ edit_url }}">{{ t('album_edit') }}</a>{% endif %}
       </p>
     {% endif %}

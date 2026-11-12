@@ -3,11 +3,15 @@
 {% block content %}
 <div class="admin-head">
   <h1>相簿</h1>
-  <a class="btn" href="/album/" target="_blank" rel="noopener">看前台相簿 ↗</a>
+  <a class="btn" href="/photos/" target="_blank" rel="noopener">看前台相簿 ↗</a>
 </div>
 <p class="muted small">{% if review %}目前設定成<b>要先審核</b>：「還沒看過」的照片只有上傳的人看得到，你按「沒問題」才公開。{% else %}目前設定成<b>上傳就公開</b>。{% endif %}
   （<a href="/admin/settings#review">到設定改</a>）不適合的照片按「下架」：前台就看不到了，上傳的人自己還看得到（附上你寫的原因），他可以自己刪掉。
   管理者不能直接刪照片。整本不適合的自訂相簿可以到「相簿」分頁整本下架。一再亂傳的人可以到「粉絲帳號」停權（停權後不能再上傳）。</p>
+
+{%- macro gb(n) %}{{ '%.1f' % (n / 1024 ** 3) }}{% endmacro %}
+<p class="small {{ 'flash' if space.low else 'muted' }}">💾 儲存空間：資料庫＋上傳的檔案用了 {{ gb(space.used) }}GB{% if space.quota %}（方案共 {{ gb(space.quota) }}GB）{% endif %}，估計還剩 {{ gb(space.free) }}GB。
+  {% if space.low %}<b>剩不到 {{ gb(reserve) }}GB，相簿已自動暫停收上傳</b>，空出空間後會自動恢復。{% else %}剩不到 {{ gb(reserve) }}GB 時會自動暫停收上傳。{% endif %}</p>
 
 <div class="status-filter" role="group" aria-label="篩選">
   {% for key, name in views.items() %}
@@ -48,8 +52,8 @@
   {% for r in rows %}
     <div class="card photo-admin {{ 'warn-row' if r.status == 'removed' or r.album_hidden }}">
       <a class="pa-thumb" href="{{ r.album_link }}#p{{ r.id }}" target="_blank" rel="noopener">
-        {% if r.media == 'image' %}<img src="/album/img/{{ r.id }}/s.jpg" alt="" loading="lazy">
-        {% elif r.media == 'video' %}<video src="/album/video/{{ r.id }}#t=0.1" preload="metadata" muted></video>
+        {% if r.media == 'image' %}<img src="/photos/img/{{ r.id }}/s.jpg" alt="" loading="lazy">
+        {% elif r.media == 'video' %}<video src="/photos/video/{{ r.id }}#t=0.1" preload="metadata" muted></video>
         {% else %}<img src="https://i.ytimg.com/vi/{{ r.youtube_id }}/hqdefault.jpg" alt="" loading="lazy">{% endif %}
         {% if r.media != 'image' %}<span class="chip">{{ '影片檔' if r.media == 'video' else 'YouTube' }}</span>{% endif %}
       </a>

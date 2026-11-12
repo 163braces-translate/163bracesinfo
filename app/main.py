@@ -46,6 +46,7 @@ async def lifespan(app):
         community.ensure_default_pages(con)
         navigation.add_sheets_link(con)
         photos.ensure_group_album(con)
+        photos.ensure_album_page(con)              # 要在 add_album_link 之前：選單連到這一頁
         navigation.add_album_link(con)
     finally:
         con.close()
@@ -55,7 +56,7 @@ async def lifespan(app):
 class CompressText:
     """網頁、CSS、JS 先壓縮（gzip）再傳，演出頁從 600 多 KB 變成 50KB 左右；瀏覽器收到會自己解開。
     圖片本來就是壓縮過的格式，再壓只是浪費時間，跳過。已經壓好的回應（演出頁快取）也不會再壓一次。"""
-    SKIP = ("/media/", "/images/", "/sheets/thumb/", "/site-icon/", "/favicon", "/album/img/", "/album/video/")
+    SKIP = ("/media/", "/images/", "/sheets/thumb/", "/site-icon/", "/favicon", "/photos/img/", "/photos/video/")
 
     def __init__(self, app):
         self.app = app
@@ -266,7 +267,7 @@ def performances_page(request, con, page, tab="list"):
     rows = Q.performances(con, f)
     cities = Q.cities(con)
     map_cities = map_points(cities, Q.city_counts(con, f))
-    pics = photos.show_photo_counts(con)           # 有照片的場次：列表、行事曆上標 📷
+    pics = photos.show_photo_counts(con) if db.album_published(con) else {}    # 有照片的場次：列表、行事曆上標 📷（相簿頁沒上線就不標）
     return render(request, con, "performances.html", dict(stats_context(request, con, tab), **{
         "f": f,
         "groups": month_groups(rows),
@@ -421,7 +422,9 @@ def cached_page(request, con, build):
 
 
 HANDLERS = {"home": home, "performances": performances_page, "lyrics": lyrics_index,
-            "articles": articles_page, "article": content_page, "page": content_page}
+            "articles": articles_page, "article": content_page, "page": content_page,
+            # 相簿頁平常由 photos.py 的 /photos/ 路由處理，這裡只是備用
+            "album": lambda request, con, page: photos.album_index(request, con)}
 
 
 @app.get("/{path:path}")

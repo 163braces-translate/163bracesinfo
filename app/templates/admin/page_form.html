@@ -20,13 +20,17 @@
         <button type="button" data-lang="zh" aria-pressed="true">中文內文</button>
         <button type="button" data-lang="en" aria-pressed="false">英文內文</button>
       </div>
-      <div data-lang-pane="zh">{{ fx.rich('body_html', row.body_html if row else '', '內文', help='標題（H1–H3）、文字顏色、字級、連結、圖片、YouTube 影片都在工具列。' ~ (' 演出、歌詞索引頁的內文會顯示在頁面上方當作說明。' if fixed and kind != 'home' else '')) }}</div>
+      <div data-lang-pane="zh">{{ fx.rich('body_html', row.body_html if row else '', '內文', help='標題（H1–H3）、文字顏色、字級、連結、圖片、YouTube 影片都在工具列。' ~ (' 演出、歌詞索引、相簿頁的內文會顯示在頁面上方當作說明。' if fixed and kind != 'home' else '')) }}</div>
       <div data-lang-pane="en" hidden>{{ fx.rich('body_html_en', row.body_html_en if row else '', '英文內文', help='空白時英文版顯示中文內文。') }}</div>
     </div>
     <aside class="card side">
       <h2>網址與發佈</h2>
       {% if kind == 'home' %}
         <p class="help">首頁的網址固定是 /，它是所有頁面的最上層。</p>
+      {% elif kind == 'album' %}
+        <p class="help">相簿的網址固定是 <b>/photos/</b>，不能改：底下的演出相簿、合照、上傳頁網址都接在後面。
+          取消發佈的話，整個相簿區（含照片）訪客都看不到，選單上的「相簿」、演出列表的 📷 也會跟著隱藏；登入後台的你還看得到。
+          照片的管理在「<a href="/admin/photos">相簿</a>」。</p>
       {% else %}
         <div class="form-row">
           <label class="field" for="f-parent">上層頁面 <span class="req">*</span></label>

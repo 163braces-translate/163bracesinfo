@@ -1,10 +1,10 @@
-"""相簿 /album/：粉絲上傳現場照片，跟演出資料串在一起。
+"""相簿 /photos/：粉絲上傳現場照片，跟演出資料串在一起。
 
-- 相簿首頁 /album/：「合照」置頂，接著是演出相簿（一場一本）、自訂相簿
-- 一場演出的所有照片 /album/show/<演出 id>/：本場相簿、合照、其他相簿裡標了這場的照片、連結到這場的自訂相簿
+- 相簿首頁 /photos/：「合照」置頂，接著是演出相簿（一場一本）、自訂相簿
+- 一場演出的所有照片 /photos/show/<演出 id>/：本場相簿、合照、其他相簿裡標了這場的照片、連結到這場的自訂相簿
   （演出列表上的 📷 連到這裡）
-- 合照 /album/group/：依場次分段；只有這裡能傳影片、貼 YouTube
-- 自訂相簿 /album/<id>/
+- 合照 /photos/group/：依場次分段；只有這裡能傳影片、貼 YouTube
+- 自訂相簿 /photos/<id>/
 
 權限：要用 Google 帳號登入才能上傳（訪客、停權的不行，跟其他投稿一樣）。任何人都可以建自訂相簿、
 上傳到任何一本相簿（包括別人建的）。照片只有上傳的人能刪、能改說明與對應的場次；自訂相簿的標題與
@@ -17,21 +17,50 @@
 import io
 import os
 import secrets
+import shutil
+import time
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 
 from . import auth, db, i18n, pagecache, queries as Q, visitors as V
 from .community import T, check_post, closed, is_admin, login_url, submit_block
 from .web import as_id, current_visitor, get_con, lang_of, render
 
-router = APIRouter()
+
+
+# 相簿關閉時，上傳的人還是可以在「我的投稿」看自己的照片、刪掉（隱私權政策承諾的）：這幾個路由對本人開放
+OWNER_ROUTES = ("/photos/img/{photo_id:int}/{size}.jpg", "/photos/video/{photo_id:int}", "/photos/photo/{photo_id:int}/delete")
+
+
+def album_open(request: Request, con=Depends(get_con)):
+    """相簿頁在後台「頁面與文章」取消發佈：整個相簿區（含照片檔）都 404。
+    例外：登入後台的管理者照樣看得到（方便預覽）；上傳的人看得到、刪得掉自己的照片。"""
+    if db.album_published(con) or is_admin(request, con):
+        return
+    route = request.scope.get("route")
+    if route is not None and route.path in OWNER_ROUTES:
+        visitor = current_visitor(request, con)
+        pid = request.path_params.get("photo_id")
+        if visitor and con.execute("SELECT 1 FROM photos WHERE id = ? AND visitor_id = ?", (pid, visitor["id"])).fetchone():
+            return
+    raise HTTPException(404)
+
+
+router = APIRouter(dependencies=[Depends(album_open)])
 
 MAX_ITEMS = 20                          # 一次最多幾張（含影片、YouTube）
 PHOTO_MAX_BYTES = 15 * 1024 * 1024      # 瀏覽器沒縮到的原檔上限（有 JavaScript 時會先縮到 2–3MB）
 PHOTO_MAX_SIDE = 2400
 VIDEO_MAX_BYTES = 80 * 1024 * 1024
+UPLOAD_MAX_BYTES = 200 * 1024 * 1024    # 一次上傳的總大小（手機網路傳太久容易斷；也不讓一次塞爆暫存空間）
+VIDEO_DAILY = 5                         # 每人每 24 小時最多幾支影片（影片最佔空間）
+# 儲存空間：Azure B1 方案的 /home 共 10GB，資料庫、備份、上傳的檔案、網站程式、記錄檔都算在內。
+# 剩不到 STORAGE_RESERVE 就暫停收上傳（留給資料庫繼續寫入；網站程式與記錄檔也在這 1.5GB 裡）。
+STORAGE_QUOTA = 10 * 1024 ** 3 if db.ON_AZURE else None
+STORAGE_RESERVE = int(1.5 * 1024 ** 3)
 VIDEO_TYPES = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
 SIZES = {"s": 600, "l": 1600}           # 縮圖（格子）、大圖（點開看）；o＝原檔
 TITLE_MAX = 60
@@ -47,6 +76,46 @@ def prefix(request):
 
 
 # ==================================================================== 資料
+ALBUM_SLUG = "photos"       # 相簿頁的網址固定是 /photos/（底下的演出相簿、合照等網址都寫在這個檔案的路由裡）
+# 不用 /album/：音樂人的網站上 album 會被當成「專輯」，英文訪客、搜尋引擎都會誤會，也留給以後可能的專輯頁
+
+
+def ensure_album_page(con):
+    """相簿頁（pages 表 kind='album'）：後台「頁面與文章」裡的固定頁面，可以改標題、介紹、摘要、縮圖、發佈狀態。
+    啟動時沒有就建立，掛在首頁底下，內容用原本寫在程式裡的文字。"""
+    row = con.execute("SELECT id, slug FROM pages WHERE kind = 'album'").fetchone()
+    if row:
+        if row["slug"] != ALBUM_SLUG and not con.execute("SELECT 1 FROM pages WHERE slug = ?", (ALBUM_SLUG,)).fetchone():
+            # 開發時建的相簿頁網址是 /album/（還沒上線過，不用留轉址）
+            con.execute("UPDATE pages SET slug = ? WHERE id = ?", (ALBUM_SLUG, row["id"]))
+            con.commit()
+        return
+    home = con.execute("SELECT id FROM pages WHERE kind = 'home'").fetchone()
+    if con.execute("SELECT 1 FROM pages WHERE slug = ?", (ALBUM_SLUG,)).fetchone():
+        print("相簿頁沒有建立：網址 /%s/ 已經有別的頁面在用" % ALBUM_SLUG)
+        return
+    try:
+        con.execute("INSERT INTO pages (kind, parent_id, slug, title, title_en, summary, summary_en, body_html, body_html_en, "
+                    "published, status, sort_order, updated_at) VALUES ('album', ?, ?, '相簿', 'Photos', ?, ?, ?, ?, 1, 'live', 0, ?)",
+                    (home["id"] if home else None, ALBUM_SLUG,
+                     "粉絲分享的 163braces 演出現場照片、合照與影片。", "Photos, group shots and videos from 163braces shows, shared by fans.",
+                     intro_html(con, "zh"), intro_html(con, "en"), db.now()))
+        con.commit()
+    except db.sqlite3.IntegrityError:        # 另一個 worker 剛好同時建好了
+        con.rollback()
+
+
+def intro_html(con, lang):
+    """相簿頁的預設內文：介紹＋轉載聲明。之後在後台「頁面與文章 → 相簿」改。"""
+    email = db.get_setting(con, "contact_email")
+    return "<p>%s</p><p><small>%s</small></p>" % (
+        i18n.t(lang, "album_intro"), i18n.t(lang, "album_rights" if email else "album_rights_plain", email=email))
+
+
+def album_page(con):
+    return con.execute("SELECT * FROM pages WHERE kind = 'album'").fetchone()
+
+
 def ensure_group_album(con):
     """「合照」相簿全站一本，啟動時沒有就建立。"""
     if not con.execute("SELECT 1 FROM photo_albums WHERE kind = 'group'").fetchone():
@@ -62,16 +131,73 @@ def group_album(con):
 
 def album_url(album):
     if album["kind"] == "group":
-        return "/album/group/"
+        return "/photos/group/"
     if album["kind"] == "show" and album["performance_id"]:
-        return "/album/show/%d/" % album["performance_id"]
-    return "/album/%d/" % album["id"]
+        return "/photos/show/%d/" % album["performance_id"]
+    return "/photos/%d/" % album["id"]
 
 
 def drop_empty_albums(con):
     """演出相簿、自訂相簿的照片都刪光了就整本刪掉（合照留著）。呼叫的人負責 commit。"""
     con.execute("DELETE FROM photo_albums WHERE kind != 'group' AND "
                 "NOT EXISTS (SELECT 1 FROM photos ph WHERE ph.album_id = photo_albums.id)")
+
+
+# ==================================================================== 儲存空間
+_usage = {"at": 0.0, "bytes": 0}
+
+
+def _bytes(path):
+    """檔案或整個資料夾的大小。"""
+    if os.path.isfile(path):
+        return os.path.getsize(path)
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+def storage_paths():
+    """算進用量的地方：上傳的檔案、資料庫。Azure 上整個 /home/data（含備份、舊站的資料庫）；
+    本機資料庫放在專案資料夾，只算資料庫檔本身與備份。"""
+    data = os.path.dirname(os.path.abspath(db.DB_PATH))
+    if db.ON_AZURE:
+        return [db.MEDIA_ROOT, data]
+    return [db.MEDIA_ROOT, db.DB_PATH, os.path.join(data, "backups")]
+
+
+def storage(refresh=False):
+    """{used：資料庫＋上傳檔案用了多少, free：估計還剩多少, quota, low：該暫停收上傳了}。
+    走一遍資料夾要花時間（Azure 的 /home 是網路磁碟），結果每個 worker 記 10 分鐘。"""
+    now = time.time()
+    if refresh or now - _usage["at"] > 600:
+        _usage.update(at=now, bytes=sum(_bytes(p) for p in storage_paths() if os.path.exists(p)))
+    os.makedirs(db.MEDIA_ROOT, exist_ok=True)
+    free = shutil.disk_usage(db.MEDIA_ROOT).free
+    if STORAGE_QUOTA:
+        free = min(free, STORAGE_QUOTA - _usage["bytes"])
+    return {"used": _usage["bytes"], "free": free, "quota": STORAGE_QUOTA, "low": free < STORAGE_RESERVE}
+
+
+def keep_show_album(con, performance_id):
+    """後台要刪掉一場演出（多半是重複建了同一場）：這場的演出相簿改成自訂相簿，照片都留著，
+    名稱用原本的「日期 演出名稱」，建立的人之後可以在編輯頁把它連到正確的場次。
+    要在 DELETE performances 之前呼叫（之後就查不到名稱了）；呼叫的人負責 commit。回傳新相簿的名稱，沒有相簿回傳 None。"""
+    row = con.execute("SELECT a.id, p.event_date, p.event_name, p.event_name_en FROM photo_albums a "
+                      "JOIN performances p ON p.id = a.performance_id WHERE a.kind = 'show' AND a.performance_id = ?",
+                      (performance_id,)).fetchone()
+    if not row:
+        return None
+    date = row["event_date"].replace("-", "/")
+    title = ("%s %s" % (date, row["event_name"]))[:TITLE_MAX]
+    title_en = ("%s %s" % (date, row["event_name_en"] or row["event_name"]))[:TITLE_MAX]
+    con.execute("UPDATE photo_albums SET kind = 'custom', title = ?, title_en = ?, performance_id = NULL, updated_at = ? "
+                "WHERE id = ?", (title, title_en, db.now(), row["id"]))
+    return title
 
 
 def cache_path(photo_id, size):
@@ -150,18 +276,18 @@ def photo_items(lang, rows, visitor, review=False):
                 "pending": review and r["status"] == "live" and not r["reviewed_at"],
                 "w": r["width"], "h": r["height"]}
         if r["media"] == "image":
-            item.update(thumb="/album/img/%d/s.jpg" % r["id"], full="/album/img/%d/l.jpg" % r["id"],
-                        orig="/album/img/%d/o.jpg" % r["id"])
+            item.update(thumb="/photos/img/%d/s.jpg" % r["id"], full="/photos/img/%d/l.jpg" % r["id"],
+                        orig="/photos/img/%d/o.jpg" % r["id"])
         elif r["media"] == "video":
-            item.update(video="/album/video/%d" % r["id"])
+            item.update(video="/photos/video/%d" % r["id"])
         else:
             item.update(yt=r["youtube_id"], thumb="https://i.ytimg.com/vi/%s/hqdefault.jpg" % r["youtube_id"])
         if r["performance_id"]:
             item["show"] = {"id": r["performance_id"], "label": show_label(lang, r),
-                            "url": i18n.link(lang, "/album/show/%d/" % r["performance_id"])}
+                            "url": i18n.link(lang, "/photos/show/%d/" % r["performance_id"])}
         if mine:
-            item["edit"] = i18n.link(lang, "/album/photo/%d/edit/" % r["id"])
-            item["delete"] = "/album/photo/%d/delete" % r["id"]
+            item["edit"] = i18n.link(lang, "/photos/photo/%d/edit/" % r["id"])
+            item["delete"] = "/photos/photo/%d/delete" % r["id"]
         out.append(item)
     return out
 
@@ -189,7 +315,7 @@ def album_title(lang, a):
 
 
 def album_card(lang, a, visitor=None):
-    cover = ("/album/img/%d/s.jpg" % a["cover_id"] if a["cover_id"]
+    cover = ("/photos/img/%d/s.jpg" % a["cover_id"] if a["cover_id"]
              else "https://i.ytimg.com/vi/%s/hqdefault.jpg" % a["cover_yt"] if a["cover_yt"] else "")
     return {"id": a["id"], "kind": a["kind"], "title": album_title(lang, a), "url": i18n.link(lang, album_url(a)),
             "n": a["n"], "cover": cover, "date": (a["event_date"] or "").replace("-", "/"), "year": (a["event_date"] or "")[:4],
@@ -211,15 +337,28 @@ def show_photo_counts(con):
 
 
 # ==================================================================== 存檔
+_heif_ready = False
+
+
+def _open_heif():
+    """讓 Pillow 讀得懂 iPhone 的 HEIC（pillow-heif）。讀進來時已經依拍攝方向轉正。"""
+    global _heif_ready
+    if not _heif_ready:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+        _heif_ready = True
+
+
 def store_image(upload):
-    """照片：重新編碼成 JPEG（去掉 GPS、拍攝資訊），最長邊縮到 2400px。回傳 (檔名, 寬, 高)。"""
+    """照片：重新編碼成 JPEG（去掉 GPS、拍攝資訊），最長邊縮到 2400px。HEIC 也在這裡轉成 JPEG。回傳 (檔名, 寬, 高)。"""
     from PIL import Image, ImageOps
+    _open_heif()
     raw = upload.file.read(PHOTO_MAX_BYTES + 1)
     if len(raw) > PHOTO_MAX_BYTES:
         raise ValueError("photo_too_large")
     try:
         with Image.open(io.BytesIO(raw)) as im:
-            if im.format not in ("JPEG", "PNG", "WEBP", "GIF", "MPO"):
+            if im.format not in ("JPEG", "PNG", "WEBP", "GIF", "MPO", "HEIF"):
                 raise ValueError("photo_bad_file")
             im = ImageOps.exif_transpose(im)
             if im.mode in ("RGBA", "LA", "P"):
@@ -275,6 +414,19 @@ def store_video(upload):
     return name, None, None
 
 
+def store_all(uploads):
+    """一次上傳的所有檔案存檔，回傳 [(media, 檔名, 寬, 高)]。有一個檔案不行就全部不收（已存的刪掉），丟出 ValueError。"""
+    stored = []
+    try:
+        for u in uploads:
+            stored.append(("video",) + store_video(u) if is_video(u) else ("image",) + store_image(u))
+    except ValueError:
+        for _, name, _, _ in stored:
+            os.remove(os.path.join(db.MEDIA_ROOT, name))
+        raise
+    return stored
+
+
 def is_video(upload):
     return (upload.content_type or "").startswith("video/") or \
         os.path.splitext(upload.filename or "")[1].lower() in VIDEO_TYPES
@@ -290,10 +442,12 @@ def show_album(con, performance_id, visitor_id, name_mode):
     return con.execute("SELECT * FROM photo_albums WHERE kind = 'show' AND performance_id = ?", (performance_id,)).fetchone()
 
 
-def photos_today(con, visitor_id):
+def photos_today(con, visitor_id, media=None):
+    """這個人 24 小時內傳了幾個（media＝只算影片之類）。"""
     import datetime
     since = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat(timespec="seconds")
-    return con.execute("SELECT COUNT(*) FROM photos WHERE visitor_id = ? AND created_at >= ?", (visitor_id, since)).fetchone()[0]
+    return con.execute("SELECT COUNT(*) FROM photos WHERE visitor_id = ? AND created_at >= ?" + (" AND media = ?" if media else ""),
+                       (visitor_id, since) + ((media,) if media else ())).fetchone()[0]
 
 
 def youtube_lines(text):
@@ -316,7 +470,7 @@ def page_meta(title, title_en=None, summary=""):
     return {"title": title, "title_en": title_en or title, "summary": summary, "summary_en": ""}
 
 
-@router.get("/album/")
+@router.get("/photos/")
 def album_index(request: Request, con=Depends(get_con)):
     lang, visitor = lang_of(request), current_visitor(request, con)
     ensure_group_album(con)
@@ -331,8 +485,8 @@ def album_index(request: Request, con=Depends(get_con)):
         if a["n"] or a["visitor_id"] == me]
     return render(request, con, "album_index.html", {
         "group": album_card(lang, group), "recent_group": recent_group, "show_albums": shows, "custom_albums": custom,
-        "msg": request.query_params.get("msg"),
-    }, page=page_meta("相簿", "Albums", "粉絲分享的 163braces 演出現場照片、合照與影片。"))
+        "msg": request.query_params.get("msg"), "contact_email": db.get_setting(con, "contact_email"),
+    }, page=album_page(con) or page_meta("相簿", "Photos", "粉絲分享的 163braces 演出現場照片、合照與影片。"))
 
 
 def view(request, con, ctx, title, title_en=None, summary=""):
@@ -340,7 +494,7 @@ def view(request, con, ctx, title, title_en=None, summary=""):
                   page=page_meta(title, title_en, summary))
 
 
-@router.get("/album/show/{performance_id:int}/")
+@router.get("/photos/show/{performance_id:int}/")
 def show_photos(performance_id: int, request: Request, con=Depends(get_con)):
     """一場演出的所有照片。"""
     lang, visitor = lang_of(request), current_visitor(request, con)
@@ -356,19 +510,19 @@ def show_photos(performance_id: int, request: Request, con=Depends(get_con)):
     sections = [s for s in [
         {"key": "own", "title": i18n.t(lang, "album_this_show"), "items": own},
         {"key": "group", "title": i18n.t(lang, "album_group"), "items": group,
-         "more": i18n.link(lang, "/album/group/")},
+         "more": i18n.link(lang, "/photos/group/")},
         {"key": "others", "title": i18n.t(lang, "album_from_others"), "items": others},
     ] if s["items"]]
-    upload = i18n.link(lang, "/album/upload/?to=show&show=%d" % performance_id)
+    upload = i18n.link(lang, "/photos/upload/?to=show&show=%d" % performance_id)
     title = i18n.tr(lang, perf, "event_name")
     return view(request, con, {
         "kind": "show", "perf": perf, "sections": sections, "linked_albums": linked, "upload_url": upload,
-        "group_upload_url": i18n.link(lang, "/album/upload/?to=group&show=%d" % performance_id),
+        "group_upload_url": i18n.link(lang, "/photos/upload/?to=group&show=%d" % performance_id),
         "heading": title, "album": album,
     }, "%s · %s" % (perf["event_name"], "相簿"), "%s · Photos" % (perf["event_name_en"] or perf["event_name"]))
 
 
-@router.get("/album/group/")
+@router.get("/photos/group/")
 def group_photos(request: Request, con=Depends(get_con)):
     """合照：依場次分段，新的場次在上面。"""
     lang, visitor = lang_of(request), current_visitor(request, con)
@@ -380,19 +534,19 @@ def group_photos(request: Request, con=Depends(get_con)):
         if not sections or sections[-1]["pid"] != key:
             sections.append({"pid": key, "key": "g%d" % key,
                              "title": show_label(lang, r) if key else i18n.t(lang, "album_no_show"),
-                             "more": i18n.link(lang, "/album/show/%d/" % key) if key else "", "items": []})
+                             "more": i18n.link(lang, "/photos/show/%d/" % key) if key else "", "items": []})
         sections[-1]["items"].append(item)
     return view(request, con, {
         "kind": "group", "album": album, "sections": sections, "heading": i18n.tr(lang, album, "title"),
-        "upload_url": i18n.link(lang, "/album/upload/?to=group"),
+        "upload_url": i18n.link(lang, "/photos/upload/?to=group"),
     }, "合照 · 相簿", "Group photos · Albums", "粉絲跟 163braces 的合照與影片，依演出場次整理。")
 
 
-@router.get("/album/{album_id:int}/")
+@router.get("/photos/{album_id:int}/")
 def custom_album(album_id: int, request: Request, con=Depends(get_con)):
     lang, visitor = lang_of(request), current_visitor(request, con)
     album = con.execute(album_select(con) + " WHERE a.id = ?", (album_id,)).fetchone() or _404()
-    if album["kind"] != "custom":
+    if album["kind"] != "custom" and album_url(album) != "/photos/%d/" % album_id:     # 演出相簿、合照有自己的網址
         return RedirectResponse(prefix(request) + album_url(album), status_code=301)
     if album["hidden"] and not is_admin(request, con):
         _404()
@@ -402,14 +556,15 @@ def custom_album(album_id: int, request: Request, con=Depends(get_con)):
         "kind": "custom", "album": album, "card": card, "heading": card["title"],
         "sections": [{"key": "all", "title": "", "items": items}] if items else [],
         "perf": performance(con, album["performance_id"]),
-        "upload_url": i18n.link(lang, "/album/upload/?to=custom&album=%d" % album_id),
-        "edit_url": i18n.link(lang, "/album/%d/edit/" % album_id) if card["mine"] else "",
+        "upload_url": i18n.link(lang, "/photos/upload/?to=custom&album=%d" % album_id),
+        "edit_url": i18n.link(lang, "/photos/%d/edit/" % album_id) if card["mine"] else "",
     }, "%s · 相簿" % album["title"], "%s · Albums" % album["title"], album["description"][:150])
 
 
 # ==================================================================== 圖檔
 def _public(con, row):
-    return row["status"] == "live" and not row["hidden"] and (row["reviewed_at"] or not db.review_required(con, "photo"))
+    return (row["status"] == "live" and not row["hidden"] and (row["reviewed_at"] or not db.review_required(con, "photo"))
+            and db.album_published(con))
 
 
 def _viewable(request, con, row):
@@ -426,7 +581,7 @@ def _media_row(con, photo_id, media):
                        (photo_id, media)).fetchone()
 
 
-@router.get("/album/img/{photo_id:int}/{size}.jpg")
+@router.get("/photos/img/{photo_id:int}/{size}.jpg")
 def photo_image(photo_id: int, size: str, request: Request, con=Depends(get_con)):
     """照片：s 格子用的縮圖、l 點開看的大圖、o 原檔（2400px）。下架的只給上傳的人與管理者看，不讓瀏覽器快取。"""
     if size not in SIZES and size != "o":
@@ -451,7 +606,7 @@ def photo_image(photo_id: int, size: str, request: Request, con=Depends(get_con)
     return FileResponse(out, media_type="image/jpeg", headers=cache)
 
 
-@router.get("/album/video/{photo_id:int}")
+@router.get("/photos/video/{photo_id:int}")
 def photo_video(photo_id: int, request: Request, con=Depends(get_con)):
     """影片檔：FileResponse 支援 Range，瀏覽器可以邊下載邊播、拖進度條。"""
     row = _media_row(con, photo_id, "video") or _404()
@@ -471,7 +626,7 @@ def custom_choices(con, lang):
             for a in con.execute(album_select(con) + " WHERE a.kind = 'custom' AND a.hidden = 0 ORDER BY a.updated_at DESC")]
 
 
-@router.get("/album/upload/")
+@router.get("/photos/upload/")
 def upload_form(request: Request, con=Depends(get_con)):
     lang, visitor = lang_of(request), current_visitor(request, con)
     qp = request.query_params
@@ -481,23 +636,34 @@ def upload_form(request: Request, con=Depends(get_con)):
         "albums": custom_choices(con, lang), "error": qp.get("error"),
         "need_login": not visitor or V.is_guest(visitor),
         "blocked": submit_block(request, visitor) if visitor and not V.is_guest(visitor) else None,
-        "closed": closed(request, con, "photo"),
-        "max_items": MAX_ITEMS, "video_mb": VIDEO_MAX_BYTES // 1024 // 1024,
+        "closed": closed(request, con, "photo") or (T(request, "album_storage_full") if storage()["low"] else None),
+        "max_items": MAX_ITEMS, "video_mb": VIDEO_MAX_BYTES // 1024 // 1024, "photo_mb": PHOTO_MAX_BYTES // 1024 // 1024,
+        "total_mb": UPLOAD_MAX_BYTES // 1024 // 1024, "video_daily": VIDEO_DAILY,
         "contact_email": db.get_setting(con, "contact_email"),
     }), page=page_meta("上傳照片", "Upload photos"))
 
 
-@router.post("/album/upload/")
+@router.post("/photos/upload/")
 async def upload(request: Request, con=Depends(get_con)):
     check_post(request)
     visitor = current_visitor(request, con)
     if not visitor:
-        return RedirectResponse(login_url(request, prefix(request) + "/album/upload/"), status_code=303)
+        return RedirectResponse(login_url(request, prefix(request) + "/photos/upload/"), status_code=303)
+    # 總大小超過就不收：先看 Content-Length（還沒開始讀檔案就擋掉；多留 1MB 給表單欄位與分隔線）
+    total_mb = UPLOAD_MAX_BYTES // 1024 // 1024
+    too_big = prefix(request) + "/photos/upload/?error=" + quote(T(request, "album_total_too_large", mb=total_mb))
+    length = as_id(request.headers.get("content-length")) or 0
+    if length > UPLOAD_MAX_BYTES + 1024 * 1024:
+        return RedirectResponse(too_big, status_code=303)
+    # 空間不夠（或收了這批就不夠）：一樣還沒讀檔案就擋掉
+    space = await run_in_threadpool(storage)
+    if space["low"] or space["free"] - length < STORAGE_RESERVE:
+        return RedirectResponse(prefix(request) + "/photos/upload/?error=" + quote(T(request, "album_storage_full")), status_code=303)
     form = await request.form()
     target = form.get("target") if form.get("target") in ("show", "custom", "group") else "show"
     pid = as_id(form.get("performance_id"))
     album_choice = (form.get("album_id") or "").strip()
-    back = prefix(request) + "/album/upload/?to=%s%s%s" % (
+    back = prefix(request) + "/photos/upload/?to=%s%s%s" % (
         target, "&show=%d" % pid if pid else "", "&album=" + quote(album_choice) if album_choice.isdigit() else "")
 
     def fail(key, **kw):
@@ -511,6 +677,8 @@ async def upload(request: Request, con=Depends(get_con)):
     if target in ("show", "group") and not perf:
         return fail("album_need_show")
     uploads = [u for u in form.getlist("files") if getattr(u, "filename", "")]
+    if sum(u.size or 0 for u in uploads) > UPLOAD_MAX_BYTES:       # 沒有 Content-Length 的（分段傳送）在這裡擋
+        return RedirectResponse(too_big, status_code=303)
     videos = [u for u in uploads if is_video(u)]
     yt = youtube_lines(form.get("youtube")) if target == "group" else []
     if yt is None:
@@ -526,6 +694,8 @@ async def upload(request: Request, con=Depends(get_con)):
         return fail("album_need_own")
     if photos_today(con, visitor["id"]) + total > V.DAILY_LIMITS["photo"]:
         return fail("daily_limit", n=V.DAILY_LIMITS["photo"])
+    if videos and photos_today(con, visitor["id"], "video") + len(videos) > VIDEO_DAILY:
+        return fail("album_video_daily", n=VIDEO_DAILY)
     mode = form.get("name_mode") if form.get("name_mode") in V.NAME_MODES else "nickname"
     album = None
     if target == "custom":
@@ -540,14 +710,12 @@ async def upload(request: Request, con=Depends(get_con)):
                                 (as_id(album_choice),)).fetchone()
             if not album:
                 return fail("album_need_album")
-    stored = []
     try:
-        for u in uploads:
-            stored.append(("video",) + store_video(u) if is_video(u) else ("image",) + store_image(u))
+        # 壓縮照片、寫影片檔要好幾秒；丟到背景執行緒做，這個 worker 才能繼續回應其他訪客
+        stored = await run_in_threadpool(store_all, uploads)
     except ValueError as e:
-        for _, name, _, _ in stored:                    # 有一個檔案不行就全部不收
-            os.remove(os.path.join(db.MEDIA_ROOT, name))
         return fail(str(e), mb=VIDEO_MAX_BYTES // 1024 // 1024)
+    _usage["bytes"] += sum(os.path.getsize(os.path.join(db.MEDIA_ROOT, name)) for _, name, _, _ in stored)   # 下次重算前先自己加上
     now = db.now()
     if target == "group":
         album = group_album(con)
@@ -580,7 +748,7 @@ def own_photo(con, visitor, photo_id):
     return con.execute(PHOTO_SELECT + " WHERE ph.id = ? AND ph.visitor_id = ?", (photo_id, visitor["id"])).fetchone()
 
 
-@router.get("/album/photo/{photo_id:int}/edit/")
+@router.get("/photos/photo/{photo_id:int}/edit/")
 def photo_edit_form(photo_id: int, request: Request, con=Depends(get_con)):
     lang, visitor = lang_of(request), current_visitor(request, con)
     if not visitor:
@@ -593,7 +761,7 @@ def photo_edit_form(photo_id: int, request: Request, con=Depends(get_con)):
     }), page=page_meta("編輯照片", "Edit photo"))
 
 
-@router.post("/album/photo/{photo_id:int}/edit/")
+@router.post("/photos/photo/{photo_id:int}/edit/")
 async def photo_edit(photo_id: int, request: Request, con=Depends(get_con)):
     check_post(request)
     visitor = current_visitor(request, con)
@@ -616,7 +784,7 @@ async def photo_edit(photo_id: int, request: Request, con=Depends(get_con)):
                             status_code=303)
 
 
-@router.post("/album/photo/{photo_id:int}/delete")
+@router.post("/photos/photo/{photo_id:int}/delete")
 def photo_delete(photo_id: int, request: Request, con=Depends(get_con)):
     """刪除自己的照片（下架的也可以刪）。相簿刪到空了就整本刪掉。"""
     check_post(request)
@@ -629,7 +797,10 @@ def photo_delete(photo_id: int, request: Request, con=Depends(get_con)):
     remove_files([row])
     pagecache.invalidate()
     still = con.execute("SELECT 1 FROM photo_albums WHERE id = ?", (album["id"],)).fetchone()
-    target = album_url(album) if still or album["kind"] == "show" else "/album/"
+    target = album_url(album) if still or album["kind"] == "show" else "/photos/"
+    if not db.album_published(con):                     # 相簿關閉中：是從「我的投稿」刪的，回那裡
+        target = "/me/?tab=submissions"
+        return RedirectResponse(prefix(request) + target + "&msg=" + quote(T(request, "album_photo_deleted")), status_code=303)
     return RedirectResponse(prefix(request) + target + "?msg=" + quote(T(request, "album_photo_deleted")), status_code=303)
 
 
@@ -640,7 +811,7 @@ def own_album(con, visitor, album_id):
                        (album_id, visitor["id"])).fetchone()
 
 
-@router.get("/album/{album_id:int}/edit/")
+@router.get("/photos/{album_id:int}/edit/")
 def album_edit_form(album_id: int, request: Request, con=Depends(get_con)):
     lang, visitor = lang_of(request), current_visitor(request, con)
     if not visitor:
@@ -654,7 +825,7 @@ def album_edit_form(album_id: int, request: Request, con=Depends(get_con)):
     }), page=page_meta("編輯相簿", "Edit album"))
 
 
-@router.post("/album/{album_id:int}/edit/")
+@router.post("/photos/{album_id:int}/edit/")
 async def album_edit(album_id: int, request: Request, con=Depends(get_con)):
     check_post(request)
     visitor = current_visitor(request, con)
@@ -669,7 +840,7 @@ async def album_edit(album_id: int, request: Request, con=Depends(get_con)):
         con.commit()
         remove_files(rows)
         pagecache.invalidate()
-        return RedirectResponse(prefix(request) + "/album/?msg=" + quote(T(request, "album_deleted")), status_code=303)
+        return RedirectResponse(prefix(request) + "/photos/?msg=" + quote(T(request, "album_deleted")), status_code=303)
     title = " ".join((form.get("title") or "").split())[:TITLE_MAX]
     if not title:
         return RedirectResponse(request.url.path + "?error=" + quote(T(request, "album_need_title")), status_code=303)
@@ -695,12 +866,23 @@ def my_photo_albums(con, lang, visitor_id):
              "removed": a["removed"] or 0, "hidden": a["hidden"]} for a in rows]
 
 
+def my_photos(con, lang, visitor):
+    """相簿關閉時「我的投稿」列出自己上傳的每一張（縮圖、在哪本相簿、刪除）。"""
+    rows = con.execute(PHOTO_SELECT + " WHERE ph.visitor_id = ? ORDER BY ph.created_at DESC, ph.id DESC", (visitor["id"],)).fetchall()
+    return [dict(item, album=album_title(lang, dict(r, kind=r["album_kind"], title=r["album_title"], title_en=r["album_title_en"],
+                                                  event_name=r["event_name"] if r["album_kind"] == "show" else None)))
+            for item, r in zip(photo_items(lang, rows, visitor), rows)]
+
+
 def sitemap_urls(con):
-    urls = ["/album/", "/album/group/"]
-    urls += ["/album/show/%d/" % r[0] for r in con.execute(
+    """相簿首頁 /photos/ 是 pages 表裡的頁面，sitemap 已經列了；這裡列底下的。相簿頁沒上線就都不列。"""
+    if not db.album_published(con):
+        return []
+    urls = ["/photos/group/"]
+    urls += ["/photos/show/%d/" % r[0] for r in con.execute(
         "SELECT DISTINCT ph.performance_id FROM photos ph JOIN photo_albums a ON a.id = ph.album_id "
         "WHERE " + live(con) + " AND a.hidden = 0 AND ph.performance_id IS NOT NULL")]
-    urls += ["/album/%d/" % r[0] for r in con.execute(
+    urls += ["/photos/%d/" % r[0] for r in con.execute(
         "SELECT a.id FROM photo_albums a WHERE a.kind = 'custom' AND a.hidden = 0 AND EXISTS "
         "(SELECT 1 FROM photos ph WHERE ph.album_id = a.id AND " + live(con) + ")")]
     return urls

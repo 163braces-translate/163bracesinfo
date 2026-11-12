@@ -46,7 +46,7 @@
       {% endif %}
       {% if p.status == 'live' %}<a class="btn small" href="{{ page_url(p) }}" target="_blank" rel="noopener">檢視</a>
       {% else %}<a class="btn small" href="{{ page_url(p) }}?preview=1" target="_blank" rel="noopener" title="還沒上線，訪客看不到；這個連結只有登入後台的人打得開">預覽</a>{% endif %}
-      <a class="btn small" href="/admin/pages/new?parent={{ p.id }}">＋子頁面</a>
+      {% if p.kind != 'album' %}<a class="btn small" href="/admin/pages/new?parent={{ p.id }}">＋子頁面</a>{% endif %}{#- 相簿頁底下不能放頁面 #}
     </span>
   </div>
 {% endmacro %}

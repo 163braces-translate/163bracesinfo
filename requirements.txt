@@ -5,3 +5,4 @@ uvicorn==0.54.0
 Jinja2==3.1.6
 python-multipart==0.0.32
 pillow==13.0.0
+pillow-heif==1.8.1          # 讀 iPhone 的 HEIC 照片（相簿上傳）

@@ -20,8 +20,15 @@ import json
 from . import db, i18n, queries as Q
 
 HEADER_KEY = "header_menu_json"
-ALBUM_ITEM = {"label": "相簿", "label_en": "Albums", "page_id": None, "url": "/album/"}
 FOOTER_KEY = "footer_json"
+
+
+def album_item(con):
+    """選單上的「相簿」：連到相簿頁（pages 表 kind='album'），標題跟著頁面、頁面取消發佈時自動不顯示。"""
+    page = con.execute("SELECT id FROM pages WHERE kind = 'album'").fetchone()
+    if page:
+        return {"label": "", "label_en": "", "page_id": page["id"], "url": "", "children": []}
+    return {"label": "相簿", "label_en": "Photos", "page_id": None, "url": "/photos/", "children": []}
 
 
 def _pages(con):
@@ -47,7 +54,7 @@ def default_header(con):
             {"label": "歌詞列表", "label_en": "Lyrics", "page_id": lyr["id"], "url": ""},
             {"label": "樂譜", "label_en": "Sheet music", "page_id": None, "url": Q.sheets_url(con)},
         ]})
-    items.append(dict(ALBUM_ITEM, children=[]))
+    items.append(album_item(con))
     for p in (pages.get("articles"), about):
         if p:
             items.append({"label": "", "label_en": "", "page_id": p["id"], "url": "", "children": []})
@@ -107,11 +114,12 @@ def add_album_link(con):
     raw = con.execute("SELECT value FROM settings WHERE key = ?", (HEADER_KEY,)).fetchone()
     if raw:
         items = json.loads(raw["value"])
-        urls = [i.get("url") for i in items] + [c.get("url") for i in items for c in i.get("children") or []]
-        if "/album/" not in urls:
+        entries = items + [c for i in items for c in i.get("children") or []]
+        item = album_item(con)
+        if not any(e.get("url") == "/photos/" or (item["page_id"] and e.get("page_id") == item["page_id"]) for e in entries):
             lyr = con.execute("SELECT id FROM pages WHERE kind = 'lyrics'").fetchone()
             at = next((n + 1 for n, i in enumerate(items) if lyr and i.get("page_id") == lyr["id"]), len(items))
-            items.insert(at, dict(ALBUM_ITEM, children=[]))
+            items.insert(at, item)
             db.set_setting(con, HEADER_KEY, json.dumps(items, ensure_ascii=False))
     db.set_setting(con, "nav_album_added", "1")
     con.commit()

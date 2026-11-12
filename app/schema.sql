@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
 -- 歌詞頁的網址＝歌詞索引頁的 slug＋歌詞的 slug；文章同理。
 CREATE TABLE IF NOT EXISTS pages (
     id              INTEGER PRIMARY KEY,
-    kind            TEXT NOT NULL CHECK (kind IN ('home', 'performances', 'lyrics', 'articles', 'article', 'page')),
+    kind            TEXT NOT NULL CHECK (kind IN ('home', 'performances', 'lyrics', 'articles', 'article', 'page', 'album')),
     parent_id       INTEGER REFERENCES pages(id),
     slug            TEXT NOT NULL UNIQUE,
     title           TEXT NOT NULL,

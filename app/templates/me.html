@@ -163,7 +163,7 @@
     <section class="card contrib-card">
       <h2>{{ t('albums') }}</h2>
       <p class="small muted">{{ t('album_target_show_hint') }}；{{ t('album_target_group_hint') }}</p>
-      {% if can_submit('photo') %}<a class="btn small primary" href="{{ link('/album/upload/') }}">{{ t('album_upload') }}</a>
+      {% if can_submit('photo') %}<a class="btn small primary" href="{{ link('/photos/upload/') }}">{{ t('album_upload') }}</a>
       {% else %}{{ m.closed_button(t('album_upload'), t('submit_closed')) }}{% endif %}
     </section>
   </div>
@@ -195,8 +195,19 @@
           {% if c.admin_note %}<div class="small muted">{{ c.admin_note }}</div>{% endif %}</li>
       {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>
     <section class="card"><div class="card-head"><h2>{{ t('album_my_photos') }}</h2></div>
+      {% if album_closed %}
+      {#- 相簿關閉中：相簿頁看不到，自己的照片列在這裡，可以刪 #}
+      <p class="small muted">{{ t('album_closed_mine') }}</p>
+      {% if my_photos %}<ul class="my-photos">{% for p in my_photos %}
+        <li>
+          {% if p.media == 'video' %}<video src="{{ p.video }}#t=0.1" preload="metadata" muted playsinline></video>
+          {% else %}<img src="{{ p.thumb }}" alt="{{ p.caption }}" loading="lazy">{% endif %}
+          <span class="small muted">{{ p.album }} · {{ p.date }}</span>
+          <form method="post" action="{{ p.delete }}"><button class="btn small danger" type="submit" data-confirm="{{ t('album_delete_confirm') }}">{{ t('delete') }}</button></form>
+        </li>
+      {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}
       {#- 照片在相簿頁點開來就能編輯、刪除 #}
-      {% if my_albums %}<ul class="plain-list">{% for a in my_albums %}
+      {% elif my_albums %}<ul class="plain-list">{% for a in my_albums %}
         <li><a href="{{ a.url }}">{{ a.title }}</a> <span class="small muted">· {{ t('album_my_count', n=a.mine) }}</span>
           {% if a.hidden %}<span class="chip warn">{{ t('album_my_hidden') }}</span>{% elif a.removed %}<span class="chip warn">{{ t('album_my_removed', n=a.removed) }}</span>{% endif %}</li>
       {% endfor %}</ul>{% else %}<p class="small muted">{{ t('subs_empty') }}</p>{% endif %}</section>

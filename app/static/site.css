@@ -610,6 +610,12 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .attend-save { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
 .results-head.dirty { position: sticky; top: 68px; z-index: 20; background: var(--bg); padding: 8px 0; box-shadow: 0 8px 8px -8px rgba(17, 24, 39, .12); }
 .perf-table .att-col { width: 1%; padding-right: 4px; }
+.my-photos { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.my-photos li { display: flex; flex-direction: column; gap: 4px; }
+.my-photos img, .my-photos video { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+.att-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.att-stack .att-count { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.att-stack .att-count:empty { display: none; }
 .perf-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .add-setlist { font-size: .78rem; color: var(--faint); margin-left: 6px; white-space: nowrap; }
 .add-setlist:hover { color: var(--primary); }
@@ -936,6 +942,10 @@ body.lb-open { overflow: hidden; }
 .upload-previews img, .upload-previews video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .upload-previews button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; font-size: .75rem; cursor: pointer; }
 [data-upload-note].over { color: #b42318; }
+.upload-previews li.bad { outline: 2px solid #b42318; outline-offset: -2px; }
+.upload-previews li.bad .ph-flag { background: #fde8e6; color: #b42318; }
+.upload-previews .ph-name { display: flex; align-items: center; justify-content: center; height: 100%; padding: 8px 8px 26px;
+  font-size: .72rem; color: var(--muted); text-align: center; word-break: break-all; }
 .edit-preview { margin: 8px 0 4px; }
 .edit-preview img, .edit-preview video { max-height: 260px; width: auto; border-radius: 8px; display: block; }
 
@@ -956,8 +966,8 @@ body.lb-open { overflow: hidden; }
 .picker-more { padding: 8px 12px; }
 
 /* 演出列表、行事曆上的 📷 */
-.chip.photo-chip { background: #eef6f0; color: #1d6b43; display: inline-flex; align-items: center; gap: 3px; }
-.chip.photo-chip:hover { text-decoration: none; background: #dcefe2; color: #1d6b43; }
+.chip.photo-chip { background: #f1ebfb; color: #5b3a9e; display: inline-flex; align-items: center; gap: 3px; }
+.chip.photo-chip:hover { text-decoration: none; background: #e4d9f7; color: #5b3a9e; }
 .chip.photo-chip svg { width: 13px; height: 13px; }
 
 /* 暫停投稿：投稿按鈕變灰（_macros.html 的 closed_button） */

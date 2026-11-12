@@ -133,6 +133,42 @@ def init(con):
         con.execute("UPDATE song_likes SET position = (SELECT COUNT(*) FROM song_likes k "
                     "WHERE k.visitor_id = song_likes.visitor_id AND k.created_at > song_likes.created_at)")
         con.commit()
+    allow_album_page(con)
+
+
+def allow_album_page(con):
+    """pages 表的 kind 加上 'album'（相簿頁也是固定頁面）。SQLite 改不了 CHECK，只能整張表重建：
+    照資料庫裡現有的建表語法（欄位順序、舊欄位都跟 schema.sql 不一定一樣）只改 kind 那一段，資料原封不動複製過去。
+    兩個 worker 同時啟動時，用 BEGIN IMMEDIATE 排隊，第二個進來時會發現已經改好了。"""
+    import re
+
+    def current():
+        return con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'pages'").fetchone()[0]
+    if "'album'" in current():
+        return
+    con.commit()
+    con.execute("PRAGMA foreign_keys = OFF")        # 別的表（與 pages 自己的 parent_id）參照 pages，重建期間先關掉
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        sql = current()
+        if "'album'" not in sql:
+            new = re.sub(r"(CHECK\s*\(\s*kind\s+IN\s*\([^)]*)\)", r"\1, 'album')", sql, count=1)
+            new = re.sub(r'^CREATE TABLE\s+"?pages"?', "CREATE TABLE pages_new", new, count=1)
+            if "'album'" not in new or "pages_new" not in new:
+                raise RuntimeError("pages 表的建表語法認不出來，沒有改")
+            before = con.execute("SELECT COUNT(*) FROM pages").fetchone()[0]
+            con.execute(new)
+            con.execute("INSERT INTO pages_new SELECT * FROM pages")
+            con.execute("DROP TABLE pages")
+            con.execute("ALTER TABLE pages_new RENAME TO pages")
+            if con.execute("SELECT COUNT(*) FROM pages").fetchone()[0] != before or con.execute("PRAGMA foreign_key_check").fetchone():
+                raise RuntimeError("pages 表重建後檢查沒過，已還原")
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.execute("PRAGMA foreign_keys = ON")
 
 
 STATUSES = {"live": "線上", "unpublished": "取消發佈", "draft": "草稿"}
@@ -152,8 +188,16 @@ def get_setting(con, key):
     return row["value"] if row else SETTINGS.get(key, "")
 
 
+def album_published(con):
+    """相簿頁（pages 表 kind='album'）有沒有上線。還沒建立時當作上線。"""
+    row = con.execute("SELECT published FROM pages WHERE kind = 'album'").fetchone()
+    return not row or bool(row[0])
+
+
 def submissions_open(con, kind):
-    """這種投稿目前開放嗎（kind 見 REVIEW_KINDS）。"""
+    """這種投稿目前開放嗎（kind 見 REVIEW_KINDS）。相簿頁取消發佈時照片也不收。"""
+    if kind == "photo" and not album_published(con):
+        return False
     return get_setting(con, "submit_" + kind) != "0"
 
 
