@@ -2,10 +2,8 @@
 
 從 main.py 拆出來，讓其他前台路由（community.py 的粉絲功能）也能用同一個 render()，又不會循環 import。
 """
-import asyncio
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 from fastapi.templating import Jinja2Templates
@@ -29,21 +27,6 @@ def venue_url(p):
 
 
 templates.env.globals["venue_url"] = venue_url
-
-
-# 同步路由（def）由 FastAPI 交給執行緒去跑，預設每個 worker 最多 40 個同時跑。
-# 但 sqlite3 每讀一列就要放掉、再搶回 Python 的 GIL，同時跑的執行緒越多，越多時間花在互搶上：
-# 2026-11 壓測，「我的 → 回顧」1 個執行緒時每次 1ms CPU，16 個時變成 48ms；300 人同時在線時要等 8～29 秒。
-# 限成 2 個之後同樣情況多半 10ms 內回應（main.py 啟動時設定）。人多時請求會先排隊，但隊伍消化得快。
-DB_THREADS = 2
-
-# 要等外部網站回應的工作（Google 登入換資料、解析地圖短網址）另外用這組執行緒，
-# 不佔上面那 2 格，也不卡住處理所有連線的主迴圈。
-_NETWORK = ThreadPoolExecutor(max_workers=8, thread_name_prefix="network")
-
-
-async def wait_network(fn, *args):
-    return await asyncio.get_running_loop().run_in_executor(_NETWORK, fn, *args)
 
 
 def get_con():

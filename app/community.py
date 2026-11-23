@@ -18,13 +18,12 @@ from collections import Counter, defaultdict
 from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import QueryParams
 
 from . import auth, db, i18n, maps, queries as Q, taiwan, visitors as V
 from .admin import same_origin
-from .web import current_visitor, get_con, lang_of, render, wait_network
+from .web import current_visitor, get_con, lang_of, render
 
 router = APIRouter()
 
@@ -142,8 +141,7 @@ def google_login(request: Request):
 
 
 @router.get("/auth/google/callback")
-async def google_callback(request: Request):
-    """等 Google 回應的那段不佔資料庫的執行緒（見 web.py DB_THREADS），存帳號、開 session 才回到一般的執行緒。"""
+def google_callback(request: Request, con=Depends(get_con)):
     def fail(msg):
         return RedirectResponse("/auth/login?error=" + quote(msg), status_code=303)
     if request.query_params.get("error"):
@@ -155,21 +153,12 @@ async def google_callback(request: Request):
     if not secrets.compare_digest(state, request.query_params.get("state") or ""):
         return fail("登入驗證失敗，請再試一次。")
     try:
-        claims = await wait_network(V.google_exchange, request.query_params.get("code") or "", verifier,
-                                    redirect_uri(request))
+        claims = V.google_exchange(request.query_params.get("code") or "", verifier, redirect_uri(request))
     except V.LoginError as e:
         return fail(str(e))
-    return await run_in_threadpool(google_finish, request, claims, nxt)
-
-
-def google_finish(request, claims, nxt):
-    con = db.connect()
-    try:
-        visitor_id = V.upsert_visitor(con, "google:" + claims["sub"], claims.get("email", ""),
-                                      claims.get("name", ""), claims.get("picture", ""))
-        return finish_login(request, con, visitor_id, nxt)
-    finally:
-        con.close()
+    visitor_id = V.upsert_visitor(con, "google:" + claims["sub"], claims.get("email", ""),
+                                  claims.get("name", ""), claims.get("picture", ""))
+    return finish_login(request, con, visitor_id, nxt)
 
 
 @router.post("/auth/dev-login")
@@ -417,7 +406,7 @@ async def read_map_link(request: Request, con=Depends(get_con)):
     if not current_visitor(request, con):
         return need_login_json(request)
     try:
-        url, lat, lng = await wait_network(maps.resolve, (await request.form()).get("url") or "")
+        url, lat, lng = maps.resolve((await request.form()).get("url") or "")
     except maps.MapLinkError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     return {"lat": lat, "lng": lng}
