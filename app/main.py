@@ -11,6 +11,7 @@ import json
 import math
 import os
 
+import anyio.to_thread
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +19,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import admin, auth, backup, community, db, holidays, i18n, navigation, pagecache, queries as Q, taiwan
-from .web import HERE, as_id, get_con, lang_of, render, venue_url
+from .web import DB_THREADS, HERE, as_id, get_con, lang_of, render, venue_url
 
 
 class LanguagePrefix:
@@ -40,6 +41,7 @@ class LanguagePrefix:
 @contextlib.asynccontextmanager
 async def lifespan(app):
     """啟動時補上新版本加的資料表（schema.sql 全是 CREATE … IF NOT EXISTS，重複執行沒關係）與預設頁面。"""
+    anyio.to_thread.current_default_thread_limiter().total_tokens = DB_THREADS     # 原因見 web.py
     con = db.connect()
     try:
         db.init(con)
