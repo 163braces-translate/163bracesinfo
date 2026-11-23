@@ -1,13 +1,38 @@
 /* 「我的 → 回顧」：在瀏覽器裡用 Canvas 畫回顧圖（1080×1920 限時動態或 1080×1080 正方形），
  * 圖表可以拖曳、縮放、拿掉，最後輸出 JPG。資料是頁面上的 recap-data；
- * 期間、住的行政區、版面只記在這台裝置（localStorage），不會送回伺服器。 */
+ * 背景可以是單色（可換主色）或自己的照片（圖表變透明底；照片只在這次的頁面裡用，不上傳也不存）。
+ * 期間、住的行政區、版面、背景設定只記在這台裝置（localStorage），不會送回伺服器。 */
 (function () {
   "use strict";
   var D = JSON.parse(document.getElementById("recap-data").textContent);
   var T = D.text;
   var FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
-  var C = { bg1: "#e8effc", bg2: "#fafafa", card: "#ffffff", border: "#e5e7eb", text: "#1f2328", muted: "#646a73",
-            primary: "#2f6fdb", home: "#eb6834", land: "#eef1f5", landLine: "#cfd5dd", dot: "rgba(47, 111, 219, .75)", zero: "#d3d7dd" };
+  // 主色可以換（預設藍色）；背景可以是單色或自己的照片。照片模式時每張圖表都是透明底，直接疊在照片上
+  var COLORS = ["#2f6fdb", "#7b5cd6", "#d9578f", "#d64545", "#e07b2a", "#2f9e6e", "#1f9bb4", "#59606b"];
+  var C = {};
+  function rgbOf(hex) { var n = parseInt(hex.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+  function rgba(c, a) { return "rgba(" + c[0] + ", " + c[1] + ", " + c[2] + ", " + a + ")"; }
+  function mix(c, to, t) { return "rgb(" + c.map(function (v, i) { return Math.round(v + (to[i] - v) * t); }).join(", ") + ")"; }
+  function luma(c) { return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+  function photoMode() { return state.bg.mode === "photo" && !!photo; }
+  function applyTheme() {
+    var c = rgbOf(state.bg.color);
+    C = { bg2: "#fafafa", card: "#ffffff", border: "#e5e7eb", text: "#1f2328", muted: "#646a73", home: "#eb6834",
+          land: "#eef1f5", landLine: "#cfd5dd", zero: "#d3d7dd", halo: "#ffffff", inset: "#d5dae1", ring: "#ffffff",
+          clear: false, shadow: "" };
+    C.bg1 = mix(c, [255, 255, 255], 0.88);                       // 背景上方的淡色（藍色時就是原本的 #e8effc）
+    C.primary = luma(c) > 0.6 ? mix(c, [0, 0, 0], 0.35) : state.bg.color;   // 太淺的顏色當字看不清楚，壓深一點
+    C.dot = rgba(c, 0.75); C.line = rgba(c, 0.45); C.track = C.bg1;
+    if (!photoMode()) return;
+    var light = state.bg.tone === "light", ink = light ? [255, 255, 255] : [17, 20, 24];
+    C.clear = true;
+    C.primary = state.bg.color;
+    C.text = rgba(ink, 1); C.muted = rgba(ink, 0.82); C.border = rgba(ink, 0.35); C.track = rgba(ink, 0.25);
+    C.land = rgba(ink, light ? 0.18 : 0.1); C.landLine = rgba(ink, 0.55); C.zero = rgba(ink, 0.4); C.inset = rgba(ink, 0.5);
+    C.halo = light ? "rgba(0, 0, 0, .55)" : "rgba(255, 255, 255, .75)";
+    C.ring = light ? "rgba(0, 0, 0, .35)" : "#ffffff";
+    C.shadow = light ? "rgba(0, 0, 0, .5)" : "rgba(255, 255, 255, .55)";     // 字的淡陰影：不是底色，只是讓字在照片上看得清楚
+  }
   var W = 1080;
   // 四周不放東西的比例（上、右、下、左）：限時動態的上方、下方會被 IG 的頭像、按鈕和回覆欄蓋住
   var FORMATS = {
@@ -32,8 +57,15 @@
     rows: [3, 5, 8, 10].indexOf(saved.rows) >= 0 ? saved.rows : 5,
     layouts: { story: cleanLayout(saved.layouts && saved.layouts.story), square: cleanLayout(saved.layouts && saved.layouts.square) },
     home: null,
-    from: "", to: ""
+    from: "", to: "",
+    bg: cleanBg(saved.bg)
   };
+  var photo = null;          // 選的背景照片（縮過的 canvas）；只在這次打開的頁面裡，不存
+  function cleanBg(b) {
+    b = b || {};
+    return { mode: b.mode === "photo" ? "photo" : "color", color: /^#[0-9a-f]{6}$/i.test(b.color || "") ? b.color : COLORS[0],
+             tone: b.tone === "dark" ? "dark" : "light", veil: Math.min(60, Math.max(0, +b.veil || 0)) };
+  }
   function cleanLayout(list) {
     if (!Array.isArray(list)) return null;
     return list.filter(function (w) {
@@ -42,7 +74,7 @@
   }
   function save() {
     try {
-      localStorage.setItem(STORE, JSON.stringify({ format: state.format, rows: state.rows, layouts: state.layouts }));
+      localStorage.setItem(STORE, JSON.stringify({ format: state.format, rows: state.rows, layouts: state.layouts, bg: state.bg }));
     } catch (e) { /* 無痕模式之類存不了，就不記 */ }
   }
   function widgets() { return state.layouts[state.format]; }
@@ -84,8 +116,9 @@
     var da = a.replace(/-/g, "/"), db = b.replace(/-/g, "/");
     return da === db ? da : da + "~" + db;
   }
+  // 「全部」：第一場那年到最後一場那年（勾了明年的場次的話會到明年）；years 是新到舊
   function setYear(y) {
-    if (y === "all") { state.from = years[years.length - 1] + "-01-01"; state.to = thisYear + "-12-31"; }
+    if (y === "all") { state.from = years[years.length - 1] + "-01-01"; state.to = years[0] + "-12-31"; }
     else if (y !== "custom") { state.from = y + "-01-01"; state.to = y + "-12-31"; }
   }
 
@@ -154,12 +187,16 @@
   }
   function text(str, x, y, size, weight, color, align) {
     ctx.font = font(size, weight); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic";
+    if (C.shadow) { ctx.shadowColor = C.shadow; ctx.shadowBlur = Math.max(4, size / 5); }
     ctx.fillText(str, x, y);
+    ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
   }
   function fmt(n) { return Number(n).toLocaleString(D.lang === "en" ? "en" : "zh-TW"); }
   function card(bw, bh, title) {
-    rr(0, 0, bw, bh, 28); ctx.fillStyle = C.card; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = C.border; ctx.stroke();
+    if (!C.clear) {             // 照片模式：透明底、沒有框，圖表直接疊在照片上
+      rr(0, 0, bw, bh, 28); ctx.fillStyle = C.card; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = C.border; ctx.stroke();
+    }
     if (title) { ctx.font = font(30, 700); text(fit(title, bw - 56), 28, 54, 30, 700, C.text); }
   }
 
@@ -176,12 +213,12 @@
     [M.mainland].concat(M.islands).forEach(function (d) { var p = new Path2D(d); ctx.fill(p); ctx.stroke(p); });
   }
   function insetBox(node) {
-    ctx.setLineDash([3, 3]); ctx.strokeStyle = "#d5dae1"; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = C.inset; ctx.lineWidth = 1;
     rr(node.inset[0], node.inset[1], node.inset[2], node.inset[3], 8); ctx.stroke(); ctx.setLineDash([]);
   }
   function mapLabel(str, x, y, align, bold, color) {      // 白邊的字，壓在線上也看得清楚
     ctx.font = font(15, bold ? 700 : 400); ctx.textAlign = align;
-    ctx.lineWidth = 3; ctx.strokeStyle = "#ffffff"; ctx.lineJoin = "round"; ctx.strokeText(str, x, y);
+    ctx.lineWidth = 3; ctx.strokeStyle = C.halo; ctx.lineJoin = "round"; ctx.strokeText(str, x, y);
     ctx.fillStyle = color; ctx.fillText(str, x, y);
   }
   function cityLabel(c) { return D.lang === "en" ? c.name : NODES[c.id].name; }
@@ -214,8 +251,9 @@
           var n = b.byType[t.id];
           if (!n) return;
           var h = (base - top) * n / max;
-          ctx.fillStyle = t.color; ctx.fillRect(cx - bar / 2, y - h, bar, h);
-          ctx.fillStyle = C.card; ctx.fillRect(cx - bar / 2, y - h, bar, 2);       // 色塊之間的白縫
+          ctx.fillStyle = t.color;
+          if (C.clear) ctx.fillRect(cx - bar / 2, y - h + 2, bar, Math.max(0, h - 2));     // 色塊之間的縫：照片模式留空
+          else { ctx.fillRect(cx - bar / 2, y - h, bar, h); ctx.fillStyle = C.card; ctx.fillRect(cx - bar / 2, y - h, bar, 2); }
           y -= h;
         });
         if (b.total) text(String(b.total), cx, y - 10, 24, 700, C.text, "center");
@@ -262,7 +300,7 @@
         if (node.inset) insetBox(node);
         ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         ctx.fillStyle = n ? C.dot : C.zero; ctx.fill();
-        ctx.lineWidth = 1.5; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = C.ring; ctx.stroke();
         if (r >= 9) text(String(n), node.x, node.y + 4, 11, 700, "#ffffff", "center");
         if (!n && !node.inset) return;      // 沒去過的縣市只畫灰點，不寫名字
         if (node.inset) mapLabel(cityLabel(c), node.x, node.inset[1] + 12, "center", n, n ? C.text : C.muted);
@@ -294,18 +332,18 @@
         HomeRoute.legs(home, stops).forEach(function (l) {
           ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.quadraticCurveTo(l.c.x, l.c.y, l.b.x, l.b.y);
           ctx.setLineDash(l.a.far || l.b.far ? [4, 3] : []);        // 海外畫虛線
-          ctx.strokeStyle = "rgba(47, 111, 219, .45)"; ctx.lineWidth = 1.6; ctx.stroke();
+          ctx.strokeStyle = C.line; ctx.lineWidth = 1.6; ctx.stroke();
         });
         ctx.setLineDash([]);
       });
       dots.forEach(function (p) {
         ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
-        ctx.fillStyle = C.primary; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+        ctx.fillStyle = C.primary; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = C.ring; ctx.stroke();
       });
       if (home) {
         if (home.abroad) insetBox(home);           // 住海外：右下角一個框，「家」寫在框的上緣
         ctx.beginPath(); ctx.arc(home.x, home.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = C.home; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+        ctx.fillStyle = C.home; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ring; ctx.stroke();
         if (home.abroad) mapLabel(T.home, home.x, home.inset[1] + 12, "center", true, C.home);
         else mapLabel(T.home, home.x + 9, home.y + 5, "left", true, C.home);
       }
@@ -327,16 +365,19 @@
 
   function doughnut(bw, bh, title, rows, total) {
     card(bw, bh, title);
-    var cx = bw / 2, cy = 200, r = 118, a = -Math.PI / 2;
-    if (!total) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = C.zero; ctx.fill(); }
+    var cx = bw / 2, cy = 200, r = 118, ri = r * 0.58, a = -Math.PI / 2;
+    function ring(from, to) {            // 環的一段（中間是空的，照片模式才透得過去）
+      ctx.beginPath(); ctx.arc(cx, cy, r, from, to); ctx.arc(cx, cy, ri, to, from, true); ctx.closePath();
+    }
+    if (!total) { ring(0, Math.PI * 2); ctx.fillStyle = C.zero; ctx.fill(); }
+    var gap = C.clear && rows.length > 1 ? 0.025 : 0;
     rows.forEach(function (row) {       // 從 12 點鐘順時針，多的在前
       var b = a + Math.PI * 2 * row.n / total;
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, a, b); ctx.closePath();
+      ring(a + gap / 2, b - gap / 2);
       ctx.fillStyle = row.color; ctx.fill();
-      ctx.lineWidth = 3; ctx.strokeStyle = C.card; ctx.stroke();
+      if (!C.clear) { ctx.lineWidth = 3; ctx.strokeStyle = C.card; ctx.stroke(); }
       a = b;
     });
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, Math.PI * 2); ctx.fillStyle = C.card; ctx.fill();
     text(String(total), cx, cy + 12, 56, 700, C.text, "center");
     text(T.shows, cx, cy + 44, 22, 400, C.muted, "center");
     // 圖例：前三名，其餘併成「其他」
@@ -366,7 +407,7 @@
         var cnt = row.n + " " + T.times;
         ctx.font = font(20, 700); right = ctx.measureText(cnt).width + 14;
         text(cnt, bw - pad, y + 28, 20, 700, C.primary, "right");
-        ctx.fillStyle = C.bg1; rr(x, y + 37, w, 5, 2.5); ctx.fill();
+        ctx.fillStyle = C.track; rr(x, y + 37, w, 5, 2.5); ctx.fill();
         ctx.fillStyle = C.primary; rr(x, y + 37, Math.max(5, w * row.n / max), 5, 2.5); ctx.fill();
       }
       ctx.font = font(22);
@@ -389,9 +430,20 @@
   function render() {
     var g = geom(), H = g.H, s = g.safe, S = stats();
     if (canvas.height !== H) canvas.height = H;
-    var bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, C.bg1); bg.addColorStop(0.6, C.bg2); bg.addColorStop(1, C.bg2);
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    applyTheme();
+    if (photoMode()) {
+      // 照片填滿整張（多的裁掉、置中）；「淡化」是整張照片蓋一層跟字相反的顏色，字比較清楚
+      var k = Math.max(W / photo.width, H / photo.height), pw = photo.width * k, ph = photo.height * k;
+      ctx.drawImage(photo, (W - pw) / 2, (H - ph) / 2, pw, ph);
+      if (state.bg.veil) {
+        ctx.fillStyle = state.bg.tone === "light" ? "rgba(0, 0, 0, " + state.bg.veil / 100 + ")" : "rgba(255, 255, 255, " + state.bg.veil / 100 + ")";
+        ctx.fillRect(0, 0, W, H);
+      }
+    } else {
+      var bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, C.bg1); bg.addColorStop(0.6, C.bg2); bg.addColorStop(1, C.bg2);
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    }
 
     // 標題：Logo、「XXX的163braces回顧」、期間
     var x = s.l, maxW = s.r - s.l;
@@ -575,6 +627,64 @@
   });
   document.querySelectorAll('input[name="recap-name"]').forEach(function (r) { r.addEventListener("change", schedule); });
 
+  // 背景與顏色
+  var bgBox = document.getElementById("recap-bg"), swatches = document.getElementById("recap-swatches");
+  var colorIn = document.getElementById("recap-color"), photoIn = document.getElementById("recap-photo");
+  var photoOpts = document.getElementById("recap-photo-opts"), photoNote = document.getElementById("recap-photo-note");
+  var veilIn = document.getElementById("recap-veil"), names = T.color_names.split(",");
+  swatches.innerHTML = COLORS.map(function (c, i) {
+    return '<button type="button" class="recap-swatch" role="radio" data-color="' + c + '" style="background:' + c + '" aria-label="' + (names[i] || c) + '"></button>';
+  }).join("");
+  function syncBg() {
+    bgBox.querySelectorAll('input[name="recap-bg"]').forEach(function (r) { r.checked = r.value === state.bg.mode; });
+    bgBox.querySelectorAll('input[name="recap-tone"]').forEach(function (r) { r.checked = r.value === state.bg.tone; });
+    swatches.querySelectorAll(".recap-swatch").forEach(function (b) {
+      b.setAttribute("aria-checked", b.dataset.color.toLowerCase() === state.bg.color.toLowerCase() ? "true" : "false");
+    });
+    colorIn.value = state.bg.color; veilIn.value = state.bg.veil;
+    photoOpts.hidden = state.bg.mode !== "photo";
+    photoNote.textContent = state.bg.mode === "photo" && !photo ? T.photo_need : "";
+  }
+  function bgChanged() { save(); syncBg(); schedule(); }
+  bgBox.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.name === "recap-bg") state.bg.mode = t.value;
+    else if (t.name === "recap-tone") state.bg.tone = t.value;
+    else if (t === colorIn) state.bg.color = colorIn.value;
+    else return;
+    bgChanged();
+  });
+  colorIn.addEventListener("input", function () { state.bg.color = colorIn.value; bgChanged(); });
+  veilIn.addEventListener("input", function () { state.bg.veil = +veilIn.value; bgChanged(); });
+  swatches.addEventListener("click", function (e) {
+    var b = e.target.closest(".recap-swatch");
+    if (b) { state.bg.color = b.dataset.color; bgChanged(); }
+  });
+  // 選照片：在瀏覽器裡讀進來、縮到最長邊 2400（每次重畫才快），看整體亮暗自動選白字或黑字。不會上傳
+  photoIn.addEventListener("change", function () {
+    var file = photoIn.files[0];
+    if (!file) return;
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      var t = document.createElement("canvas"); t.width = t.height = 24;
+      var tc = t.getContext("2d"); tc.drawImage(c, 0, 0, 24, 24);
+      var px = tc.getImageData(0, 0, 24, 24).data, sum = 0;
+      for (var i = 0; i < px.length; i += 4) sum += luma([px[i], px[i + 1], px[i + 2]]);
+      photo = c;
+      state.bg.mode = "photo";
+      state.bg.tone = sum / (px.length / 4) < 0.55 ? "light" : "dark";
+      bgChanged();
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); photoNote.textContent = T.photo_bad; };
+    img.src = url;
+  });
+  syncBg();
+
   // 期間
   var yearSel = document.getElementById("recap-year"), fromIn = document.getElementById("recap-from"), toIn = document.getElementById("recap-to");
   yearSel.innerHTML = ['<option value="all">' + T.all + "</option>"].concat(years.map(function (y) {
@@ -584,7 +694,7 @@
     fromIn.value = state.from; toIn.value = state.to;
     var y = state.from.slice(0, 4);
     yearSel.value = state.from === y + "-01-01" && state.to === y + "-12-31" ? y
-      : state.from === years[years.length - 1] + "-01-01" && state.to === thisYear + "-12-31" ? "all" : "custom";
+      : state.from === years[years.length - 1] + "-01-01" && state.to === years[0] + "-12-31" ? "all" : "custom";
   }
   yearSel.addEventListener("change", function () { setYear(yearSel.value); syncPeriod(); schedule(); });
   [fromIn, toIn].forEach(function (inp) {

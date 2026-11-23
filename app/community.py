@@ -311,13 +311,13 @@ def route_cities(con, lang):
 
 
 def recap_data(con, lang, visitor):
-    """「回顧」分頁的資料：去過的（已經發生的）場次、各場歌單、喜歡的歌、地圖。
-    期間、圖表、移動距離都在瀏覽器裡算（static/recap.js），選了什麼不會送回來。"""
+    """「回顧」分頁的資料：勾了「我去過」的場次（含還沒到的：今年要去的也算進今年的場次）、各場歌單、喜歡的歌、地圖。
+    聽過的歌只算已經發生的場次。期間、圖表、移動距離都在瀏覽器裡算（static/recap.js），選了什麼不會送回來。"""
     perfs = con.execute("SELECT p.id, p.event_date, p.event_type_id, p.city_id, p.lat, p.lng FROM performances p "
                         "JOIN attendance a ON a.performance_id = p.id AND a.visitor_id = ? "
-                        "WHERE p.event_date <= ? ORDER BY p.event_date, p.id", (visitor["id"], Q.today())).fetchall()
+                        "ORDER BY p.event_date, p.id", (visitor["id"],)).fetchall()
     titles, shows = {}, []
-    lists = Q.setlists(con, [p["id"] for p in perfs])
+    lists = Q.setlists(con, [p["id"] for p in perfs if p["event_date"] <= Q.today()])
     for p in perfs:
         keys = []
         for it in lists.get(p["id"], []):
