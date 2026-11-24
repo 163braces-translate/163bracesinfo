@@ -729,6 +729,14 @@ label.field { display: block; font-size: .85rem; color: var(--muted); margin-bot
 .recap-controls .card { padding: 16px 18px; }
 .recap-controls h2 { font-size: 1rem; margin-bottom: 10px; }
 .recap-controls select { width: 100%; }
+.recap-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+.recap-swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
+.recap-swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--text); }
+.recap-custom-color { display: flex; align-items: center; gap: 8px; }
+.recap-custom-color input[type="color"] { width: 40px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; }
+.recap-photo-note:empty { display: none; }
+.recap-photo-note { color: #b42318; margin: 6px 0 0; }
+#recap-photo-opts input[type="range"] { width: 100%; }
 .recap-kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
 .recap-kinds .check-row { margin: 4px 0; }
 .recap-main { position: sticky; top: 12px; display: grid; justify-items: center; gap: 10px; }

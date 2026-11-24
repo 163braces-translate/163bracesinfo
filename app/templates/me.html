@@ -54,6 +54,30 @@
           <label class="pill"><input type="radio" name="recap-format" value="square"><span>{{ t('recap_square') }}</span></label>
         </div>
       </section>
+      {#- 背景：單色（預設藍色，可以換主色）或自己的照片（圖表變透明底）；照片只在瀏覽器裡用，不上傳 #}
+      <section class="card" id="recap-bg">
+        <h2>{{ t('recap_bg') }}</h2>
+        <div class="pills">
+          <label class="pill"><input type="radio" name="recap-bg" value="color" checked><span>{{ t('recap_bg_color') }}</span></label>
+          <label class="pill"><input type="radio" name="recap-bg" value="photo"><span>{{ t('recap_bg_photo') }}</span></label>
+        </div>
+        <span class="field">{{ t('recap_color') }}</span>
+        <div class="recap-swatches" id="recap-swatches" role="radiogroup" aria-label="{{ t('recap_color') }}"></div>
+        <label class="small muted recap-custom-color">{{ t('recap_color_custom') }} <input type="color" id="recap-color" value="#2f6fdb"></label>
+        <div id="recap-photo-opts" hidden>
+          <label class="field" for="recap-photo">{{ t('recap_photo_pick') }}</label>
+          <input type="file" id="recap-photo" accept="image/*">
+          <p class="small muted" style="margin: 6px 0 0">{{ t('recap_photo_help') }}</p>
+          <p class="small recap-photo-note" id="recap-photo-note" role="status"></p>
+          <span class="field">{{ t('recap_tone') }}</span>
+          <div class="pills">
+            <label class="pill"><input type="radio" name="recap-tone" value="light" checked><span>{{ t('recap_tone_light') }}</span></label>
+            <label class="pill"><input type="radio" name="recap-tone" value="dark"><span>{{ t('recap_tone_dark') }}</span></label>
+          </div>
+          <label class="field" for="recap-veil">{{ t('recap_veil') }}</label>
+          <input type="range" id="recap-veil" min="0" max="60" step="5" value="0">
+        </div>
+      </section>
       <section class="card">
         <h2>{{ t('recap_name') }}</h2>
         <div class="pills">
@@ -116,7 +140,8 @@
     "n_shows": t('recap_n_shows'), "n_songs": t('recap_n_songs'), "n_cities": t('recap_n_cities'), "km": t('recap_km'),
     "times": t('times'), "shows": t('shows'), "other": t('recap_other'), "month": t('recap_month', m='{m}'),
     "shows_n": t('results', n='{n}'), "km_note": t('recap_km_note', km='{km}', n='{n}'), "none": t('recap_none'),
-    "file": t('recap_file')}) | tojson }}</script>
+    "file": t('recap_file'), "color_names": t('recap_color_names'), "photo_need": t('recap_photo_need'),
+    "photo_bad": t('recap_photo_bad')}) | tojson }}</script>
   {% endif %}
 {% elif tab == 'submissions' %}
   {#- 上方：四種投稿的入口；下方：各自的紀錄 #}
